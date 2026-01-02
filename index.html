@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.IO Chat UI</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #e5ddd5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .chat-container {
+            width: 400px;
+            height: 90vh;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #075E54;
+            padding: 15px;
+            color: white;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .inputs {
+            padding: 15px;
+            background: #f7f7f7;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #bbb;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            background: #25D366;
+            color: white;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .messages-box {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: #ece5dd;
+        }
+
+        .messages-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .message {
+            background: white;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            max-width: 70%;
+            font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            clear: both;
+        }
+
+        .send {
+            background: #dcf8c6;
+            float: right;
+            text-align: right;
+        }
+
+        .receive {
+            background: white;
+            float: left;
+        }
+
+        .footer {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: #f7f7f7;
+        }
+
+        .footer input {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <div class="header">Socket.IO Chat</div>
+
+        <div class="inputs">
+            <input id="userId" placeholder="Your User ID">
+            <input id="roomId" placeholder="Room ID">
+            <button id="joinBtn">Join Room</button>
+            <input id="targetId" placeholder="Target user ID">
+        </div>
+
+        <div class="messages-box">
+            <ul id="messages"></ul>
+        </div>
+
+        <div class="footer">
+            <input id="msg" placeholder="Type a message...">
+            <button id="sendBtn">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io("http://localhost:3000", { withCredentials: true });
+
+        const joinBtn = document.getElementById("joinBtn");
+        const sendBtn = document.getElementById("sendBtn");
+        const messages = document.getElementById("messages");
+
+        let currentUser = ""; // store logged userId
+
+        joinBtn.addEventListener("click", () => {
+            const userId = document.getElementById("userId").value;
+            const roomId = document.getElementById("roomId").value;
+            currentUser = userId;
+
+            socket.emit("join_room", { roomId, userId });
+
+            socket.on("room_members", (members) => {
+                console.log("Room Members:", members);
+            });
+
+            // Load old messages from backend
+            socket.on("old_messages", (msgs) => {
+                msgs.forEach(msg => {
+                    addMessage(msg.message, msg.senderId === currentUser);
+                });
+            });
+        });
+
+        sendBtn.addEventListener("click", () => {
+            const roomId = document.getElementById("roomId").value;
+            const targetUserId = document.getElementById("targetId").value;
+            const message = document.getElementById("msg").value;
+
+            if (message.trim() === "") return;
+
+            socket.emit("send_message", { roomId, targetUserId, message });
+            document.getElementById("msg").value = "";
+        });
+
+        socket.on("receive_message", ({ from, message }) => {
+            addMessage(message, from === currentUser);
+        });
+
+        function addMessage(text, isSender) {
+            console.log(text, isSender);
+            
+            const li = document.createElement("li");
+            li.className = isSender ? "message send" : "message receive";
+            li.innerText = text;
+
+            messages.appendChild(li);
+            messages.scrollTop = messages.scrollHeight;
+        }
+    </script>
+
+</body>
+</html>

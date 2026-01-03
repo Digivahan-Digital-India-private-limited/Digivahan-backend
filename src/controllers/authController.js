@@ -608,13 +608,94 @@ const ChangeUserpassword = async (req, res) => {
       });
     }
 
-    // 3️⃣ Verify old password
+    // 3️⃣ Old password must match CURRENT password
     const isOldPasswordCorrect = await user.comparePassword(old_password);
     if (!isOldPasswordCorrect) {
       return res.status(400).json({
         status: false,
-        error_type: "password",
-        message: ERROR_MESSAGES.INVALID_OLD_PASSWORD,
+        error_type: "Old Password Error",
+        message: "Your old password doesn't match",
+      });
+    }
+
+    // 4️⃣ Old password and new password should NOT be same
+    if (old_password === new_password) {
+      return res.status(400).json({
+        status: false,
+        error_type: "Old and current password is same",
+        message: "Your old password is match with new password",
+      });
+    }
+
+    // 5️⃣ New password should not be same as CURRENT password
+    const isSameAsCurrent = await user.comparePassword(new_password);
+    if (isSameAsCurrent) {
+      return res.status(400).json({
+        status: false,
+        error_type: "New Password Error",
+        message: "Your new password is your current password",
+      });
+    }
+
+    // 6️⃣ New password should not match PREVIOUS passwords
+    const oldPasswords = [
+      user.old_passwords.previous_password1,
+      user.old_passwords.previous_password2,
+      user.old_passwords.previous_password3,
+    ];
+
+    for (const oldPass of oldPasswords) {
+      if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
+        return res.status(400).json({
+          status: false,
+          error_type: "New password is Previous password",
+          message: "Your new password matches your previous password",
+        });
+      }
+    }
+
+    // 7️⃣ Shift password history
+    user.old_passwords.previous_password3 =
+      user.old_passwords.previous_password2;
+
+    user.old_passwords.previous_password2 =
+      user.old_passwords.previous_password1;
+
+    user.old_passwords.previous_password1 = user.basic_details.password;
+
+    // 8️⃣ Update password
+    user.basic_details.password = new_password;
+    user.is_logged_in = true;
+
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Your password successfully updated",
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({
+      status: false,
+      error_type: "other",
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
+
+// Check new password with our database password are already avaliable or not
+const ValidateNewPassword = async (req, res) => {
+  try {
+    const { user_id, new_password } = req.body;
+
+    // 1️⃣ Find user
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        error_type: "other",
+        message: ERROR_MESSAGES.USER_NOT_FOUND,
       });
     }
 
@@ -662,63 +743,7 @@ const ChangeUserpassword = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      message: ERROR_MESSAGES.PASSWORD_CHANGED_SUCCESSFULLY,
-    });
-  } catch (error) {
-    console.error("Change password error:", error);
-    return res.status(500).json({
-      status: false,
-      error_type: "other",
-      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
-    });
-  }
-};
-
-// Check new password with our database password are already avaliable or not
-const ValidateNewPassword = async (req, res) => {
-  try {
-    const { user_id, new_password } = req.body;
-
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        error_type: "other",
-        message: ERROR_MESSAGES.USER_NOT_FOUND,
-      });
-    }
-
-    // 4️⃣ New password should not be same as current
-    const isSamePassword = await user.comparePassword(new_password);
-    if (isSamePassword) {
-      return res.status(400).json({
-        status: false,
-        error_type: "password",
-        message: ERROR_MESSAGES.SAME_PASSWORD,
-      });
-    }
-
-    // 5️⃣ Check against previous passwords
-    const oldPasswords = [
-      user.old_passwords.previous_password1,
-      user.old_passwords.previous_password2,
-      user.old_passwords.previous_password3,
-    ];
-
-    for (const oldPass of oldPasswords) {
-      if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
-        return res.status(400).json({
-          status: false,
-          error_type: "password",
-          message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
-        });
-      }
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Now You can Change Your password!",
+      message: SUCCESS_MESSAGES.PASSWORD_CHANGED_SUCCESSFULLY,
     });
   } catch (error) {
     console.error("Change password error:", error);

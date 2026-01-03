@@ -35,7 +35,7 @@ const UserAddAddress = async (req, res) => {
       city,
       state,
       landmark,
-      default: default_status,
+      default_status,
     };
 
     // If new address is default

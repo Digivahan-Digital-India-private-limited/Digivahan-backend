@@ -20,7 +20,7 @@ const {
 router.post(
   API_ROUTES.EMERGENCY_CONTACT.ADD_CONTACT,
   authenticateToken,
-  upload.single("profile_pic"),
+  profilePicParser,
   [commonValidations.userId("user_id"), handleValidationErrors],
   AddEmergencyContact
 );

@@ -7,32 +7,87 @@ const AddEmergencyContact = async (req, res) => {
     const { user_id, first_name, last_name, relation, phone_number, email } =
       req.body;
 
+    if (!user_id || !first_name || !last_name || !phone_number) {
+      return res.status(400).json({
+        status: false,
+        message: "Required fields are missing",
+      });
+    }
+
     const user = await User.findById(user_id);
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
 
-    // Validation handled by schema
-    const newContact = {
-      first_name,
-      last_name,
-      relation,
-      phone_number,
-      email,
-      profile_pic: req.file?.path || "",
-      public_id: req.file?.filename || "",
-    };
-
-    user.emergency_contacts.push(newContact);
-    await user.save();
-
-    res.status(200).json({
-      status: true,
-      message: "Emergency contact added successfully",
-      emergency_contacts: user.emergency_contacts,
+    // 🔍 CHECK DUPLICATE EMERGENCY CONTACT
+    const isAlreadyExist = user.emergency_contacts.some((contact) => {
+      return (
+        contact.phone_number === phone_number &&
+        contact.first_name.toLowerCase() === first_name.toLowerCase() &&
+        contact.last_name.toLowerCase() === last_name.toLowerCase()
+      );
     });
+
+    if (isAlreadyExist) {
+      return res.status(409).json({
+        status: false,
+        message: "This emergency contact is already added",
+      });
+    }
+
+    const profilePicFile = req.file;
+
+    // 3️⃣ PROFILE PIC LOGIC (2 CASES)
+    if (profilePicFile) {
+      const buffer = profilePicFile.buffer;
+
+      // 🔹 CASE 2: old image does NOT exist → fresh upload
+      const uploadResult = await new Promise((resolve, reject) => {
+        cloudinary.uploader
+          .upload_stream(
+            {
+              folder: "uploads",
+              resource_type: "image",
+            },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          )
+          .end(buffer);
+      });
+
+
+      // 🧾 CREATE NEW CONTACT
+      const newContact = {
+        first_name,
+        last_name,
+        relation,
+        phone_number,
+        email,
+        profile_pic: uploadResult.secure_url || "",
+        public_id: uploadResult.public_id || "",
+      };
+
+      user.emergency_contacts.push(newContact);
+      await user.save();
+
+      return res.status(200).json({
+        status: true,
+        message: "Emergency contact added successfully",
+        emergency_contacts: user.emergency_contacts,
+      });
+    }
   } catch (error) {
-    console.log(error);
-    status: true, res.status(500).json({ message: "Internal server error" });
+    console.error("AddEmergencyContact error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
   }
 };
 
@@ -131,7 +186,6 @@ const UpdateUserEmergencyContact = async (req, res) => {
     });
   }
 };
-
 
 const DeleteUserEmergencyContact = async (req, res) => {
   try {

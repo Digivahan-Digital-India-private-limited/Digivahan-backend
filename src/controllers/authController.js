@@ -613,7 +613,7 @@ const ChangeUserpassword = async (req, res) => {
     if (!isOldPasswordCorrect) {
       return res.status(400).json({
         status: false,
-        error_type: "Old Password Error",
+        error_type: "old_password",
         message: "Your old password doesn't match",
       });
     }
@@ -622,7 +622,7 @@ const ChangeUserpassword = async (req, res) => {
     if (old_password === new_password) {
       return res.status(400).json({
         status: false,
-        error_type: "Old and current password is same",
+        error_type: "new_password",
         message: "Your old password is match with new password",
       });
     }
@@ -632,7 +632,7 @@ const ChangeUserpassword = async (req, res) => {
     if (isSameAsCurrent) {
       return res.status(400).json({
         status: false,
-        error_type: "New Password Error",
+        error_type: "new_password",
         message: "Your new password is your current password",
       });
     }
@@ -648,7 +648,7 @@ const ChangeUserpassword = async (req, res) => {
       if (oldPass && (await bcrypt.compare(new_password, oldPass))) {
         return res.status(400).json({
           status: false,
-          error_type: "New password is Previous password",
+          error_type: "new_password",
           message: "Your new password matches your previous password",
         });
       }
@@ -705,7 +705,7 @@ const ValidateNewPassword = async (req, res) => {
       return res.status(400).json({
         status: false,
         error_type: "password",
-        message: ERROR_MESSAGES.SAME_PASSWORD,
+        message: ERROR_MESSAGES.PASSWORD_USED_PREVIOUSLY,
       });
     }
 

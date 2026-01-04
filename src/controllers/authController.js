@@ -240,7 +240,7 @@ const verifyOtp = async (req, res) => {
         previous_password4: "",
       },
       is_tracking_on: true,
-      is_notification_sound_on: false,
+      is_notification_sound_on: true,
       garage: {
         vehicles: [], // 🔥 VERY IMPORTANT
       },
@@ -419,6 +419,7 @@ const signIn = async (req, res) => {
 
     // Update login status
     user.is_logged_in = true;
+    user.is_notification_sound_on=true;
     await user.save();
 
     // Generate JWT token
@@ -968,6 +969,7 @@ const verifyLoginOtp = async (req, res) => {
 
     // Update login status
     user.is_logged_in = true;
+    user.is_notification_sound_on = true;
     await user.save();
 
     // Generate JWT token

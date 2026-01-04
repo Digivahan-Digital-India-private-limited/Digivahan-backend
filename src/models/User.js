@@ -397,8 +397,7 @@ userSchema.methods.generateAuthToken = function () {
       email: this.basic_details.email,
       phone: this.basic_details.phone_number,
     },
-    process.env.JWT_SECRET || "your-secret-key",
-    { expiresIn: "7d" }
+    process.env.JWT_SECRET || "your-secret-key", 
   );
 };
 

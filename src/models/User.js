@@ -141,9 +141,9 @@ const userMyOrderSchema = new mongoose.Schema(
 const notificationSchema = new mongoose.Schema(
   {
     sender_id: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       ref: "User",
-      required: true,
+      default: "",
     },
 
     sender_pic: {
@@ -270,7 +270,7 @@ const userSchema = new mongoose.Schema({
     previous_password3: { type: String, default: "" },
   },
   is_tracking_on: { type: Boolean, default: false },
-  
+
   is_notification_sound_on: {
     type: Boolean,
     default: true,

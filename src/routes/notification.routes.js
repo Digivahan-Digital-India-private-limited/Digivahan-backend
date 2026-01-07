@@ -20,7 +20,6 @@ const {
 router.post(
   API_ROUTES.NOTIFICATION.SEND,
   [
-    commonValidations.senderId("sender_id"),
     commonValidations.receiverId("receiver_id"),
     handleValidationErrors,
   ],

@@ -4,9 +4,9 @@ const mongoose = require("mongoose");
 
 const sendNotification = async (req, res) => {
   try {
-    const {
-      sender_id,
-      receiver_id,
+    let {
+      sender_id, // ❗ optional (web me nahi aayega)
+      receiver_id, // ✅ always required
       notification_type,
       notification_title,
       link,
@@ -22,25 +22,55 @@ const sendNotification = async (req, res) => {
       seen_status,
     } = req.body;
 
-    // 1️⃣ Find sender
-    const sender = await User.findById(sender_id).select(
-      "basic_details.first_name basic_details.last_name basic_details.profile_pic"
-    );
+    const GUEST_ID = process.env.GUEST_QR_USER_ID;
+    const isGuestCase = !sender_id; // 🌐 WEB CASE
 
-    if (!sender) {
-      return res.status(404).json({
-        status: false,
-        message: "Sender not found",
-      });
+    /* -----------------------------
+       1️⃣ RESOLVE SENDER (APP vs WEB)
+    ------------------------------ */
+
+    let sender;
+    let senderName = "Guest User";
+    let senderPic = "";
+
+    if (sender_id) {
+      // 🟢 APP CASE
+      sender = await User.findById(sender_id).select(
+        "basic_details.first_name basic_details.last_name basic_details.profile_pic"
+      );
+
+      if (!sender) {
+        return res.status(404).json({
+          status: false,
+          message: "Sender not found",
+        });
+      }
+
+      senderName = `${sender.basic_details.first_name || ""} ${
+        sender.basic_details.last_name || ""
+      }`.trim();
+
+      senderPic = sender.basic_details.profile_pic || "";
+    } else {
+      // 🌐 WEB / GUEST CASE
+      sender_id = GUEST_ID;
+
+      sender = await User.findById(sender_id).select(
+        "basic_details.first_name basic_details.last_name basic_details.profile_pic"
+      );
+
+      if (sender) {
+        senderName = `${sender.basic_details.first_name || "Guest"} ${
+          sender.basic_details.last_name || ""
+        }`.trim();
+        senderPic = sender.basic_details.profile_pic || "";
+      }
     }
 
-    const senderName = `${sender.basic_details.first_name || ""} ${
-      sender.basic_details.last_name || ""
-    }`.trim();
+    /* -----------------------------
+       2️⃣ FIND RECEIVER
+    ------------------------------ */
 
-    const senderPic = sender.basic_details.profile_pic || "";
-
-    // 2️⃣ Find receiver
     const receiver = await User.findById(receiver_id);
 
     if (!receiver) {
@@ -50,14 +80,43 @@ const sendNotification = async (req, res) => {
       });
     }
 
-    // 3️⃣ Normalize incident proof
+    /* -----------------------------
+       3️⃣ 🚨 GUEST LIMIT VALIDATION
+       Max 3 notifications / 24 hrs
+    ------------------------------ */
+
+    if (isGuestCase) {
+      const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const guestNotificationCount = receiver.notifications.filter(
+        (n) =>
+          n.sender_id?.toString() === GUEST_ID &&
+          new Date(n.time || receiver.updated_at) > last24Hours
+      ).length;
+
+      if (guestNotificationCount >= 3) {
+        return res.status(429).json({
+          status: false,
+          message:
+            "You have reached the maximum limit of notifications for today",
+        });
+      }
+    }
+
+    /* -----------------------------
+       4️⃣ NORMALIZE INCIDENT PROOF
+    ------------------------------ */
+
     const incidentProofArray = Array.isArray(incident_proof)
       ? incident_proof
       : incident_proof
       ? [incident_proof]
       : [];
 
-    // 4️⃣ Save notification in DB (ONLY schema fields)
+    /* -----------------------------
+       5️⃣ SAVE NOTIFICATION (DB)
+    ------------------------------ */
+
     receiver.notifications.push({
       sender_id,
       sender_pic: senderPic,
@@ -75,11 +134,16 @@ const sendNotification = async (req, res) => {
       incident_proof: incidentProofArray,
       inapp_notification,
       seen_status,
+      time: new Date(), // 🔥 IMPORTANT for limit check
     });
 
     await receiver.save();
 
     const savedNotification = receiver.notifications.at(-1);
+
+    /* -----------------------------
+       6️⃣ ANDROID CHANNEL LOGIC
+    ------------------------------ */
 
     const ANDROID_CHANNEL_MAP = {
       no_parking: "0b251d79-aa58-4410-ac8b-a810849ce1c6",
@@ -95,7 +159,6 @@ const sendNotification = async (req, res) => {
 
     const DEFAULT_ANDROID_CHANNEL = "328b98de-49cc-47b2-85b4-733547c953d4";
 
-    // 🔥 FINAL CHANNEL DECISION
     let androidChannelId = DEFAULT_ANDROID_CHANNEL;
 
     if (receiver.is_notification_sound_on === true) {
@@ -103,25 +166,26 @@ const sendNotification = async (req, res) => {
         ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
     }
 
-    // 🔥 5️⃣ SEND ONESIGNAL (SINGLE USER)
-    if (receiver._id) {
-      await sendOneSignalNotification({
-        externalUserId: receiver._id.toString(), // ✅ USER schema se
-        title: notification_title,
-        message,
-        data: {
-          sender_id,
-          notification_type,
-          order_id: order_id || "",
-          vehicle_id: vehicle_id || "",
-          chat_room_id: chat_room_id || "",
-          issue_type: issue_type || "",
-          latitude: latitude || "",
-          longitude: longitude || "",
-        },
-        androidChannelId,
-      });
-    }
+    /* -----------------------------
+       7️⃣ SEND ONESIGNAL PUSH
+    ------------------------------ */
+
+    await sendOneSignalNotification({
+      externalUserId: "695b9441b2458ed93811c040",
+      title: notification_title,
+      message,
+      data: {
+        sender_id,
+        notification_type,
+        order_id: order_id || "",
+        vehicle_id: vehicle_id || "",
+        chat_room_id: chat_room_id || "",
+        issue_type: issue_type || "",
+        latitude: latitude || "",
+        longitude: longitude || "",
+      },
+      androidChannelId,
+    });
 
     return res.status(201).json({
       status: true,

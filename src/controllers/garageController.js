@@ -86,6 +86,7 @@ const addVehicle = async (req, res) => {
   }
 };
 
+// Mask The vehicle data
 const maskVehicleResponse = (data) => {
   if (!data) return data;
 
@@ -141,6 +142,8 @@ const maskVehicleResponse = (data) => {
   };
 };
 
+
+// Add vehicle in User Garage
 const addVehicleInUsergarage = async (req, res) => {
   try {
     const { user_id, vehicle_number, owner_name } = req.body;
@@ -196,7 +199,7 @@ const addVehicleInUsergarage = async (req, res) => {
           owner_name.toLowerCase().trim()
     );
 
-    console.log(matchedVehicle);
+    // console.log(matchedVehicle);
 
     if (!matchedVehicle) {
       return res.status(404).json({

@@ -27,8 +27,7 @@ const pdfStorage = new CloudinaryStorage({
   cloudinary,
   params: async () => ({
     folder: "vehicle_docs/pdf",
-    resource_type: "raw", // 🔥 change
-    format: "pdf",
+    resource_type: "image", // 🔥 change
   }),
 });
 

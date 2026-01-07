@@ -240,7 +240,6 @@ const verifyOtp = async (req, res) => {
         previous_password4: "",
       },
       is_tracking_on: true,
-      is_notification_sound_on: true,
       garage: {
         vehicles: [], // 🔥 VERY IMPORTANT
       },
@@ -684,7 +683,6 @@ const ChangeUserpassword = async (req, res) => {
   }
 };
 
-
 // Check new password with our database password are already avaliable or not
 const ValidateNewPassword = async (req, res) => {
   try {
@@ -967,7 +965,7 @@ const verifyLoginOtp = async (req, res) => {
       user.basic_details.phone_number_verified = true;
     }
 
-    // Update login status
+    // Update login status and notification sound on
     user.is_logged_in = true;
     user.is_notification_sound_on = true;
     await user.save();

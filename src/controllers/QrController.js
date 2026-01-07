@@ -24,7 +24,7 @@ const createQrScanner = async (req, res) => {
       const qr_id = generateRandomId(10);
 
       // 2️⃣ Attach with base URL
-      const BASE_URL = `https://www.digicapital.co.in/${qr_id}`;
+      const BASE_URL = `https://digivahan-frontend.vercel.app/send-notification/${qr_id}`;
 
       // 3️⃣ Generate QR buffer
       const qrBuffer = await generateQRCode(BASE_URL);
@@ -327,11 +327,71 @@ const getUploadedTemplateImage = (req, res) => {
   }
 };
 
+const GetUserdetailsThrowTheQRId = async (req, res) => {
+  try {
+    const { qr_id } = req.params;
+
+    // 1️⃣ QR check
+    const qrData = await QRAssignment.findOne({ qr_id });
+
+    if (!qrData) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid QR code",
+      });
+    }
+
+    // 2️⃣ Check assign_to
+    if (!qrData.assign_to) {
+      return res.status(200).json({
+        success: false,
+        message: "This QR is not assigned to any user",
+      });
+    }
+
+    // 3️⃣ Find user with profile pic
+    const user = await User.findById(qrData.assign_to).select(
+      "basic_details.first_name basic_details.last_name basic_details.profile_pic public_details.age public_details.gender public_details.address"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Assigned user not found",
+      });
+    }
+
+    // 4️⃣ Response
+    return res.status(200).json({
+      success: true,
+      message: "User details fetched successfully",
+      data: {
+        user_id: user._id,
+        first_name: user.basic_details.first_name,
+        last_name: user.basic_details.last_name,
+        profile_pic: user.basic_details.profile_pic,
+        age: user.public_details.age,
+        gender: user.public_details.gender,
+        address: user.public_details.address,
+        product_type: qrData.product_type,
+        vehicle_id: qrData.vehicle_id,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   createQrScanner,
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
   QrCustomTemplateUrl,
-  getUploadedTemplateImage
+  getUploadedTemplateImage,
+  GetUserdetailsThrowTheQRId,
 };

@@ -120,6 +120,7 @@ const API_ROUTES = {
     ASSIGN_QR: "/assign-qr",
     QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
+    GET_USER_DETAILS:"/user-details/:qr_id"
   },
 
   // Fuel Price routes

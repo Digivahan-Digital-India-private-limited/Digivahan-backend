@@ -141,9 +141,9 @@ const userMyOrderSchema = new mongoose.Schema(
 const notificationSchema = new mongoose.Schema(
   {
     sender_id: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: "",
+      default: null, // ✅ guest case
     },
 
     sender_pic: {
@@ -397,7 +397,7 @@ userSchema.methods.generateAuthToken = function () {
       email: this.basic_details.email,
       phone: this.basic_details.phone_number,
     },
-    process.env.JWT_SECRET || "your-secret-key", 
+    process.env.JWT_SECRET || "your-secret-key"
   );
 };
 

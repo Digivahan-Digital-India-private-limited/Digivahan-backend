@@ -171,7 +171,7 @@ const sendNotification = async (req, res) => {
     ------------------------------ */
 
     await sendOneSignalNotification({
-      externalUserId: "695b9441b2458ed93811c040",
+      externalUserId: receiver._id.toString(),
       title: notification_title,
       message,
       data: {

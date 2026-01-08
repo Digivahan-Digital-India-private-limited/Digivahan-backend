@@ -6,12 +6,12 @@ const {
   updateIOSVersion,
   updatePrivacyPolicy,
   updateTermsCondition,
+  updateAboutpage,
   getAndroidVersion,
   getIOSVersion,
-  getPrivacyPolicy,
-  getTermsCondition,
   updateRazorpayKey,
-  getAppInfo
+  getAppInfo,
+  updateZigoAppData
 } = require("../controllers/appInfo.controller");
 
 // GET ANDROID VERSION
@@ -19,12 +19,6 @@ router.get("/api/v1/app-info/android", getAndroidVersion);
 
 // GET IOS VERSION
 router.get("/api/v1/app-info/ios", getIOSVersion);
-
-// GET PRIVACY POLICY
-router.get("/api/v1/app-info/privacy-policy", getPrivacyPolicy);
-
-// GET TERMS & CONDITIONS
-router.get("/api/v1/app-info/terms-condition", getTermsCondition);
 
 // ANDROID VERSION UPDATE
 router.post("/api/v1/app-info/android", updateAndroidVersion);
@@ -37,8 +31,14 @@ router.post("/api/v1/app-info/privacy-policy", updatePrivacyPolicy);
 
 // TERMS & CONDITIONS UPDATE
 router.post("/api/v1/app-info/terms-condition", updateTermsCondition);
+
+// ABOUT & ABOUTPAGE
+router.post("/api/v1/app-info/about-page", updateAboutpage);
+
 // 🔑 RAZORPAY KEY ADD / UPDATE
 router.post("/api/v1/app-info/razorpay-key", updateRazorpayKey);
+
+router.post("/api/v1/app-info/zigo-app", updateZigoAppData)
 
 // GET FULL APP INFO (Android, iOS, Policies everything)
 router.get("/api/v1/app-info", getAppInfo);

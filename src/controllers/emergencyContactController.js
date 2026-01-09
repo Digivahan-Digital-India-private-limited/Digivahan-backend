@@ -7,7 +7,7 @@ const AddEmergencyContact = async (req, res) => {
     const { user_id, first_name, last_name, relation, phone_number, email } =
       req.body;
 
-    if (!user_id || !first_name || !last_name || !phone_number) {
+    if (!user_id || !first_name || !phone_number) {
       return res.status(400).json({
         status: false,
         message: "Required fields are missing",
@@ -20,6 +20,15 @@ const AddEmergencyContact = async (req, res) => {
       return res.status(404).json({
         status: false,
         message: "User not found",
+      });
+    }
+
+    if (user.basic_details.phone_number === phone_number) {
+      return res.status(404).json({
+        status: false,
+        error_type: "phone_number",
+        message:
+          "This Phone number is already use In User Account Please use another Phone Number",
       });
     }
 
@@ -118,6 +127,15 @@ const UpdateUserEmergencyContact = async (req, res) => {
       return res.status(404).json({
         status: false,
         message: "User not found",
+      });
+    }
+
+    if (user.basic_details.phone_number === phone_number) {
+      return res.status(404).json({
+        status: false,
+        error_type: "phone_number",
+        message:
+          "This Phone number is already use In User Account Please use another Phone Number",
       });
     }
 

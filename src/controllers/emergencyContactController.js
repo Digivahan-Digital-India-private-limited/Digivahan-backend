@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
+const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
 
 const AddEmergencyContact = async (req, res) => {
   try {
@@ -86,6 +87,11 @@ const AddEmergencyContact = async (req, res) => {
     };
 
     user.emergency_contacts.push(newContact);
+
+    // 🟢 6️⃣ Recalculate profile completion %
+    user.basic_details.profile_completion_percent =
+      calculateProfileCompletion(user);
+
     await user.save();
 
     return res.status(200).json({

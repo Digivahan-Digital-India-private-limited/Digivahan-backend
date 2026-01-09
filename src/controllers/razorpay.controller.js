@@ -13,12 +13,23 @@ exports.createRazorpayOrder = async (req, res) => {
     }
 
     // 🔑 Fetch Razorpay Key ID from DB
-    const appInfo = await AppInfo.findOne({}, { "api_key.razorpay_key_id": 1 }).lean();
+    const appInfo = await AppInfo.findOne(
+      {},
+      { "api_key.razorpay_key_id": 1, "api_key.is_payment": 1 }
+    ).lean();
 
     if (!appInfo || !appInfo.api_key?.razorpay_key_id) {
       return res.status(500).json({
         success: false,
         message: "Razorpay key not configured",
+      });
+    }
+
+    if (!appInfo?.api_key?.is_payment) {
+      return res.status(503).json({
+        status: false,
+        error_type: "payment_failed",
+        message: "Payment service is temporarily disabled",
       });
     }
 
@@ -58,9 +69,11 @@ exports.createRazorpayOrder = async (req, res) => {
       receipt,
       order: response.data,
     });
-
   } catch (error) {
-    console.error("Razorpay Order Error:", error?.response?.data || error.message);
+    console.error(
+      "Razorpay Order Error:",
+      error?.response?.data || error.message
+    );
 
     return res.status(500).json({
       success: false,

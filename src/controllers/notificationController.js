@@ -202,6 +202,74 @@ const sendNotification = async (req, res) => {
   }
 };
 
+const sendNotificationForCall = async (req, res) => {
+  try {
+    const { sender_id, receiver_id } = req.body;
+
+    let notification_title = "Call Notification";
+    let message = "Request For Call";
+    let sender;
+    let senderName = "Unknow User";
+
+    if (sender_id) {
+      sender = await User.findById(sender_id).select(
+        "basic_details.first_name basic_details.last_name"
+      );
+
+      if (!sender) {
+        return res.status(404).json({
+          status: false,
+          message: "Sender not found",
+        });
+      }
+
+      senderName = `${sender.basic_details.first_name || ""} ${
+        sender.basic_details.last_name || ""
+      }`.trim();
+    }
+
+    const receiver = await User.findById(receiver_id);
+
+    if (!receiver) {
+      return res.status(404).json({
+        status: false,
+        message: "Receiver not found",
+      });
+    }
+
+    const androidChannelId = "0f86d5a8-1877-4a8a-ad45-d609c14d16bd";
+
+    await sendOneSignalNotification({
+      externalUserId: receiver._id.toString(),
+      title: notification_title,
+      message,
+      data: {
+        sender_id,
+        senderName,
+      },
+      androidChannelId,
+    });
+
+    return res.status(201).json({
+      status: true,
+      message: "Notification sent successfully",
+      details: {
+        title: notification_title,
+        sender_id,
+        senderName: senderName,
+        message,
+      },
+    });
+  } catch (error) {
+    console.error("Send notification error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 const sendOneSignalNotification = async ({
   externalUserId,
   title,
@@ -562,6 +630,7 @@ const isOnnotification = async (req, res) => {
 
 module.exports = {
   sendNotification,
+  sendNotificationForCall,
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,

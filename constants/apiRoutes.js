@@ -39,7 +39,7 @@ const API_ROUTES = {
     // Password reset routes
     PASSWORD_RESET: {
       CHANGE_PASSWORD: "/change-password",
-      VALIDATE_PASSWORD:"/check/new-password",
+      VALIDATE_PASSWORD: "/check/new-password",
       REQUEST: "/request-reset-password",
       VERIFY_OTP: "/verify-reset-otp-change-password",
     },
@@ -120,7 +120,7 @@ const API_ROUTES = {
     ASSIGN_QR: "/assign-qr",
     QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
-    GET_USER_DETAILS:"/user-details/:qr_id"
+    GET_USER_DETAILS: "/user-details/:qr_id",
   },
 
   // Fuel Price routes
@@ -305,6 +305,7 @@ const API_ROUTES = {
   NOTIFICATION: {
     BASE: "/api/notifications",
     SEND: "/send",
+    SEND_NOTIFICATION_FOR_CALL: "/send/call-notification",
     GET_USER_NOTIFICATIONS: "/:user_id",
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",

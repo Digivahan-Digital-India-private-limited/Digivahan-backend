@@ -27,6 +27,8 @@ const UpdateUserDetails = async (req, res) => {
       });
     }
 
+    const ageInYears = Math.floor(age / (1000 * 60 * 60 * 24 * 365));
+
     // 🔥 Store old public_ids (for deletion later)
     let oldProfilePublicId = null;
     let oldPublicPublicId = null;
@@ -61,7 +63,7 @@ const UpdateUserDetails = async (req, res) => {
     // ===== 5️⃣ Update public details =====
     if (nick_name) user.public_details.nick_name = nick_name;
     if (address) user.public_details.address = address;
-    if (age !== undefined) user.public_details.age = age;
+    if (age !== undefined) user.public_details.age = ageInYears;
     if (gender) user.public_details.gender = gender;
 
     // 🟢 6️⃣ Recalculate profile completion %

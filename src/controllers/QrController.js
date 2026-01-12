@@ -351,7 +351,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
 
     // 3️⃣ Find user with profile pic
     const user = await User.findById(qrData.assign_to).select(
-      "basic_details.first_name basic_details.last_name basic_details.profile_pic public_details.age public_details.gender public_details.address"
+      "basic_details.first_name basic_details.last_name public_details.public_pic public_details.age public_details.gender public_details.address"
     );
 
     if (!user) {
@@ -369,7 +369,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
         user_id: user._id,
         first_name: user.basic_details.first_name,
         last_name: user.basic_details.last_name,
-        profile_pic: user.basic_details.profile_pic,
+        profile_pic: user.public_details.public_pic,
         age: user.public_details.age,
         gender: user.public_details.gender,
         address: user.public_details.address,

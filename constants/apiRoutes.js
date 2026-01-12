@@ -306,6 +306,7 @@ const API_ROUTES = {
     BASE: "/api/notifications",
     SEND: "/send",
     SEND_NOTIFICATION_FOR_CALL: "/send/call-notification",
+    SEND_SMS_NOTIFICATION: "/send/sms-notification/:user_id",
     GET_USER_NOTIFICATIONS: "/:user_id",
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",

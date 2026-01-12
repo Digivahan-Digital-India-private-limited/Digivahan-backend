@@ -2,11 +2,9 @@ const QRCode = require("qrcode");
 
 const generateQRCode = async (data) => {
   try {
-    // Object → String
-    const qrData = JSON.stringify(data);
-
+   
     // Base64 QR
-    const qrImage = await QRCode.toDataURL(qrData, {
+    const qrImage = await QRCode.toDataURL(data, {
       errorCorrectionLevel: "H",
       type: "image/png",
       margin: 2,

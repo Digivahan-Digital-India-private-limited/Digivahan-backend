@@ -267,6 +267,59 @@ const sendNotificationForCall = async (req, res) => {
   }
 };
 
+const sendSMSNotificationToUser = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+
+    if (!user_id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID required" });
+    }
+
+    // 1. Find user
+    const user = await User.findById(user_id);
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // 3. Get phone number
+    const phone = user?.basic_details?.phone_number;
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "User phone number not found",
+      });
+    }
+
+    // 4. Send SMS
+    const smsSent = await sendOTPViaSMS(phone, "verify");
+
+    if (!smsSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send SMS",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "SMS sent successfully to offline user",
+      phone,
+    });
+  } catch (error) {
+    console.error("sendSMSNotificationToUser Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 const sendOneSignalNotification = async ({
   externalUserId,
   title,
@@ -625,9 +678,75 @@ const isOnnotification = async (req, res) => {
   }
 };
 
+const sendOTPViaSMS = async (phone, templateType = "verify") => {
+  try {
+    // PRP SMS API configuration
+    const prpSmsConfig = {
+      apiUrl:
+        process.env.PRP_SMS_API_URL ||
+        "https://api.prpsms.biz/BulkSMSapi/keyApiSendSMS/SendSmsTemplateName",
+      apiKey: process.env.PRP_SMS_API_KEY,
+      sender: process.env.PRP_SMS_SENDER || "DGVAHN",
+      templates: {
+        verify: process.env.PRP_SMS_2FA_TEMPLATE_NAME || "2FA_Verification_OTP",
+      },
+    };
+
+    // Validate configuration
+    if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
+      console.error(
+        "PRP SMS configuration missing. Please check environment variables."
+      );
+      return false;
+    }
+
+    // Get template name based on type
+    const templateName = prpSmsConfig.templates[templateType];
+    if (!templateName) {
+      console.error(`Template name not found for type: ${templateType}`);
+      return false;
+    }
+
+    // Prepare SMS payload for PRP SMS API
+    const smsPayload = {
+      sender: prpSmsConfig.sender,
+      templateName: templateName,
+      smsReciever: [
+        {
+          mobileNo: phone,
+        },
+      ],
+    };
+
+    // Send SMS via PRP SMS API
+    const response = await axios.post(prpSmsConfig.apiUrl, smsPayload, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        apikey: prpSmsConfig.apiKey,
+      },
+      timeout: 10000, // 10 second timeout
+    });
+
+    // Check response status
+    if (response.data.isSuccess) {
+      console.log(`📱 SMS sent successfully to ${phone} via PRP SMS`);
+      console.log(`Response:`, response.data);
+      return true;
+    } else {
+      console.error("PRP SMS API error:", response.data);
+      return false;
+    }
+  } catch (error) {
+    console.error("Error sending SMS via PRP SMS:", error.message);
+    return false;
+  }
+};
+
 module.exports = {
   sendNotification,
   sendNotificationForCall,
+  sendSMSNotificationToUser,
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,

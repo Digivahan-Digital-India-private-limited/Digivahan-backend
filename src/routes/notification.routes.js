@@ -11,6 +11,7 @@ const {
 const {
   sendNotification,
   sendNotificationForCall,
+  sendSMSNotificationToUser,
   getAllNotification,
   checkSecurityCode,
   verifySecurityCode,
@@ -32,6 +33,12 @@ router.post(
     handleValidationErrors,
   ],
   sendNotificationForCall
+);
+
+router.post(
+  API_ROUTES.NOTIFICATION.SEND_SMS_NOTIFICATION,
+  [handleValidationErrors],
+  sendSMSNotificationToUser
 );
 
 router.get(

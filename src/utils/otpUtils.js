@@ -42,8 +42,6 @@ const generateVerificationId = () => {
  * @returns {Promise<boolean>} - Success status
  */
 const sendOTPViaSMS = async (phone, otp, templateType= "signup") => {
-  console.log(templateType);
-  
   try {
     // PRP SMS API configuration
     const prpSmsConfig = {
@@ -108,14 +106,6 @@ const sendOTPViaSMS = async (phone, otp, templateType= "signup") => {
     }
   } catch (error) {
     console.error("Error sending SMS via PRP SMS:", error.message);
-
-    // Fallback to console log for development
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `📱 [DEV] SMS would be sent to ${phone}: Your OTP is ${otp}. Valid for 10 minutes.`
-      );
-      return true;
-    }
     return false;
   }
 };

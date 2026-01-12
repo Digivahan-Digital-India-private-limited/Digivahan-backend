@@ -206,8 +206,7 @@ const sendNotificationForCall = async (req, res) => {
   try {
     const { sender_id, receiver_id } = req.body;
 
-    let notification_title = "Call Notification";
-    let message = "Request For Call";
+    let message = "Incoming call Request";
     let sender;
     let senderName = "Unknow User";
 
@@ -241,11 +240,10 @@ const sendNotificationForCall = async (req, res) => {
 
     await sendOneSignalNotification({
       externalUserId: receiver._id.toString(),
-      title: notification_title,
+      title: senderName,
       message,
       data: {
         sender_id,
-        senderName,
       },
       androidChannelId,
     });
@@ -254,7 +252,6 @@ const sendNotificationForCall = async (req, res) => {
       status: true,
       message: "Notification sent successfully",
       details: {
-        title: notification_title,
         sender_id,
         senderName: senderName,
         message,

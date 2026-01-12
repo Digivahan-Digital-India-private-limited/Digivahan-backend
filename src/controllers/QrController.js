@@ -24,7 +24,7 @@ const createQrScanner = async (req, res) => {
       const qr_id = generateRandomId(10);
 
       // 2️⃣ Attach with base URL
-      const BASE_URL = `https://digivahan-frontend.vercel.app/send-notification/${qr_id}`;
+      const BASE_URL = `https://digivahan.in/send-notification/${qr_id}`;
 
       // 3️⃣ Generate QR buffer
       const qrBuffer = await generateQRCode(BASE_URL);

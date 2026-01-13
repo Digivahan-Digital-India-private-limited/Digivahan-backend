@@ -85,23 +85,23 @@ const sendNotification = async (req, res) => {
        Max 3 notifications / 24 hrs
     ------------------------------ */
 
-    if (isGuestCase) {
-      const last3Hours = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    // if (isGuestCase) {
+    //   const last3Hours = new Date(Date.now() - 3 * 60 * 60 * 1000);
 
-      const guestNotificationCount = receiver.notifications.filter(
-        (n) =>
-          n.sender_id?.toString() === GUEST_ID &&
-          new Date(n.time || receiver.updated_at) > last3Hours
-      ).length;
+    //   const guestNotificationCount = receiver.notifications.filter(
+    //     (n) =>
+    //       n.sender_id?.toString() === GUEST_ID &&
+    //       new Date(n.time || receiver.updated_at) > last3Hours
+    //   ).length;
 
-      if (guestNotificationCount >= 3) {
-        return res.status(429).json({
-          status: false,
-          message:
-            "You have reached the maximum limit of notifications for today",
-        });
-      }
-    }
+    //   if (guestNotificationCount >= 3) {
+    //     return res.status(429).json({
+    //       status: false,
+    //       message:
+    //         "You have reached the maximum limit of notifications for today",
+    //     });
+    //   }
+    // }
 
     /* -----------------------------
        4️⃣ NORMALIZE INCIDENT PROOF

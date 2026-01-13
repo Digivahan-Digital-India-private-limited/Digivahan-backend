@@ -222,9 +222,7 @@ const sendNotificationForCall = async (req, res) => {
         });
       }
 
-      senderName = `${sender.basic_details.first_name || ""} ${
-        sender.basic_details.last_name || ""
-      }`.trim();
+      senderName = `${sender.public_details.nick_name || ""}`.trim();
     }
 
     const receiver = await User.findById(receiver_id);

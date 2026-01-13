@@ -367,8 +367,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
       message: "User details fetched successfully",
       data: {
         user_id: user._id,
-        first_name: user.basic_details.first_name,
-        last_name: user.basic_details.last_name,
+        full_name: user.public_details.nick_name,
         profile_pic: user.public_details.public_pic,
         age: user.public_details.age,
         gender: user.public_details.gender,

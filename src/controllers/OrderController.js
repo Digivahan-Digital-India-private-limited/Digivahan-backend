@@ -19,15 +19,15 @@ const formatOrderDate = () => {
 // ------------------------------
 // Generate Order Controller
 // ------------------------------
-const GenerateOrder = async (req, res) => {
+const GenerateOrderByUser = async (req, res) => {
   try {
     const {
       user_id,
-      payment_id,
+      order_id,
       sub_total,
       order_value,
       declared_value,
-      is_prepaid = 1,
+      is_prepared,
       shipping_is_billing = 1,
       is_return = 0,
 
@@ -86,19 +86,19 @@ const GenerateOrder = async (req, res) => {
     const currentOrderDate = formatOrderDate();
 
     // -----------------------------
-    // Prepare orderData for Shiprocket
+    // Prepare Order Data
     // -----------------------------
-    const orderDataForShiprocket = {
-      order_id: payment_id,
+    const orderData = {
+      order_id,
       order_date: currentOrderDate,
 
       sub_total,
       order_value,
-      payment_method: "Prepaid",
-      is_prepaid,
+      declared_value,
+      is_prepared,
       shipping_is_billing,
       is_return,
-      declared_value,
+      payment_method: "Prepaid",
 
       // Shipping
       shipping_customer_name,
@@ -123,13 +123,13 @@ const GenerateOrder = async (req, res) => {
       billing_country,
       billing_pincode,
 
-      // Parcel dimensions
+      // Parcel
       length,
       breadth,
       height,
       weight,
 
-      // Order items
+      // Items
       order_items: [
         {
           vehicle_id,
@@ -137,7 +137,7 @@ const GenerateOrder = async (req, res) => {
           name,
           sku,
           units,
-          selling_price: Number(selling_price), // Ensure number type
+          selling_price: Number(selling_price),
           selling_price_currency,
           discount,
           tax,
@@ -146,49 +146,24 @@ const GenerateOrder = async (req, res) => {
       ],
     };
 
-    // -----------------------------
-    // Call Shiprocket API
-    // -----------------------------
-    const shiprocketResponse = await createShiprocketOrder(
-      orderDataForShiprocket
-    );
-
-    console.log(shiprocketResponse);
-    
-
-    if (!shiprocketResponse) {
-      return res.status(500).json({
-        status: false,
-        message: "Shiprocket API error",
-      });
-    }
-
-   
     // ------------------------------
     // Save order in MongoDB
     // ------------------------------
     const newOrder = await Order.create({
       user_id,
-      ...orderDataForShiprocket,
-      payment_id: orderDataForShiprocket.order_id,
-      ship_rocket: shiprocketResponse,
+      ...orderData,
     });
 
-    const { order_id, ...restOrderData } = orderDataForShiprocket;
-
-    const myorder = {
-      ...restOrderData, // ❌ order_id gone
-      payment_id: order_id, // ✅ renamed
-      ship_rocket: shiprocketResponse,
-    };
-
+    // ------------------------------
+    // Save in User.my_orders
+    // ------------------------------
     await User.findByIdAndUpdate(
       user_id,
       {
         $push: {
           my_orders: {
             order_id: newOrder._id,
-            order_data: myorder,
+            order_data: orderData,
           },
         },
       },
@@ -197,11 +172,121 @@ const GenerateOrder = async (req, res) => {
 
     return res.status(201).json({
       status: true,
-      message: "Order created successfully",
+      message: "Order created successfully (without Shiprocket)",
       data: newOrder,
     });
   } catch (error) {
     console.log("Order Creation Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
+
+// Order confirm By admin
+const ConfirmOrderByAdmin = async (req, res) => {
+  try {
+    const { order_id } = req.body; // yeh Mongo _id hoga
+
+    // 1) Find Order by _id
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    // 2) Check status
+    if (order.order_status !== "NEW") {
+      return res.status(400).json({
+        status: false,
+        message: `Order is already ${order.order_status}`,
+      });
+    }
+
+    // 3) Prepare data for Shiprocket
+    const shiprocketPayload = {
+      order_id: order.order_id, // payment/order id
+      order_date: order.order_date,
+      sub_total: order.sub_total,
+      order_value: order.order_value,
+      payment_method: order.payment_method,
+      is_prepared: order.is_prepared,
+      shipping_is_billing: order.shipping_is_billing,
+      is_return: order.is_return,
+      declared_value: order.declared_value,
+
+      // Shipping
+      shipping_customer_name: order.shipping_customer_name,
+      shipping_last_name: order.shipping_last_name,
+      shipping_phone: order.shipping_phone,
+      shipping_address: order.shipping_address,
+      shipping_address_2: order.shipping_address_2,
+      shipping_city: order.shipping_city,
+      shipping_state: order.shipping_state,
+      shipping_country: order.shipping_country,
+      shipping_pincode: order.shipping_pincode,
+      shipping_email: order.shipping_email,
+
+      // Billing
+      billing_customer_name: order.billing_customer_name,
+      billing_last_name: order.billing_last_name,
+      billing_phone: order.billing_phone,
+      billing_address: order.billing_address,
+      billing_address_2: order.billing_address_2,
+      billing_city: order.billing_city,
+      billing_state: order.billing_state,
+      billing_country: order.billing_country,
+      billing_pincode: order.billing_pincode,
+
+      // Parcel
+      length: order.length,
+      breadth: order.breadth,
+      height: order.height,
+      weight: order.weight,
+
+      // Items
+      order_items: order.order_items,
+    };
+
+    // 4) Call Shiprocket
+    const shiprocketResponse = await createShiprocketOrder(shiprocketPayload);
+
+    if (!shiprocketResponse) {
+      return res.status(500).json({
+        status: false,
+        message: "Shiprocket API failed",
+      });
+    }
+
+    // 5) Update Order after confirmation
+    order.ship_rocket = shiprocketResponse;
+    order.ship_rocket.status = "PENDING"; // 🔥 Shiprocket status
+    order.order_status = "PENDING"; // Order status
+    order.is_prepared = true; // ✅ Admin prepared
+    await order.save();
+
+    // 6) Update in User.my_orders also
+    await User.updateOne(
+      { _id: order.user_id, "my_orders.order_id": order._id },
+      {
+        $set: {
+          "my_orders.$.order_data": order,
+        },
+      }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Order confirmed and sent to Shiprocket",
+      data: order,
+    });
+  } catch (error) {
+    console.log("ConfirmOrderByAdmin Error:", error);
     return res.status(500).json({
       status: false,
       message: "Something went wrong",
@@ -215,12 +300,16 @@ const GenerateOrder = async (req, res) => {
 // ------------------------------
 const createShiprocketOrder = async (payload) => {
   try {
-    const response = await axios.post(`https://apiv2.shiprocket.in/v1/external/orders/create/adhoc`, payload, {
-      headers: {
-        Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await axios.post(
+      `https://apiv2.shiprocket.in/v1/external/orders/create/adhoc`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
     return response.data;
   } catch (error) {
     console.log("Shiprocket API Error:", error?.response?.data);
@@ -277,7 +366,6 @@ const getUserAllOrder = async (req, res) => {
     });
   }
 };
-
 
 // ------------------------------
 // Find Single Order Details
@@ -497,11 +585,70 @@ const findOrderByUserId = async (req, res) => {
   }
 };
 
+// ------------------------------
+// This apis only hit by user
+const OrderCanceByUser = async (req, res) => {
+  try {
+    const { order_id } = req.body;
+
+    if (!order_id) {
+      return res.status(400).json({
+        status: false,
+        message: "Order id is required",
+      });
+    }
+
+    // 1) Find order by _id
+    const order = await Order.findById(order_id);
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    // 2) Check prepared status
+    if (order.is_prepared === true) {
+      return res.status(400).json({
+        status: false,
+        message: "This order is already prepared, you cannot cancel it",
+      });
+    }
+
+    // 3) Cancel order
+    order.order_status = "CANCELED";
+    await order.save();
+
+    // 4) Update in user.my_orders also
+    await User.updateOne(
+      { _id: order.user_id, "my_orders.order_id": order._id },
+      {
+        $set: {
+          "my_orders.$.order_data.order_status": "CANCELED",
+        },
+      }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Order canceled successfully",
+      data: order,
+    });
+  } catch (error) {
+    console.log("OrderCanceByUser Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Something went wrong",
+      error: error.message,
+    });
+  }
+};
 
 // ------------------------------
-// Order Cancel By user
+// Order Cancel By Admin
 // --
-const OrderCancel = async (req, res) => {
+const OrderCancelByAdmin = async (req, res) => {
   try {
     const { user_id, order_id, shiprocket_orderId } = req.body;
 
@@ -551,6 +698,7 @@ const OrderCancel = async (req, res) => {
 
     // 5️⃣ Update ORDER schema
     order.ship_rocket.status = "CANCELED";
+    order.is_prepared = false;
     order.ship_rocket.delivery_code = "";
 
     await order.save();
@@ -614,7 +762,6 @@ const cancelShiprocketOrder = async (orderId) => {
     throw error;
   }
 };
-
 
 // Track Order Status
 const TrackOrderwithOrderId = async (req, res) => {
@@ -722,7 +869,7 @@ const TrackOrderwithOrderId = async (req, res) => {
   }
 };
 
-
+// Shiprocket Order Track Function
 const trackShiprocketOrder = async (shiprocketOrderId) => {
   const url = `https://apiv2.shiprocket.in/v1/external/orders/show/${shiprocketOrderId}`;
 
@@ -737,12 +884,14 @@ const trackShiprocketOrder = async (shiprocketOrderId) => {
 };
 
 module.exports = {
-  GenerateOrder,
+  GenerateOrderByUser,
+  ConfirmOrderByAdmin,
   getUserAllOrder,
   findSingleOrderData,
   checkCouierService,
   findOrderByOrderId,
   findOrderByUserId,
-  OrderCancel,
+  OrderCancelByAdmin,
+  OrderCanceByUser,
   TrackOrderwithOrderId,
 };

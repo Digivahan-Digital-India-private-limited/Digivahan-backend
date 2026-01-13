@@ -32,14 +32,15 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    payment_id: { type: String, required: true },
+    order_id: { type: String, required: true },
     order_date: { type: String, required: true },
 
     sub_total: { type: Number, required: true },
     order_value: { type: Number, required: true },
+    order_status: { type: String, default: "NEW" },
 
     payment_method: { type: String, default: "Prepaid" },
-    is_prepaid: { type: Number, default: 1 },
+    is_prepared: { type: Boolean, default: false },
     shipping_is_billing: { type: Number, default: 1 },
     is_return: { type: Number, default: 0 },
     declared_value: { type: Number, required: true },

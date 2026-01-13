@@ -8,20 +8,28 @@ const {
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 const {
-  GenerateOrder,
+  GenerateOrderByUser,
+  ConfirmOrderByAdmin,
   getUserAllOrder,
   findSingleOrderData,
   checkCouierService,
   findOrderByOrderId,
   findOrderByUserId,
   TrackOrderwithOrderId,
-  OrderCancel
+  OrderCancelByAdmin,
+  OrderCanceByUser,
 } = require("../controllers/OrderController.js");
 
 router.post(
-  API_ROUTES.ORDER.CREATE_ORDER,
+  API_ROUTES.ORDER.USER_CREATE_ORDER,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  GenerateOrder
+  GenerateOrderByUser
+);
+
+router.post(
+  API_ROUTES.ORDER.ADMIN_CONFIRM_ORDER,
+  [commonValidations.orderId("order_id"), handleValidationErrors],
+  ConfirmOrderByAdmin
 );
 
 router.post(
@@ -62,13 +70,16 @@ router.post(
 );
 
 router.post(
-  API_ROUTES.ORDER.CANCEL_ORDER,
-  [
-    commonValidations.userId("user_id"),
-    handleValidationErrors
-  ], 
-  OrderCancel
-)
+  API_ROUTES.ORDER.CANCEL_ORDER_BY_USER,
+  [commonValidations.orderId("order_id"), handleValidationErrors],
+  OrderCanceByUser
+);
+
+router.post(
+  API_ROUTES.ORDER.CANCEL_ORDER_BY_ADMIN,
+  [commonValidations.userId("user_id"), handleValidationErrors],
+  OrderCancelByAdmin
+);
 
 router.post(
   API_ROUTES.ORDER.TRACK_ORDER_STATUS,

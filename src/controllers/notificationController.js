@@ -86,12 +86,12 @@ const sendNotification = async (req, res) => {
     ------------------------------ */
 
     if (isGuestCase) {
-      const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const last3Hours = new Date(Date.now() - 3 * 60 * 60 * 1000);
 
       const guestNotificationCount = receiver.notifications.filter(
         (n) =>
           n.sender_id?.toString() === GUEST_ID &&
-          new Date(n.time || receiver.updated_at) > last24Hours
+          new Date(n.time || receiver.updated_at) > last3Hours
       ).length;
 
       if (guestNotificationCount >= 3) {

@@ -355,14 +355,16 @@ const API_ROUTES = {
   // Order routes
   ORDER: {
     BASE: "/api",
-    CREATE_ORDER: "/orders",
+    USER_CREATE_ORDER: "/user/create-order",
+    ADMIN_CONFIRM_ORDER: "/admin/order-confirm",
     // find from user myorder node
     USER_ORDERS: "/orders-user-list",
     USER_ORDER_DETAILS: "/orders/order-details",
     // find from direct order section
     FETCH_BY_ORDER_ID: "/admin/fetch/order-id",
     FETCH_BY_USER_ID: "/admin/fetch/user-id",
-    CANCEL_ORDER: "/orders/cancel",
+    CANCEL_ORDER_BY_ADMIN: "/orders/admin-cancel",
+    CANCEL_ORDER_BY_USER: "/order/user-cancel",
     CHECK_COURIER: "/check/courier-service",
     // Track Order Status
     TRACK_ORDER_STATUS: "/track-order-status",

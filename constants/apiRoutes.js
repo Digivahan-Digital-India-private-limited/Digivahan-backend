@@ -135,6 +135,7 @@ const API_ROUTES = {
   GARAGE: {
     BASE: "/api",
     ADD_VEHICLE: "/v1/add-vehicle",
+    REFRESH_VEHICLE_DATA:"/v1/refresh/vehicle-data",
     ADD_USER_GARAGE: "/v1/user/add-garage",
     GET_GARAGE: "/v1/garage/:user_id",
     REMOVE_VEHICLE: "/v1/garage/remove-vehicle",

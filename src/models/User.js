@@ -257,7 +257,7 @@ const userSchema = new mongoose.Schema({
     public_id: { type: String, default: "" },
     nick_name: { type: String, default: "" },
     address: { type: String, default: "" },
-    age: { type: Number, default: 0 },
+    age: { type: String, default: "" },
     gender: {
       type: String,
       enum: ["male", "female", "other", ""],

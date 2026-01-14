@@ -94,8 +94,9 @@ const GenerateOrderByUser = async (req, res) => {
 
       sub_total,
       order_value,
+      order_status: "NEW",
       declared_value,
-      is_prepared,
+      is_prepared: false,
       shipping_is_billing,
       is_return,
       payment_method: "Prepaid",
@@ -698,7 +699,7 @@ const OrderCancelByAdmin = async (req, res) => {
 
     // 5️⃣ Update ORDER schema
     order.ship_rocket.status = "CANCELED";
-    order.is_prepared = false;
+    order.order_status = "CANCELED";
     order.ship_rocket.delivery_code = "";
 
     await order.save();
@@ -764,20 +765,19 @@ const cancelShiprocketOrder = async (orderId) => {
 };
 
 // Track Order Status
+// Track Order Status
 const TrackOrderwithOrderId = async (req, res) => {
   try {
     const { user_id, order_id, shiprocket_orderId } = req.body;
 
-    if (!user_id || !order_id || !shiprocket_orderId) {
+    if (!user_id || !order_id) {
       return res.status(400).json({
         status: false,
-        message: "user_id, order_id and shiprocket_orderId are required",
+        message: "user_id and order_id are required",
       });
     }
 
-    /* ----------------------------------
-       1️⃣ Find order by order_id (FAST)
-    -----------------------------------*/
+    /* 1️⃣ Find order by order_id */
     const order = await Order.findById(order_id);
 
     if (!order) {
@@ -787,9 +787,7 @@ const TrackOrderwithOrderId = async (req, res) => {
       });
     }
 
-    /* ----------------------------------
-       2️⃣ Check order belongs to user
-    -----------------------------------*/
+    /* 2️⃣ Check order belongs to user */
     if (String(order.user_id) !== String(user_id)) {
       return res.status(403).json({
         status: false,
@@ -797,9 +795,16 @@ const TrackOrderwithOrderId = async (req, res) => {
       });
     }
 
-    /* ----------------------------------
-       3️⃣ Validate Shiprocket order ID
-    -----------------------------------*/
+    /* 3️⃣ Agar shiprocket_orderId NAHI aaya → direct order return */
+    if (!shiprocket_orderId) {
+      return res.status(200).json({
+        status: true,
+        message: "Order fetched successfully (no tracking called)",
+        order,
+      });
+    }
+
+    /* 4️⃣ Agar aaya hai → validate karo */
     if (String(order.ship_rocket?.order_id) !== String(shiprocket_orderId)) {
       return res.status(400).json({
         status: false,
@@ -807,15 +812,9 @@ const TrackOrderwithOrderId = async (req, res) => {
       });
     }
 
-    /* ----------------------------------
-       4️⃣ Call Shiprocket Tracking API
-    -----------------------------------*/
+    /* 5️⃣ Call Shiprocket Tracking API */
     const trackingData = await trackShiprocketOrder(shiprocket_orderId);
 
-    /* ----------------------------------
-       5️⃣ Extract shipment status & delivery_code
-       (shipment status preferred)
-    -----------------------------------*/
     const shipmentStatus =
       trackingData?.data?.shipments?.status ||
       trackingData?.data?.status ||
@@ -823,17 +822,12 @@ const TrackOrderwithOrderId = async (req, res) => {
 
     const deliveryCode = trackingData?.data?.delivery_code || "";
 
-    /* ----------------------------------
-       6️⃣ Update ORDER schema
-    -----------------------------------*/
+    /* 6️⃣ Update ORDER */
     order.ship_rocket.status = shipmentStatus;
     order.ship_rocket.delivery_code = deliveryCode;
-
     await order.save();
 
-    /* ----------------------------------
-       7️⃣ Update USER schema (my_orders)
-    -----------------------------------*/
+    /* 7️⃣ Update USER my_orders */
     await User.findOneAndUpdate(
       {
         _id: user_id,
@@ -847,9 +841,7 @@ const TrackOrderwithOrderId = async (req, res) => {
       }
     );
 
-    /* ----------------------------------
-       8️⃣ Response
-    -----------------------------------*/
+    /* 8️⃣ Response */
     return res.status(200).json({
       status: true,
       message: "Order tracked & updated successfully",
@@ -857,11 +849,10 @@ const TrackOrderwithOrderId = async (req, res) => {
       shiprocket_orderId,
       shipment_status: shipmentStatus,
       delivery_code: deliveryCode,
-      tracking: trackingData,
+      order,
     });
   } catch (error) {
     console.error("Track order error:", error?.response?.data || error.message);
-
     return res.status(500).json({
       status: false,
       message: "Failed to track order",

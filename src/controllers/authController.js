@@ -64,7 +64,7 @@ const registerInit = async (req, res) => {
     }
 
     // Generate OTP and user register ID
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const userRegisterId = generateTempUserId();
 
     // Create or update OTP record
@@ -522,7 +522,7 @@ const resendOtp = async (req, res) => {
     }
 
     // Generate new OTP
-    const newOtpCode = generateOTP(6);
+    const newOtpCode = generateOTP(4);
 
     // Update temp user with new OTP
     tempUser.otp_code = newOtpCode;
@@ -831,7 +831,7 @@ const otpBasedLogin = async (req, res) => {
     }
 
     // Generate OTP
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const otpChannel = login_via.toUpperCase();
 
     // Create or update OTP record
@@ -1101,7 +1101,7 @@ const requestResetPassword = async (req, res) => {
     }
 
     // Generate OTP
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const otpChannel = otp_channel; // Already converted to uppercase by validation middleware
 
     // Create or update OTP record
@@ -1375,7 +1375,7 @@ const verifyRequest = async (req, res) => {
     }
 
     // Generate OTP and verification ID
-    const otpCode = generateOTP(6);
+    const otpCode = generateOTP(4);
     const verificationId = generateVerificationId();
     const otpChannel = otp_channel;
 
@@ -1549,7 +1549,7 @@ const RequestPrimaryContact = async (req, res) => {
     }
 
     // 3️⃣ Generate OTP
-    const otp = generateOTP(6);
+    const otp = generateOTP(4);
 
     // 4️⃣ Save OTP in database
     await PrimaryOTP.create({

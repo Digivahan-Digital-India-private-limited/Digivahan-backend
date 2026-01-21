@@ -24,12 +24,12 @@ exports.uploadNotificationImage = async (req, res) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: `notification_file/${folder_name}`,
-          resource_type: "image",
+          resource_type: "auto",
         },
         (error, result) => {
           if (error) return reject(error);
           resolve(result);
-        }
+        },
       );
 
       streamifier.createReadStream(req.file.buffer).pipe(stream);
@@ -52,7 +52,6 @@ exports.uploadNotificationImage = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteNotificationImage = async (req, res) => {
     try {

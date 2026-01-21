@@ -33,6 +33,7 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
     order_id: { type: String, required: true },
+    courier_company_id: { type: String, required: true },
     order_date: { type: String, required: true },
 
     sub_total: { type: Number, required: true },

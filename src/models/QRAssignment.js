@@ -2,61 +2,38 @@ const mongoose = require("mongoose");
 
 const qrAssignmentSchema = new mongoose.Schema(
   {
-    qr_id: {
-      type: String,
+    qr_no: {
+      type: Number,
       required: true,
-      trim: true,
+      unique: true,
+      index: true,
     },
-    qr_img: {
-      type: String,
-      default: null,
-    },
+    qr_id: { type: String, required: true, trim: true },
+    qr_img: { type: String, default: null },
     qr_status: {
       type: String,
       default: "unassigned",
       enum: ["unassigned", "assigned", "blocked"],
-      trim: true,
     },
-    assigned_by: {
-      type: String,
-      // required: true,
-      enum: ["user", "sales"],
-    },
-    assign_to: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+    assigned_by: { type: String, enum: ["user", "sales"] },
+    assign_to: { type: String, default: "" },
     product_type: {
       type: String,
       default: "vehicle",
       enum: ["vehicle", "pets", "children", "devices"],
-      trim: true,
     },
-    vehicle_id: {
-      type: String,
-      // required: true,
-      trim: true,
-      default: "",
-    },
-    sales_id: {
-      type: String,
-      default: "",
-      trim: true,
-    },
+    vehicle_id: { type: String, default: "" },
+    sales_id: { type: String, default: "" },
     status: {
       type: String,
       enum: ["active", "damaged", "inactive"],
       default: "active",
     },
-    assigned_at: {
-      type: Date,
-      default: "",
-    }
+    assigned_at: { type: Date, default: "" },
+    is_printed: { type: Boolean, default: false, index: true },
+    printed_at: { type: Date, default: null },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true },
 );
 
 // Index for efficient queries
@@ -64,6 +41,12 @@ const qrAssignmentSchema = new mongoose.Schema(
 qrAssignmentSchema.index({ vehicle_id: 1 });
 qrAssignmentSchema.index({ user_id: 1 });
 qrAssignmentSchema.index({ sales_id: 1 });
+
+// 🔢 Get next QR number (sequence)
+qrAssignmentSchema.statics.getNextQrNo = async function () {
+  const lastQr = await this.findOne().sort({ qr_no: -1 }).select("qr_no");
+  return lastQr ? lastQr.qr_no + 1 : 1;
+};
 
 // Virtual for checking if QR is assigned
 qrAssignmentSchema.virtual("isAssigned").get(function () {

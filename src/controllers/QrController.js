@@ -5,6 +5,7 @@ const User = require("../models/User");
 const { generateQRCode } = require("../middleware/qrgernator");
 const { uploadQrToCloudinary } = require("../middleware/cloudinary");
 const generateQRTemplate = require("../utils/generateQRTemplate");
+const zipAndClearFiles = require("../utils/zipAndClearFiles");
 
 const createQrScanner = async (req, res) => {
   try {
@@ -17,32 +18,28 @@ const createQrScanner = async (req, res) => {
       });
     }
 
+    let nextQrNo = await QRAssignment.getNextQrNo(); // 🔥 from model
+
     const qrAssignments = [];
 
     for (let i = 0; i < unit; i++) {
-      // 1️⃣ Generate random QR ID
       const qr_id = generateRandomId(10);
-
-      // 2️⃣ Attach with base URL
       const BASE_URL = `https://digivahan.in/send-notification/${qr_id}`;
-
-      // 3️⃣ Generate QR buffer
       const qrBuffer = await generateQRCode(BASE_URL);
-
-      // 4️⃣ Upload QR to Cloudinary
       const uploadResult = await uploadQrToCloudinary(qrBuffer, qr_id);
 
-      // 5️⃣ Prepare DB object
       qrAssignments.push({
+        qr_no: nextQrNo, // 👈 sequence
         qr_id,
         qr_img: uploadResult.secure_url,
         qr_status: "unassigned",
         product_type: "vehicle",
         status: "active",
       });
+
+      nextQrNo++; // next number
     }
 
-    // 6️⃣ Bulk insert (FAST & CLEAN 🔥)
     const savedQrs = await QRAssignment.insertMany(qrAssignments);
 
     res.status(201).json({
@@ -251,42 +248,50 @@ const CheckQrInUser = async (req, res) => {
 
 const QrCustomTemplateUrl = async (req, res) => {
   try {
-    const { qr_id } = req.params;
+    const qrList = await QRAssignment.find({
+      is_printed: false,
+      qr_status: "unassigned",
+    }).sort({ createdAt: 1 });
 
-    if (!qr_id) {
-      return res.status(400).json({
-        success: false,
-        message: "qr_id is required",
-      });
-    }
-
-    // 1️⃣ Find QR Assignment
-    const qrData = await QRAssignment.findOne({ qr_id });
-
-    if (!qrData) {
+    if (!qrList.length) {
       return res.status(404).json({
         success: false,
-        message: "QR Assignment not found",
+        message: "No new QR available for printing",
       });
     }
 
-    // 2️⃣ Get QR Image URL
-    const qrImageUrl = qrData.qr_img;
+    const templatePaths = [];
 
-    if (!qrImageUrl) {
+    // Generate templates
+    for (const qr of qrList) {
+      if (!qr.qr_img) continue;
+      const templatePath = await generateQRTemplate(qr.qr_img, qr.qr_no);
+      // expected: "/uploads/template_xxx.png"
+      templatePaths.push(templatePath);
+    }
+
+    if (!templatePaths.length) {
       return res.status(400).json({
         success: false,
-        message: "QR image URL not found in record",
+        message: "No templates generated",
       });
     }
 
-    // 3️⃣ Generate Template using QR URL
-    const templateUrl = await generateQRTemplate(qrImageUrl);
+    // Zip all templates & delete originals
+    const zipRelativePath = await zipAndClearFiles(templatePaths);
 
-    // 4️⃣ Success Response
+    // Mark QRs as printed
+    const ids = qrList.map((q) => q._id);
+    await QRAssignment.updateMany(
+      { _id: { $in: ids } },
+      { $set: { is_printed: true, printed_at: new Date() } },
+    );
+
     return res.status(200).json({
       success: true,
-      template_url: `${process.env.BASE_URL}${templateUrl}`,
+      total_printed: qrList.length,
+      download_zip: `${process.env.BASE_URL}${zipRelativePath}`,
+      message: "All QR templates downloaded & originals cleared",
     });
   } catch (error) {
     console.error("QrCustomURL Error:", error);

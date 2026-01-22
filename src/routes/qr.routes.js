@@ -45,7 +45,7 @@ router.get(
   CreateQrTemplateInBulk,
 );
 
-router.get(
+router.post(
   API_ROUTES.QR.GET_QR_TEMPLATE_USER,
   [handleValidationErrors],
   CreateSingleQRTemplate,

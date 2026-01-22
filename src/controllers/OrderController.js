@@ -56,6 +56,8 @@ const GenerateOrderByUser = async (req, res) => {
 
       // Order Item
       vehicle_id,
+      makers_model,
+      makers_name,
       order_type,
       name,
       sku = "QR-001",
@@ -135,6 +137,8 @@ const GenerateOrderByUser = async (req, res) => {
       order_items: [
         {
           vehicle_id,
+          makers_model,
+          makers_name,
           order_type,
           name,
           sku,
@@ -445,8 +449,6 @@ const checkCouierService = async (req, res) => {
 
     const API_URL = `https://apiv2.shiprocket.in/v1/external/courier/serviceability/?${queryString}`;
 
-    console.log("📦 Checking Serviceability => ", API_URL);
-
     const response = await axios.get(API_URL, {
       headers: {
         Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
@@ -468,6 +470,14 @@ const checkCouierService = async (req, res) => {
       };
     });
 
+    let estimated1 = courier_companies.sort(
+      (a, b) => a.total_price - b.total_price,
+    );
+    let estimated2 = courier_companies.sort(
+      (a, b) =>
+        Number(a.estimated_delivery_days) - Number(b.estimated_delivery_days),
+    );
+
     if (compareOn === "price") {
       courier_companies.sort((a, b) => a.total_price - b.total_price);
     } else if (compareOn === "days") {
@@ -480,7 +490,18 @@ const checkCouierService = async (req, res) => {
     return res.status(200).json({
       status: true,
       message: "Serviceability Fetched Successfully",
-      data: courier_companies,
+      is_fast_delivery:
+        estimated1[0].estimated_delivery_days ===
+        estimated2[0].estimated_delivery_days
+          ? false
+          : true,
+      data: {
+        courier_company_id: courier_companies[0].courier_company_id,
+        courier_name: courier_companies[0].courier_name,
+        estimated_delivery_days: courier_companies[0].estimated_delivery_days,
+        freight_charge: courier_companies[0].freight_charge,
+        suppress_date: courier_companies[0].suppress_date,
+      },
     });
   } catch (error) {
     console.error(

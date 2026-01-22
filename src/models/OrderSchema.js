@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 
 const orderItemSchema = new mongoose.Schema({
   vehicle_id: { type: String, default: "" },
+  makers_model: { type: String, default: "" },
+  makers_name: { type: String, default: "" },
   order_type: { type: String, default: "" },
   name: { type: String, required: true },
   sku: { type: String, default: "QR-001" },

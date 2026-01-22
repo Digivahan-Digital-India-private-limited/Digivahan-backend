@@ -246,8 +246,9 @@ const CheckQrInUser = async (req, res) => {
   }
 };
 
-const QrCustomTemplateUrl = async (req, res) => {
+const CreateQrTemplateInBulk = async (req, res) => {
   try {
+    const { template_type } = req.body;
     const qrList = await QRAssignment.find({
       is_printed: false,
       qr_status: "unassigned",
@@ -265,7 +266,11 @@ const QrCustomTemplateUrl = async (req, res) => {
     // Generate templates
     for (const qr of qrList) {
       if (!qr.qr_img) continue;
-      const templatePath = await generateQRTemplate(qr.qr_img, qr.qr_no);
+      const templatePath = await generateQRTemplate(
+        qr.qr_img,
+        qr.qr_no,
+        template_type,
+      );
       // expected: "/uploads/template_xxx.png"
       templatePaths.push(templatePath);
     }
@@ -356,7 +361,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
 
     // 3️⃣ Find user with profile pic
     const user = await User.findById(qrData.assign_to).select(
-      "public_details.nick_name public_details.public_pic public_details.age public_details.gender public_details.address"
+      "public_details.nick_name public_details.public_pic public_details.age public_details.gender public_details.address",
     );
 
     if (!user) {
@@ -390,12 +395,79 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
   }
 };
 
+const CreateSingleQRTemplate = async (req, res) => {
+  try {
+    const { qr_id } = req.params;
+    const { template_type } = req.body;
+
+    if (!qr_id) {
+      return res.status(400).json({
+        success: false,
+        message: "qr_id is required",
+      });
+    }
+
+    // 1️⃣ Find QR
+    const qrData = await QRAssignment.findOne({ qr_id });
+
+    if (!qrData) {
+      return res.status(404).json({
+        success: false,
+        message: "QR Assignment not found",
+      });
+    }
+
+    // 2️⃣ Check QR is assigned
+    if (qrData.qr_status !== "assigned") {
+      return res.status(400).json({
+        success: false,
+        message: "QR is not assigned yet",
+      });
+    }
+
+    // 3️⃣ Check assign_to exists
+    if (!qrData.assign_to || qrData.assign_to.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "QR is not linked to any user",
+      });
+    }
+
+    // 4️⃣ Check QR image
+    if (!qrData.qr_img) {
+      return res.status(400).json({
+        success: false,
+        message: "QR image not found",
+      });
+    }
+
+    // 5️⃣ Generate template with QR + number
+    const templatePath = await generateQRTemplate(
+      qrData.qr_img,
+      qrData.qr_no,
+      template_type,
+    );
+
+    return res.status(200).json({
+      success: true,
+      template_url: `${process.env.BASE_URL}${templatePath}`,
+    });
+  } catch (error) {
+    console.error("CreateSingleQRTemplate Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
 module.exports = {
   createQrScanner,
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
-  QrCustomTemplateUrl,
+  CreateQrTemplateInBulk,
+  CreateSingleQRTemplate,
   getUploadedTemplateImage,
   GetUserdetailsThrowTheQRId,
 };

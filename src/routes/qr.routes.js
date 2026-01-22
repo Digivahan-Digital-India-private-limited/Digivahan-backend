@@ -13,7 +13,8 @@ const {
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
-  QrCustomTemplateUrl,
+  CreateQrTemplateInBulk,
+  CreateSingleQRTemplate,
   getUploadedTemplateImage,
   GetUserdetailsThrowTheQRId,
 } = require("../controllers/QrController.js");
@@ -21,7 +22,7 @@ const {
 router.post(
   API_ROUTES.QR.GENERATE_QR,
   [commonValidations.unitno("unit"), handleValidationErrors],
-  createQrScanner
+  createQrScanner,
 );
 
 router.get(API_ROUTES.QR.QR_DETAILS, [handleValidationErrors], getQrDetails);
@@ -29,31 +30,37 @@ router.get(API_ROUTES.QR.QR_DETAILS, [handleValidationErrors], getQrDetails);
 router.post(
   API_ROUTES.QR.QR_ASSIGNMENT,
   [handleValidationErrors],
-  AssignedQrtoUser
+  AssignedQrtoUser,
 );
 
 router.post(
   API_ROUTES.QR.CHECK_QR,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  CheckQrInUser
+  CheckQrInUser,
 );
 
 router.get(
-  API_ROUTES.QR.GET_QR_TEMPLATES,
+  API_ROUTES.QR.GET_QR_TEMPLATES_BULK,
   [handleValidationErrors],
-  QrCustomTemplateUrl
+  CreateQrTemplateInBulk,
+);
+
+router.get(
+  API_ROUTES.QR.GET_QR_TEMPLATE_USER,
+  [handleValidationErrors],
+  CreateSingleQRTemplate,
 );
 
 router.get(
   API_ROUTES.QR.UPLODED_TEMPLATE,
   [handleValidationErrors],
-  getUploadedTemplateImage
+  getUploadedTemplateImage,
 );
 
 router.get(
   API_ROUTES.QR.GET_USER_DETAILS,
   [handleValidationErrors],
-  GetUserdetailsThrowTheQRId
+  GetUserdetailsThrowTheQRId,
 );
 
 module.exports = router;

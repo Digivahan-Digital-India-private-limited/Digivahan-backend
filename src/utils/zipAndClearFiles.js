@@ -15,7 +15,7 @@ async function zipAndClearFiles(filePaths) {
     filePath = normalize(filePath); // 👈 important
     const absPath = path.join(__dirname, "../../", filePath);
 
-    console.log("Zipping:", absPath);
+    // console.log("Zipping:", absPath);
 
     if (fs.existsSync(absPath)) {
       archive.file(absPath, { name: path.basename(absPath) });
@@ -34,7 +34,7 @@ async function zipAndClearFiles(filePaths) {
 
         if (fs.existsSync(absPath)) {
           fs.unlinkSync(absPath);
-          console.log("Deleted:", absPath);
+          // console.log("Deleted:", absPath);
         } else {
           console.log("Not found for delete:", absPath);
         }

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload, profilePicParser } = require("../middleware/cloudinary.js");
+const { profilePicParser } = require("../middleware/cloudinary.js");
 
 const {
   handleValidationErrors,

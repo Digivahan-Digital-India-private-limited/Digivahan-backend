@@ -10,6 +10,7 @@ const qrAssignmentSchema = new mongoose.Schema(
     },
     qr_id: { type: String, required: true, trim: true },
     qr_img: { type: String, default: null },
+    qr_image_public_id: { type: String, default: null },
     qr_status: {
       type: String,
       default: "unassigned",

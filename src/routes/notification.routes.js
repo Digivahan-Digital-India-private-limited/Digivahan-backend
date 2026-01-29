@@ -13,6 +13,7 @@ const {
   sendNotificationForCall,
   sendSMSNotificationToUser,
   getAllNotification,
+  DeleteNotification,
   checkSecurityCode,
   verifySecurityCode,
   seenNotificationByUser,
@@ -22,7 +23,7 @@ const {
 router.post(
   API_ROUTES.NOTIFICATION.SEND,
   [commonValidations.receiverId("receiver_id"), handleValidationErrors],
-  sendNotification
+  sendNotification,
 );
 
 router.post(
@@ -32,25 +33,31 @@ router.post(
     commonValidations.receiverId("receiver_id"),
     handleValidationErrors,
   ],
-  sendNotificationForCall
+  sendNotificationForCall,
 );
 
 router.post(
   API_ROUTES.NOTIFICATION.SEND_SMS_NOTIFICATION,
   [handleValidationErrors],
-  sendSMSNotificationToUser
+  sendSMSNotificationToUser,
 );
 
 router.get(
   API_ROUTES.NOTIFICATION.GET_USER_NOTIFICATIONS,
   [handleValidationErrors],
-  getAllNotification
+  getAllNotification,
+);
+
+router.post(
+  API_ROUTES.NOTIFICATION.DELETE_NOTIFICATIONS,
+  [commonValidations.userId("user_id"), handleValidationErrors],
+  DeleteNotification,
 );
 
 router.post(
   API_ROUTES.NOTIFICATION.SEEN_NOTIFICATION,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  seenNotificationByUser
+  seenNotificationByUser,
 );
 
 router.post(
@@ -60,7 +67,7 @@ router.post(
     commonValidations.vehicleIdRequired("vehicle_id"),
     handleValidationErrors,
   ],
-  checkSecurityCode
+  checkSecurityCode,
 );
 
 router.post(
@@ -70,13 +77,13 @@ router.post(
     commonValidations.vehicleIdRequired("vehicle_id"),
     handleValidationErrors,
   ],
-  verifySecurityCode
+  verifySecurityCode,
 );
 
 router.post(
   API_ROUTES.NOTIFICATION.IS_ON_NOTIFICATION,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  isOnnotification
+  isOnnotification,
 );
 
 module.exports = router;

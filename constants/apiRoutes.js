@@ -308,8 +308,8 @@ const API_ROUTES = {
     BASE: "/api/notifications",
     SEND: "/send",
     SEND_NOTIFICATION_FOR_CALL: "/send/call-notification",
-    SEND_SMS_NOTIFICATION: "/send/sms-notification/:user_id",
     GET_USER_NOTIFICATIONS: "/:user_id",
+    DELETE_NOTIFICATIONS: "/delete",
     SEEN_NOTIFICATION: "/user/seen-notification",
     CHECK_SECURITY_CODE: "/check/security-code",
     VERIFY_SECURITY_CODE: "/verify/security-code",
@@ -393,6 +393,13 @@ const API_ROUTES = {
     GET_MESSAGES: "/messages/:chat_room_id",
     UPDATE_MESSAGE_STATUS: "/messages/:messageId/status",
     UNREAD_COUNT: "/messages/unread/:userId",
+  },
+
+  // Contact To User
+  CONTACT: {
+    BASE: "/api",
+    CALL_USER: "/user/contact-via-call",
+    SEND_SMS_NOTIFICATION: "/send/sms-notification",
   },
 };
 

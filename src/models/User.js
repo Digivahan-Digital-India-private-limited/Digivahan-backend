@@ -124,6 +124,40 @@ const vehicleSchema = new mongoose.Schema({
       },
     ],
   },
+
+  qr_list: [
+    {
+      qr_id: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      qr_img: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      qr_image_public_id: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      product_type: {
+        type: String,
+        enum: ["vehicle"],
+        default: "vehicle",
+      },
+      vehicle_id: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      assigned_date: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
 });
 
 const garageSchema = new mongoose.Schema({
@@ -135,7 +169,7 @@ const userMyOrderSchema = new mongoose.Schema(
     order_id: { type: mongoose.Schema.Types.ObjectId, ref: "Order" }, // Reference to main Order schema
     order_data: mongoose.Schema.Types.Mixed, // Stores full order object
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const notificationSchema = new mongoose.Schema(
@@ -233,7 +267,7 @@ const notificationSchema = new mongoose.Schema(
   },
   {
     timestamps: true, // createdAt & updatedAt
-  }
+  },
 );
 
 const userSchema = new mongoose.Schema({
@@ -290,10 +324,15 @@ const userSchema = new mongoose.Schema({
         required: true,
         trim: true,
       },
+      qr_image_public_id: {
+        type: String,
+        required: true,
+        trim: true,
+      },
       product_type: {
         type: String,
-        enum: ["vehicle", "pets", "children", "devices"],
-        default: "vehicle",
+        enum: ["pets", "children", "devices"],
+        default: "other",
       },
       vehicle_id: {
         type: String,
@@ -369,7 +408,7 @@ userSchema.pre("save", async function (next) {
     const salt = await bcrypt.genSalt(10);
     this.basic_details.password = await bcrypt.hash(
       this.basic_details.password,
-      salt
+      salt,
     );
     next();
   } catch (error) {
@@ -397,7 +436,7 @@ userSchema.methods.generateAuthToken = function () {
       email: this.basic_details.email,
       phone: this.basic_details.phone_number,
     },
-    process.env.JWT_SECRET || "your-secret-key"
+    process.env.JWT_SECRET || "your-secret-key",
   );
 };
 

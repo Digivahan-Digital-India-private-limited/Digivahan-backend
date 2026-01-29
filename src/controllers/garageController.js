@@ -31,40 +31,64 @@ const addVehicle = async (req, res) => {
     }
 
     const cachedVehicle = vehicleInfoDoc.vehicles.find(
-      (v) => v.vehicle_id === vehicle_number
+      (v) => v.vehicle_id === vehicle_number,
     );
 
-    // ✅ CASE 1: CACHE HIT
     if (cachedVehicle) {
       return res.status(200).json({
         status: true,
         message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
         data: {
           result: maskVehicleResponse(cachedVehicle.api_data),
-          data_source: "vehicle_info_cache",
+          data_source: cachedVehicle.data_source || "vehicle_info_cache",
         },
       });
     }
 
-    // ❌ CASE 2: FETCH FROM RTO
     let rtoData;
+    let dataSource = "rto_api";
+
     try {
+      // 🥇 ALWAYS try Normal first
       rtoData = await fetchVehicleDataFromRTO(vehicle_number);
-    } catch (err) {
-      return res.status(404).json({
+    } catch (error) {
+      // 🔥 Normal RTO failed → silently fallback
+      if (error.statusCode === 500) {
+        try {
+          rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicle_number);
+          dataSource = "rto_premium_api";
+        } catch (premiumError) {
+          // ❌ ONLY HERE send response
+          return res.status(premiumError.statusCode || 502).json({
+            status: false,
+            message: "All RTO services unavailable",
+          });
+        }
+      } else {
+        return res.status(500).json({
+          status: false,
+          message: "Unexpected RTO error",
+        });
+      }
+    }
+
+    // 🔥 HARD GUARD
+    if (!rtoData) {
+      return res.status(502).json({
         status: false,
-        message: err.message || ERROR_MESSAGES.RTO_API_FAILED,
+        message: "RTO services unavailable",
       });
     }
 
     const vehicleData = transformRTODataToVehicleSchema(
       rtoData,
-      vehicle_number
+      vehicle_number,
     );
 
     vehicleInfoDoc.vehicles.push({
       vehicle_id: vehicle_number,
       api_data: vehicleData,
+      data_source: dataSource, // 👈 IMPORTANT
     });
 
     await vehicleInfoDoc.save();
@@ -74,7 +98,7 @@ const addVehicle = async (req, res) => {
       message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
       data: {
         result: maskVehicleResponse(vehicleData),
-        data_source: "rto_api",
+        data_source: dataSource,
       },
     });
   } catch (error) {
@@ -96,13 +120,11 @@ const maskVehicleResponse = (data) => {
     custom_vehicle_info: {
       ...data.custom_vehicle_info,
       owner_name: maskName(data.custom_vehicle_info.owner_name),
-      vehicle_number: maskVehicleNumber(
-        data.custom_vehicle_info.vehicle_number
-      ),
+      vehicle_number: data.custom_vehicle_info.vehicle_number,
       engine: maskAlphaNumeric(data.custom_vehicle_info.engine),
       chassis_number: maskAlphaNumeric(data.custom_vehicle_info.chassis_number),
       insurance_policy_number: maskAlphaNumeric(
-        data.custom_vehicle_info.insurance_policy_number
+        data.custom_vehicle_info.insurance_policy_number,
       ),
     },
 
@@ -135,7 +157,7 @@ const maskVehicleResponse = (data) => {
       pollutionControl: {
         ...data.rto_data.pollutionControl,
         certificateNumber: maskAlphaNumeric(
-          data.rto_data.pollutionControl.certificateNumber
+          data.rto_data.pollutionControl.certificateNumber,
         ),
       },
     },
@@ -171,7 +193,7 @@ const addVehicleInUsergarage = async (req, res) => {
 
     // ------------------ DUPLICATE CHECK IN USER GARAGE ------------------
     const alreadyExists = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_number
+      (v) => v.vehicle_id === vehicle_number,
     );
 
     if (alreadyExists) {
@@ -195,7 +217,7 @@ const addVehicleInUsergarage = async (req, res) => {
       (v) =>
         v.vehicle_id === vehicle_number &&
         v.api_data?.custom_vehicle_info?.owner_name?.toLowerCase().trim() ===
-          owner_name.toLowerCase().trim()
+          owner_name.toLowerCase().trim(),
     );
 
     // console.log(matchedVehicle);
@@ -237,72 +259,61 @@ const addVehicleInUsergarage = async (req, res) => {
  * Makes actual API call to RTO service
  */
 const fetchVehicleDataFromRTO = async (vehicleNumber) => {
+  console.log("➡️ Calling NORMAL RTO API");
+
   try {
-    // Get environment variables
-    const rtoApiUrl = process.env.RTO_API_URL;
-    const rtoAccessToken = process.env.RTO_API_ACCESS_TOKEN;
-
-    // Validate environment variables
-    if (!rtoApiUrl || !rtoAccessToken) {
-      throw new Error(
-        "RTO API configuration missing. Please check RTO_API_URL and RTO_API_ACCESS_TOKEN environment variables."
-      );
-    }
-
-    // Make API call to RTO service
     const response = await axios.post(
-      rtoApiUrl,
-      {
-        rcNumber: vehicleNumber,
-      },
+      process.env.RTO_API_URL,
+      { rcNumber: vehicleNumber },
       {
         headers: {
-          accessToken: rtoAccessToken,
+          accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
-        timeout: 30000, // 30 seconds timeout
-      }
+        timeout: 30000,
+      },
     );
 
-    // Check if API call was successful
     if (response.status === 200 && response.data.code === 200) {
       return response.data.result;
-    } else if (response.data.code === 404) {
-      throw new Error("Vehicle data not found");
-    } else {
-      throw new Error(
-        `RTO API returned error: ${response.data.message || "Unknown error"}`
-      );
     }
+
+    // logical not found
+    const err = new Error("NORMAL_RTO_FAILED");
+    err.statusCode = 500;
+    throw err;
   } catch (error) {
-    console.error("RTO API fetch error:", error);
+    const err = new Error("NORMAL_RTO_FAILED");
+    err.statusCode = 500;
+    throw err;
+  }
+};
 
-    // Handle specific error cases
-    if (error.response) {
-      // API responded with error status
-      const statusCode = error.response.status;
-      const errorData = error.response.data;
+const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
+  try {
+    const response = await axios.post(
+      process.env.RTO_PREMIMUM_API_URL,
+      { rcNumber: vehicleNumber },
+      {
+        headers: {
+          accessToken: process.env.RTO_API_ACCESS_TOKEN,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      },
+    );
 
-      if (statusCode === 404 || errorData?.code === 404) {
-        throw new Error("Vehicle data not found");
-      } else if (statusCode === 401) {
-        throw new Error("Invalid RTO API access token");
-      } else if (statusCode === 429) {
-        throw new Error("RTO API rate limit exceeded");
-      } else {
-        throw new Error(
-          `RTO API error: ${errorData?.message || error.message}`
-        );
-      }
-    } else if (error.request) {
-      // Network error
-      throw new Error("Unable to connect to RTO API service");
-    } else {
-      // Other errors
-      throw new Error(
-        `Failed to fetch vehicle data from RTO: ${error.message}`
-      );
+    if (response.status === 200 && response.data.statusCode === 200) {
+      return response.data.result;
     }
+
+    const err = new Error(response.data.message || "PREMIUM_RTO_FAILED");
+    err.statusCode = response.data.statusCode || 500;
+    throw err;
+  } catch (error) {
+    const err = new Error("PREMIUM_RTO_UNAVAILABLE");
+    err.statusCode = 502;
+    throw err;
   }
 };
 
@@ -398,7 +409,7 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
         new Date().getFullYear() -
         parseYear(rtoData.vehicle?.manufacturingYear),
       fitness_upto: parseDate(
-        rtoData.vehicle?.fitnessUpTo || rtoData.registration?.expiryDate
+        rtoData.vehicle?.fitnessUpTo || rtoData.registration?.expiryDate,
       ),
       pollution_renew_date: parseDate(rtoData?.pollutionControl?.validUpto),
       pollution_expiry: parseDate(rtoData?.pollutionControl?.validUpto),
@@ -506,7 +517,7 @@ const removeVehicle = async (req, res) => {
 
     // Find vehicle by actual location of vehicle_id (inside api_data)
     const vehicleIndex = user.garage.vehicles.findIndex(
-      (vehicle) => vehicle.vehicle_id === vehicle_number
+      (vehicle) => vehicle.vehicle_id === vehicle_number,
     );
 
     console.log("Found index:", vehicleIndex);
@@ -564,7 +575,7 @@ const RefreshVehicleData = async (req, res) => {
     }
 
     const vehicleData = vehicleDataDoc.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id
+      (v) => v.vehicle_id === vehicle_id,
     );
 
     if (!vehicleData) {
@@ -593,7 +604,7 @@ const RefreshVehicleData = async (req, res) => {
     // 4) Transform RTO data to your schema format
     const transformedData = transformRTODataToVehicleSchema(
       rtoData,
-      vehicle_id
+      vehicle_id,
     );
 
     // 5) Update VehicleInfoData collection
@@ -605,7 +616,7 @@ const RefreshVehicleData = async (req, res) => {
           "vehicles.$.last_updated": new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
     // 6) Update same vehicle inside User
@@ -626,11 +637,11 @@ const RefreshVehicleData = async (req, res) => {
           "garage.vehicles.$.last_updated": new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
     const refreshedVehicle = updatedVehicle.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id
+      (v) => v.vehicle_id === vehicle_id,
     );
 
     return res.status(200).json({
@@ -638,7 +649,6 @@ const RefreshVehicleData = async (req, res) => {
       message: "Vehicle data refreshed successfully",
       data: refreshedVehicle,
     });
-    
   } catch (error) {
     console.error("RefreshVehicleData Error:", error.message);
     return res.status(500).json({

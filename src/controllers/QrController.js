@@ -3,7 +3,10 @@ const path = require("path");
 const QRAssignment = require("../models/QRAssignment");
 const User = require("../models/User");
 const { generateQRCode } = require("../middleware/qrgernator");
-const { uploadQrToCloudinary } = require("../middleware/cloudinary");
+const {
+  uploadQrToCloudinary,
+  deleteFromCloudinary,
+} = require("../middleware/cloudinary");
 const generateQRTemplate = require("../utils/generateQRTemplate");
 const zipAndClearFiles = require("../utils/zipAndClearFiles");
 
@@ -32,6 +35,7 @@ const createQrScanner = async (req, res) => {
         qr_no: nextQrNo, // 👈 sequence
         qr_id,
         qr_img: uploadResult.secure_url,
+        qr_image_public_id: uploadResult.public_id,
         qr_status: "unassigned",
         product_type: "vehicle",
         status: "active",
@@ -108,20 +112,20 @@ const AssignedQrtoUser = async (req, res) => {
       qr_id,
       assign_to, // user_id
       assigned_by, // "user" | "sales"
-      product_type, // optional
-      sales_id, // optional
-      vehicle_id, // optional
+      product_type,
+      sales_id,
+      vehicle_id, // REQUIRED now
     } = req.body;
 
-    // 1️⃣ Basic validation
+    /* 1️⃣ Validation */
     if (!qr_id || !assign_to) {
       return res.status(400).json({
         status: false,
-        message: "qr_id and assign_to are required",
+        message: "qr_id, assign_to are required",
       });
     }
 
-    // 2️⃣ Find QR
+    /* 2️⃣ Find QR */
     const qr = await QRAssignment.findOne({ qr_id });
 
     if (!qr) {
@@ -138,18 +142,18 @@ const AssignedQrtoUser = async (req, res) => {
       });
     }
 
-    // 3️⃣ Update QR Assignment FIRST ✅
+    /* 3️⃣ Update QR Assignment */
     qr.qr_status = "assigned";
     qr.assign_to = assign_to;
     qr.assigned_by = assigned_by || "user";
     qr.product_type = product_type || qr.product_type;
     qr.sales_id = sales_id || "";
-    qr.vehicle_id = vehicle_id || "";
+    qr.vehicle_id = vehicle_id;
     qr.assigned_at = new Date();
 
     await qr.save();
 
-    // 4️⃣ Find User
+    /* 4️⃣ Find User */
     const user = await User.findById(assign_to);
 
     if (!user) {
@@ -159,48 +163,107 @@ const AssignedQrtoUser = async (req, res) => {
       });
     }
 
-    // 5️⃣ Prevent duplicate QR in user
-    const alreadyExists = user.qr_list?.some((q) => q.qr_id === qr_id);
+    const isVehicleProduct = product_type === "vehicle";
 
-    if (alreadyExists) {
-      return res.status(400).json({
-        status: false,
-        message: "QR already exists in user",
+    if (isVehicleProduct) {
+      /* 5️⃣ Find vehicle inside garage */
+      const vehicle = user.garage?.vehicles?.find(
+        (v) => v.vehicle_id === vehicle_id,
+      );
+
+      if (!vehicle) {
+        return res.status(404).json({
+          status: false,
+          message: "Vehicle not found in user's garage",
+        });
+      }
+
+      /* 6️⃣ Prevent duplicate QR */
+      const alreadyExists = vehicle.qr_list?.some((q) => q.qr_id === qr.qr_id);
+
+      if (alreadyExists) {
+        return res.status(400).json({
+          status: false,
+          message: "QR already exists for this vehicle",
+        });
+      }
+
+      /* 🔁 LIFO: max 2 QR per vehicle */
+      if (vehicle.qr_list.length >= 2) {
+        const removedQR = vehicle.qr_list.shift();
+
+        // 🔥 delete image from cloudinary
+        if (removedQR.qr_image_public_id) {
+          await deleteFromCloudinary(removedQR.qr_image_public_id);
+        }
+
+        // 🔥 delete QR assignment
+        await QRAssignment.deleteOne({
+          qr_id: removedQR.qr_id,
+        });
+      }
+
+      /* 7️⃣ Push latest QR into vehicle */
+      vehicle.qr_list.push({
+        qr_id: qr.qr_id,
+        qr_img: qr.qr_img,
+        qr_image_public_id: qr.qr_image_public_id,
+        product_type,
+        vehicle_id,
+        assigned_date: new Date(),
+      });
+    } else {
+      // 🔁 Prevent duplicate QR in user.qr_list
+      const alreadyExists = user.qr_list?.some((q) => q.qr_id === qr.qr_id);
+
+      if (alreadyExists) {
+        return res.status(400).json({
+          status: false,
+          message: "QR already exists for this user",
+        });
+      }
+
+      user.qr_list.push({
+        qr_id: qr.qr_id,
+        qr_img: qr.qr_img,
+        qr_image_public_id: qr.qr_image_public_id,
+        product_type,
+        assigned_date: new Date(),
       });
     }
 
-    // 6️⃣ Push QR into user's qr_list
-    user.qr_list.push({
-      qr_id: qr.qr_id,
-      qr_img: qr.qr_img,
-      product_type: product_type || qr.product_type,
-      vehicle_id: vehicle_id || "",
-      assigned_date: new Date(),
-    });
-
     await user.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
-      message: "QR assigned to user successfully",
+      message: "QR assigned to vehicle successfully",
       data: {
         qr_id: qr.qr_id,
         user_id: assign_to,
+        vehicle_id: vehicle_id,
       },
     });
   } catch (error) {
     console.error("Assign QR error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       status: false,
       message: "QR assignment failed",
     });
   }
 };
 
-// Check Qr in user QR List Apis
+// ✅ Check QR in User (Garage OR Direct QR List)
 const CheckQrInUser = async (req, res) => {
   try {
     const { user_id, vehicle_id, qr_id } = req.body;
+
+    // 🔴 user_id mandatory
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required",
+      });
+    }
 
     // 🔍 Find user
     const user = await User.findById(user_id);
@@ -212,33 +275,55 @@ const CheckQrInUser = async (req, res) => {
       });
     }
 
-    // 🧠 Find QR by vehicle_id OR qr_id (jo mile wahi)
-    const qrExists = user.qr_list.find((qr) => {
-      if (vehicle_id && qr.vehicle_id?.toString() === vehicle_id.toString()) {
-        return true;
-      }
-      if (qr_id && qr._id.toString() === qr_id.toString()) {
-        return true;
-      }
-      return false;
-    });
+    /* ===============================
+       CASE 1️⃣ vehicle_id provided
+    ================================*/
+    if (vehicle_id) {
+      const vehicle = user.garage?.vehicles?.find(
+        (v) => v.vehicle_id === vehicle_id,
+      );
 
-    // ✅ Found
-    if (qrExists) {
+      const firstQR = vehicle?.qr_list?.[0];
+
+      if (firstQR) {
+        return res.status(200).json({
+          success: true,
+          data: firstQR,
+        });
+      }
+
       return res.status(200).json({
-        success: true,
-        message: "QR found in user QR list",
-        data: qrExists,
+        success: false,
+        message: "QR not found",
       });
     }
 
-    // ❌ Not found
-    return res.status(200).json({
+    /* ===============================
+       CASE 2️⃣ only qr_id provided
+    ================================*/
+    if (qr_id) {
+      const qr = user.qr_list?.find((q) => q.qr_id === qr_id);
+
+      if (qr) {
+        return res.status(200).json({
+          success: true,
+          data: qr,
+        });
+      }
+
+      return res.status(200).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    // 🔴 nothing provided
+    return res.status(400).json({
       success: false,
-      message: "QR not found in user QR list",
+      message: "vehicle_id or qr_id is required",
     });
   } catch (error) {
-    console.error("Check QR in user error:", error);
+    console.error("Check QR error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

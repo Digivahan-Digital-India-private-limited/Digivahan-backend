@@ -19,7 +19,7 @@ const contactToUser = async (req, res) => {
       api_id: process.env.API_ID,
       api_password: process.env.API_PASSWORD,
       ivr_number: process.env.IVR_NUMBER,
-      dial: "Customer",
+      dial: "agent",
       receiver_number: String(receiver),
       agent_number: String(agent),
     });

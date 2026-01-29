@@ -139,7 +139,7 @@ const vehicleSchema = new mongoose.Schema({
       },
       qr_image_public_id: {
         type: String,
-        required: true,
+        // required: true,
         trim: true,
       },
       product_type: {
@@ -326,7 +326,7 @@ const userSchema = new mongoose.Schema({
       },
       qr_image_public_id: {
         type: String,
-        required: true,
+        // required: true,
         trim: true,
       },
       product_type: {

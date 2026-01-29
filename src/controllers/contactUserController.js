@@ -5,7 +5,7 @@ const contactToUser = async (req, res) => {
   try {
     const { receiver, agent } = req.body;
 
-    if (!receiver_number || !agent_number) {
+    if (!receiver || !agent) {
       return res.status(400).json({
         success: false,
         message: "receiver_number and agent_number are required",

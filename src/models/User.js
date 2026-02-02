@@ -273,7 +273,7 @@ const notificationSchema = new mongoose.Schema(
 const userSchema = new mongoose.Schema({
   basic_details: {
     profile_pic: { type: String, default: "" },
-    public_id: { type: String, default: "" },
+    profile_id: { type: String, default: "" },
     first_name: { type: String, trim: true },
     last_name: { type: String, trim: true },
     phone_number: { type: String, trim: true, unique: true },

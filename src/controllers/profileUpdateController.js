@@ -33,10 +33,10 @@ const UpdateUserDetails = async (req, res) => {
 
     // ===== 2️⃣ Profile Pic Update =====
     if (req.files?.profile_pic?.[0]?.path) {
-      oldProfilePublicId = user.basic_details.public_id || null;
+      oldProfilePublicId = user.basic_details.profile_id || null;
 
       user.basic_details.profile_pic = req.files.profile_pic[0].path;
-      user.basic_details.public_id = req.files.profile_pic[0].filename;
+      user.basic_details.profile_id = req.files.profile_pic[0].filename;
     }
 
     // ===== 3️⃣ Public Pic Update =====

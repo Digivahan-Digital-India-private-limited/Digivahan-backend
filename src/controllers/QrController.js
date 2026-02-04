@@ -426,42 +426,46 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
   try {
     const { qr_id } = req.params;
 
-    // 1️⃣ QR check
     const qrData = await QRAssignment.findOne({ qr_id });
 
+    // ❌ Invalid QR
     if (!qrData) {
       return res.status(404).json({
         success: false,
+        error_type: "INVALID_QR",
         message: "Invalid QR code",
       });
     }
 
-    // 2️⃣ Check assign_to
+    // ❌ Not assigned
     if (!qrData.assign_to) {
       return res.status(200).json({
         success: false,
+        error_type: "NOT_ASSIGNED",
         message: "This QR is not assigned to any user",
       });
     }
 
-    // 3️⃣ Find user with profile pic
     const user = await User.findById(qrData.assign_to).select(
-      "public_details.nick_name public_details.public_pic public_details.age public_details.gender public_details.address",
+      "basic_details.phone_number public_details.nick_name public_details.public_pic public_details.age public_details.gender public_details.address emergency_contacts",
     );
 
+    // ❌ Assigned but user deleted
     if (!user) {
       return res.status(404).json({
         success: false,
+        error_type: "USER_NOT_FOUND",
         message: "Assigned user not found",
       });
     }
 
-    // 4️⃣ Response
+    // ✅ Success
     return res.status(200).json({
       success: true,
       message: "User details fetched successfully",
       data: {
         user_id: user._id,
+        phone_number: user.basic_details.phone_number,
         full_Name: user.public_details.nick_name,
         profile_pic: user.public_details.public_pic,
         age: user.public_details.age,
@@ -469,12 +473,14 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
         address: user.public_details.address,
         product_type: qrData.product_type,
         vehicle_id: qrData.vehicle_id,
+        emergency_contacts: user.emergency_contacts,
       },
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
+      error_type: "SERVER_ERROR",
       message: "Internal server error",
     });
   }

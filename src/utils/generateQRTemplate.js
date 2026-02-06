@@ -8,10 +8,10 @@ const TEMPLATE_CONFIG = {
     canvasHeight: 718,
     templatePath: path.join(__dirname, "../../assets/template.png"),
     qrBox: {
-      x: 118,
-      y: 290,
-      width: 225,
-      height: 225,
+      x: 98,
+      y: 274,
+      width: 260,
+      height: 260,
     },
   },
 
@@ -20,10 +20,10 @@ const TEMPLATE_CONFIG = {
     canvasHeight: 455, // ✅ updated as requested
     templatePath: path.join(__dirname, "../../assets/bike_template.png"),
     qrBox: {
-      x: 43,
-      y: 100,
-      width: 270,
-      height: 270,
+      x: 52,
+      y: 102,
+      width: 255,
+      height: 255,
     },
   },
 };

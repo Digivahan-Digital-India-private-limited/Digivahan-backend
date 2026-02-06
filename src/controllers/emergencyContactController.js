@@ -36,8 +36,8 @@ const AddEmergencyContact = async (req, res) => {
     // 🔍 CHECK DUPLICATE
     const isAlreadyExist = user.emergency_contacts.some((contact) => {
       return (
-        contact.phone_number === phone_number &&
-        contact.first_name.toLowerCase() === first_name.toLowerCase() &&
+        contact.phone_number === phone_number ||
+        contact.first_name.toLowerCase() === first_name.toLowerCase() ||
         contact.last_name.toLowerCase() === last_name.toLowerCase()
       );
     });
@@ -66,7 +66,7 @@ const AddEmergencyContact = async (req, res) => {
             (error, result) => {
               if (error) reject(error);
               else resolve(result);
-            }
+            },
           )
           .end(buffer);
       });
@@ -147,7 +147,7 @@ const UpdateUserEmergencyContact = async (req, res) => {
 
     // 2️⃣ Find emergency contact
     const contact = user.emergency_contacts.find((c) =>
-      c._id.equals(contact_id)
+      c._id.equals(contact_id),
     );
 
     if (!contact) {
@@ -179,7 +179,7 @@ const UpdateUserEmergencyContact = async (req, res) => {
             (error, result) => {
               if (error) reject(error);
               else resolve(result);
-            }
+            },
           )
           .end(buffer);
       });
@@ -240,7 +240,7 @@ const DeleteUserEmergencyContact = async (req, res) => {
 
     // 4️⃣ Remove contact from array
     user.emergency_contacts = user.emergency_contacts.filter(
-      (item) => item._id.toString() !== contact_id
+      (item) => item._id.toString() !== contact_id,
     );
 
     // 5️⃣ Save updated user

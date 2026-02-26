@@ -28,7 +28,7 @@ const createQrScanner = async (req, res) => {
     const qrPromises = qrNumbers.map(async (qr_no) => {
       const qr_id = generateRandomId(10);
 
-      const BASE_URL = `https://digicapital.co.in/send-notification/${qr_id}`;
+      const BASE_URL = `https://www.digivahan.in/send-notification/${qr_id}`;
 
       const qrBuffer = await generateQRCode(BASE_URL);
 

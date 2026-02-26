@@ -64,7 +64,7 @@ exports.createRazorpayOrder = async (req, res) => {
 
     // ✅ Final Response
     return res.json({
-      status: true,
+      success: true,
       razorpay_key_id,
       receipt,
       order: response.data,

@@ -6,7 +6,6 @@ const CompareVehicle = async (req, res) => {
   try {
     const { car1_id, car2_id } = req.body;
 
-    // 🔴 validation
     if (!car1_id || !car2_id) {
       return res.status(400).json({
         success: false,
@@ -24,9 +23,11 @@ const CompareVehicle = async (req, res) => {
       });
     }
 
-    // 🔍 find both cars
-    const car1 = await TrendingCars.findById(car1_id);
-    const car2 = await TrendingCars.findById(car2_id);
+    // 🔥 Check both cars exist (parallel query)
+    const [car1, car2] = await Promise.all([
+      TrendingCars.exists({ _id: car1_id }),
+      TrendingCars.exists({ _id: car2_id }),
+    ]);
 
     if (!car1 || !car2) {
       return res.status(404).json({
@@ -35,31 +36,9 @@ const CompareVehicle = async (req, res) => {
       });
     }
 
-    // 🧠 pick only required fields
-    const car1Data = {
-      car_id: car1_id,
-      brand_name: car1.brand_name,
-      model_name: car1.model_name,
-      image_url: car1.car_details?.image_url,
-      price_display: car1.car_details?.price_display,
-    };
-
-    const car2Data = {
-      car_id: car2_id,
-      brand_name: car2.brand_name,
-      model_name: car2.model_name,
-      image_url: car2.car_details?.image_url,
-      price_display: car2.car_details?.price_display,
-    };
-
-    // 💾 save inside car_data array
     const comparison = await VehicleComparison.create({
-      car_data: [
-        {
-          car_1_data: car1Data,
-          car_2_data: car2Data,
-        },
-      ],
+      car_1: car1_id,
+      car_2: car2_id,
     });
 
     return res.status(201).json({
@@ -76,12 +55,10 @@ const CompareVehicle = async (req, res) => {
   }
 };
 
-
 const CompareVehicleUpdate = async (req, res) => {
   try {
     const { compare_id, car_id, update_car_id } = req.body;
 
-    // 🔴 validation
     if (!compare_id || !car_id || !update_car_id) {
       return res.status(400).json({
         success: false,
@@ -89,50 +66,53 @@ const CompareVehicleUpdate = async (req, res) => {
       });
     }
 
-    // 1️⃣ find comparison
-    const comparison = await VehicleComparison.findById(compare_id);
-
-    if (!comparison || comparison.car_data.length === 0) {
-      return res.status(404).json({
+    if (
+      !mongoose.Types.ObjectId.isValid(compare_id) ||
+      !mongoose.Types.ObjectId.isValid(car_id) ||
+      !mongoose.Types.ObjectId.isValid(update_car_id)
+    ) {
+      return res.status(400).json({
         success: false,
-        message: "Comparison data not found",
+        message: "Invalid ids",
       });
     }
 
-    // 2️⃣ find updated car
-    const updatedCar = await TrendingCars.findById(update_car_id);
+    const compareObjectId = new mongoose.Types.ObjectId(compare_id);
+    const carObjectId = new mongoose.Types.ObjectId(car_id);
+    const updateCarObjectId = new mongoose.Types.ObjectId(update_car_id);
 
-    if (!updatedCar) {
+    // 🔥 Check updated car exists
+    const updatedCarExists = await TrendingCars.exists({
+      _id: updateCarObjectId,
+    });
+
+    if (!updatedCarExists) {
       return res.status(404).json({
         success: false,
         message: "Updated car not found",
       });
     }
 
-    // 3️⃣ prepare new data
-    const updatedCarData = {
-      car_id: update_car_id,
-      brand_name: updatedCar.brand_name,
-      model_name: updatedCar.model_name,
-      image_url: updatedCar.car_details?.image_url,
-      price_display: updatedCar.car_details?.price_display,
-    };
+    // 🔥 Find comparison
+    const comparison = await VehicleComparison.findOne({
+      _id: compareObjectId,
+      $or: [{ car_1: carObjectId }, { car_2: carObjectId }],
+    });
 
-    // 4️⃣ direct update (NO LOOP needed)
-    const compareObj = comparison.car_data[0];
-
-    if (compareObj.car_1_data?.car_id?.toString() === car_id) {
-      compareObj.car_1_data = updatedCarData;
-    } else if (compareObj.car_2_data?.car_id?.toString() === car_id) {
-      compareObj.car_2_data = updatedCarData;
-    } else {
+    if (!comparison) {
       return res.status(404).json({
         success: false,
-        message: "Car id not found in comparison",
+        message: "Comparison not found or car not matched",
       });
     }
 
-    // 5️⃣ save
+    // 🔥 Update correct field
+    if (comparison.car_1.equals(carObjectId)) {
+      comparison.car_1 = updateCarObjectId;
+    } else if (comparison.car_2.equals(carObjectId)) {
+      comparison.car_2 = updateCarObjectId;
+    }
+
     await comparison.save();
 
     return res.status(200).json({
@@ -149,24 +129,37 @@ const CompareVehicleUpdate = async (req, res) => {
   }
 };
 
+
 const getAllvehicleCompairesionList = async (req, res) => {
   try {
-    // 🔍 find all comparisons (latest first)
-    const comparisons = await VehicleComparison.find().sort({ createdAt: -1 });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    // ❗ no data case
-    if (!comparisons || comparisons.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No vehicle comparisons found",
-        data: [],
-      });
-    }
+    const comparisons = await VehicleComparison.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({
+        path: "car_1",
+        select:
+          "brand_name model_name car_details.image_url car_details.price_display",
+      })
+      .populate({
+        path: "car_2",
+        select:
+          "brand_name model_name car_details.image_url car_details.price_display",
+      })
+      .lean();
+
+    const total = await VehicleComparison.countDocuments();
 
     return res.status(200).json({
       success: true,
       message: "Vehicle comparison list fetched successfully",
-      total: comparisons.length,
+      total,
+      page,
+      limit,
       data: comparisons,
     });
   } catch (error) {
@@ -174,7 +167,6 @@ const getAllvehicleCompairesionList = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };

@@ -1,29 +1,28 @@
 const TipsTricks = require("../models/tipsTricks.model");
 const cloudinary = require("cloudinary").v2;
-const { deleteCloudinaryImage } = require("../middleware/cloudinary");
+const { deleteFromCloudinary } = require("../middleware/cloudinary");
+const mongoose = require("mongoose");
 
 exports.createTipsTricks = async (req, res) => {
   try {
     const { title, summary, messages } = req.body;
 
-    // banner image
-    if (!req.files || !req.files.banner) {
+    if (!req.files?.banner?.length) {
       return res.status(400).json({
         success: false,
         message: "Banner image is required",
       });
     }
 
-    // points icons
-    if (!req.files.icons || req.files.icons.length === 0) {
+    if (!req.files?.icons?.length) {
       return res.status(400).json({
         success: false,
         message: "At least one point icon is required",
       });
     }
 
-    // messages array check
     const parsedMessages = JSON.parse(messages || "[]");
+
     if (parsedMessages.length !== req.files.icons.length) {
       return res.status(400).json({
         success: false,
@@ -31,28 +30,33 @@ exports.createTipsTricks = async (req, res) => {
       });
     }
 
-    // banner upload
+    // 🔥 Upload banner + icons in parallel
     const bannerFile = req.files.banner[0];
-    const bannerUpload = await cloudinary.uploader.upload(bannerFile.path, {
+
+    const bannerPromise = cloudinary.uploader.upload(bannerFile.path, {
       folder: "tips_tricks/banner",
     });
 
-    // points upload
-    const points = [];
-    for (let i = 0; i < req.files.icons.length; i++) {
-      const iconFile = req.files.icons[i];
-
-      const iconUpload = await cloudinary.uploader.upload(iconFile.path, {
+    const iconPromises = req.files.icons.map((file) =>
+      cloudinary.uploader.upload(file.path, {
         folder: "tips_tricks/icons",
-      });
+      }),
+    );
 
-      points.push({
-        icon: iconUpload.secure_url,
-        icon_public_id: iconUpload.public_id,
-        message: parsedMessages[i],
-      });
-    }
+    // ⏳ Wait all uploads together
+    const [bannerUpload, ...iconUploads] = await Promise.all([
+      bannerPromise,
+      ...iconPromises,
+    ]);
 
+    // 🧠 Map points
+    const points = iconUploads.map((upload, index) => ({
+      icon: upload.secure_url,
+      icon_public_id: upload.public_id,
+      message: parsedMessages[index],
+    }));
+
+    // 💾 Save in DB
     const saved = await TipsTricks.create({
       banner: bannerUpload.secure_url,
       banner_public_id: bannerUpload.public_id,
@@ -82,50 +86,74 @@ exports.updateTipsTricks = async (req, res) => {
 
     const doc = await TipsTricks.findById(id);
     if (!doc) {
-      return res.status(404).json({ success: false, message: "Tips not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Tips not found",
+      });
     }
 
-    // text updates (optional)
+    // 🔹 Update text fields
     if (title) doc.title = title;
     if (summary) doc.summary = summary;
 
-    // banner update (optional)
-    if (req.files?.banner) {
-      await deleteCloudinaryImage(doc.banner_public_id);
+    /* -----------------------
+       🔥 Banner Update
+    ----------------------- */
+    if (req.files?.banner?.length) {
+      const bannerFile = req.files.banner[0];
 
-      const bannerUpload = await cloudinary.uploader.upload(
-        req.files.banner[0].path,
-        { folder: "tips_tricks/banner" }
-      );
+      // delete old banner + upload new banner in parallel
+      const bannerUpload = await Promise.all([
+        doc.banner_public_id
+          ? cloudinary.uploader.destroy(doc.banner_public_id)
+          : Promise.resolve(),
+        cloudinary.uploader.upload(bannerFile.path, {
+          folder: "tips_tricks/banner",
+        }),
+      ]);
 
-      doc.banner = bannerUpload.secure_url;
-      doc.banner_public_id = bannerUpload.public_id;
+      const uploadResult = bannerUpload[1];
+
+      doc.banner = uploadResult.secure_url;
+      doc.banner_public_id = uploadResult.public_id;
     }
 
-    // points update (optional)
-    if (req.files?.icons && messages) {
-      // delete old icons
-      for (const p of doc.points) {
-        await deleteCloudinaryImage(p.icon_public_id);
-      }
-
+    /* -----------------------
+       🔥 Points Update
+    ----------------------- */
+    if (req.files?.icons?.length && messages) {
       const parsedMessages = JSON.parse(messages);
-      const newPoints = [];
 
-      for (let i = 0; i < req.files.icons.length; i++) {
-        const iconUpload = await cloudinary.uploader.upload(
-          req.files.icons[i].path,
-          { folder: "tips_tricks/icons" }
-        );
-
-        newPoints.push({
-          icon: iconUpload.secure_url,
-          icon_public_id: iconUpload.public_id,
-          message: parsedMessages[i],
+      if (parsedMessages.length !== req.files.icons.length) {
+        return res.status(400).json({
+          success: false,
+          message: "Icons and messages count mismatch",
         });
       }
 
-      doc.points = newPoints;
+      // 🔥 Delete old icons in parallel
+      await Promise.all(
+        doc.points.map((p) =>
+          p.icon_public_id
+            ? cloudinary.uploader.destroy(p.icon_public_id)
+            : Promise.resolve(),
+        ),
+      );
+
+      // 🔥 Upload new icons in parallel
+      const iconUploads = await Promise.all(
+        req.files.icons.map((file) =>
+          cloudinary.uploader.upload(file.path, {
+            folder: "tips_tricks/icons",
+          }),
+        ),
+      );
+
+      doc.points = iconUploads.map((upload, index) => ({
+        icon: upload.secure_url,
+        icon_public_id: upload.public_id,
+        message: parsedMessages[index],
+      }));
     }
 
     await doc.save();
@@ -137,7 +165,10 @@ exports.updateTipsTricks = async (req, res) => {
     });
   } catch (err) {
     console.error("Update Tips Error:", err);
-    res.status(500).json({ success: false, message: "Update failed" });
+    return res.status(500).json({
+      success: false,
+      message: "Update failed",
+    });
   }
 };
 
@@ -145,43 +176,62 @@ exports.deleteTipsTricks = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const doc = await TipsTricks.findById(id);
+    // 🔥 Validate ObjectId FIRST
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ID format",
+      });
+    }
+
+    const doc = await TipsTricks.findById(id).lean();
+
     if (!doc) {
-      return res.status(404).json({ success: false, message: "Tips not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Tips not found",
+      });
     }
 
-    // delete banner
-    await deleteCloudinaryImage(doc.banner_public_id);
+    const publicIds = [
+      doc.banner_public_id,
+      ...doc.points.map((p) => p.icon_public_id),
+    ].filter(Boolean);
 
-    // delete icons
-    for (const p of doc.points) {
-      await deleteCloudinaryImage(p.icon_public_id);
-    }
+    await Promise.all(
+      publicIds.map((publicId) => deleteFromCloudinary(publicId)),
+    );
 
-    await TipsTricks.findByIdAndDelete(id);
+    await TipsTricks.deleteOne({ _id: id });
 
-    res.json({
+    return res.json({
       success: true,
       message: "Tips & Tricks deleted successfully",
     });
   } catch (err) {
     console.error("Delete Tips Error:", err);
-    res.status(500).json({ success: false, message: "Delete failed" });
+    return res.status(500).json({
+      success: false,
+      message: "Delete failed",
+    });
   }
 };
 
 exports.getAllTipsTricks = async (req, res) => {
   try {
-    const list = await TipsTricks.find().sort({ createdAt: -1 });
+    const list = await TipsTricks.find().sort({ createdAt: -1 }).lean(); // 🔥 skip mongoose document hydration
 
-    res.json({
+    return res.json({
       success: true,
       count: list.length,
       data: list,
     });
   } catch (err) {
     console.error("Get Tips Error:", err);
-    res.status(500).json({ success: false, message: "Fetch failed" });
+    return res.status(500).json({
+      success: false,
+      message: "Fetch failed",
+    });
   }
 };
 
@@ -189,18 +239,32 @@ exports.getSingleTipsTricks = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const doc = await TipsTricks.findById(id);
-    if (!doc) {
-      return res.status(404).json({ success: false, message: "Tips not found" });
+    // 🔥 Validate ObjectId first
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ID",
+      });
     }
 
-    res.json({
+    const doc = await TipsTricks.findById(id).lean(); // 🔥 lean = faster
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Tips not found",
+      });
+    }
+
+    return res.json({
       success: true,
       data: doc,
     });
   } catch (err) {
     console.error("Get Single Tips Error:", err);
-    res.status(500).json({ success: false, message: "Fetch failed" });
+    return res.status(500).json({
+      success: false,
+      message: "Fetch failed",
+    });
   }
 };
-

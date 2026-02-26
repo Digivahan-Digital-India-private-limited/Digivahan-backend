@@ -12,10 +12,11 @@ const startDeletionCron = require("./src/utils/cronJobs.js");
 const { API_ROUTES } = require("./constants/index.js");
 
 // Routes
+const AdminauthRoutes = require("./src/routes/admin.routes.js");
 const appInfoRoutes = require("./src/routes/appInfo.routes.js");
-const fuelRoutes = require('./src/routes/fuel.routes.js');
-const uploadRoutes = require('./src/routes/upload.routes.js');
-const deleteImageRoutes = require('./src/routes/deleteImage.routes.js');
+const fuelRoutes = require("./src/routes/fuel.routes.js");
+const uploadRoutes = require("./src/routes/upload.routes.js");
+const deleteImageRoutes = require("./src/routes/deleteImage.routes.js");
 const razorpayRoutes = require("./src/routes/razorpay.routes.js");
 const qrBenefitsRoutes = require("./src/routes/qrBenefits.routes.js");
 const newsRoutes = require("./src/routes/news.routes.js");
@@ -32,11 +33,12 @@ const userReviewroutes = require("./src/routes/addReview.routes.js");
 const userOrderRoutes = require("./src/routes/order.routes.js");
 const roomRoutes = require("./src/routes/rooom.routes.js");
 const notificationRoutes = require("./src/routes/notification.routes.js");
-const QRroutes = require("./src/routes/qr.routes.js")
-const chatRoutes = require("./src/routes/chats.routes.js")
-const trendingCarsRoutes = require("./src/routes/trendingCars.route.js")
-const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js")
+const QRroutes = require("./src/routes/qr.routes.js");
+const chatRoutes = require("./src/routes/chats.routes.js");
+const trendingCarsRoutes = require("./src/routes/trendingCars.route.js");
+const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js");
 const contactUserRoutes = require("./src/routes/contactUser.routes.js");
+const googleServiceRoutes = require("./src/routes/googleService.routes.js");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -49,15 +51,13 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-
-
 // Database connection middleware
 app.use(async (req, res, next) => {
   try {
     // Only connect if not already connected
     if (require("mongoose").connection.readyState !== 1) {
       await connectDB();
-      startDeletionCron()
+      startDeletionCron();
     }
     next();
   } catch (error) {
@@ -67,7 +67,7 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Hasan Routes Code 
+// Hasan Routes Code
 app.use(appInfoRoutes);
 app.use(fuelRoutes);
 app.use(uploadRoutes);
@@ -81,6 +81,7 @@ app.use(notificationImageRoutes);
 // -------------------- ROUTES --------------------
 
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
+app.use(API_ROUTES.AUTH.BASE, AdminauthRoutes);
 app.use(API_ROUTES.USER.BASE, profileDeletation);
 app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);
 app.use(API_ROUTES.EMERGENCY_CONTACT.BASE, emergencyContactRoutes);
@@ -91,11 +92,12 @@ app.use(API_ROUTES.REVIEW.BASE, userReviewroutes);
 app.use(API_ROUTES.ORDER.BASE, userOrderRoutes);
 app.use(API_ROUTES.CHAT.BASE, roomRoutes);
 app.use(API_ROUTES.NOTIFICATION.BASE, notificationRoutes);
-app.use(API_ROUTES.QR.BASE, QRroutes)
-app.use(API_ROUTES.TRENDING_CARS.BASE, trendingCarsRoutes)
-app.use(API_ROUTES.VEHICLE_COMPARISON_UPDATE.BASE, CompareVehicleRoutes)
-app.use(API_ROUTES.CHAT.BASE, chatRoutes)
+app.use(API_ROUTES.QR.BASE, QRroutes);
+app.use(API_ROUTES.TRENDING_CARS.BASE, trendingCarsRoutes);
+app.use(API_ROUTES.VEHICLE_COMPARISON_UPDATE.BASE, CompareVehicleRoutes);
+app.use(API_ROUTES.CHAT.BASE, chatRoutes);
 app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
+app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file
@@ -104,7 +106,7 @@ app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
 // });
 
 app.get("/", (req, res) => {
-  res.status(200).json({message:"Welcome To Digivahan Server"});
+  res.status(200).json({ message: "Welcome To Digivahan Server" });
 });
 
 // -------------------- SERVER SETUP --------------------
@@ -120,6 +122,9 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+
+// ✅ THIS LINE IS REQUIRED
+app.set("io", io);
 
 // Setup Socket.IO handlers
 setupSocketIO(io);

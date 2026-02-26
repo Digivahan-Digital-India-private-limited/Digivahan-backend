@@ -259,4 +259,3 @@ exports.getAppInfo = async (req, res) => {
     });
   }
 };
-

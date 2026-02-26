@@ -1,5 +1,5 @@
 // src/controllers/fuel.controller.js
-const Fuel = require('../models/fuel.model');
+const Fuel = require("../models/fuel.model");
 
 /**
  * POST /api/v1/fuel/prices
@@ -7,71 +7,88 @@ const Fuel = require('../models/fuel.model');
 exports.upsertStates = async (req, res) => {
   try {
     const { states } = req.body;
-    if (!states || typeof states !== 'object' || Array.isArray(states)) {
-      return res.status(400).json({ success: false, message: 'Invalid or missing "states" object' });
+    if (!states || typeof states !== "object") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid states" });
     }
 
-    const setObj = {};
-    for (const [stateName, priceObj] of Object.entries(states)) {
-      if (!priceObj || typeof priceObj !== 'object') continue;
-      const cng = Number(priceObj.cng);
-      const petrol = Number(priceObj.petrol);
-      const diesel = Number(priceObj.diesel);
-      if (Number.isNaN(cng) || Number.isNaN(petrol) || Number.isNaN(diesel)) {
-        return res.status(422).json({ success: false, message: `Invalid prices for state "${stateName}"` });
-      }
-      setObj[`states.${stateName}`] = { cng, petrol, diesel };
-    }
+    const ops = Object.entries(states).map(([state, prices]) => ({
+      updateOne: {
+        filter: { state },
+        update: {
+          $set: {
+            cng: prices.cng ?? null,
+            petrol: prices.petrol,
+            diesel: prices.diesel,
+            updatedAt: new Date(),
+          },
+        },
+        upsert: true,
+      },
+    }));
 
-    setObj['updatedAt'] = new Date();
+    await Fuel.bulkWrite(ops);
 
-    const doc = await Fuel.findOneAndUpdate(
-      {},
-      { $set: setObj },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean().exec();
-
-    // hide _id if you don't want to return it
-    if (doc && doc._id) delete doc._id;
-
-    return res.json({ success: true, data: doc });
+    return res.json({ success: true, message: "Fuel prices updated" });
   } catch (err) {
-    console.error('upsertStates error:', err);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error(err);
+    res.status(500).json({ success: false });
   }
 };
 
 /**
  * GET /api/v1/fuel/states?order=asc
  */
+// GET /api/v1/fuel/states?order=asc
 exports.listStatesAlphabetical = async (req, res) => {
-    try {
-      const order = (req.query.order || 'asc').toLowerCase();
-      const sortFactor = order === 'desc' ? -1 : 1;
-  
-      const doc = await Fuel.findOne().lean().exec();
-      if (!doc || !doc.states) return res.json({ success: true, data: { updatedAt: doc?.updatedAt || null, states: [] } });
-  
-      const statesObj = doc.states;
-      const arr = Object.entries(statesObj).map(([stateName, prices]) => ({
-        state: stateName,
-        cng: prices?.cng ?? null,
-        petrol: prices?.petrol ?? null,
-        diesel: prices?.diesel ?? null
-      }));
-  
-      arr.sort((a, b) => sortFactor * a.state.localeCompare(b.state, 'en', { sensitivity: 'base' }));
-  
+  try {
+    const order = req.query.order === "desc" ? -1 : 1;
+
+    // 🔥 Fetch all states (DB sorting = fast)
+    const statesDocs = await Fuel.find({})
+      .select("state cng petrol diesel updatedAt -_id")
+      .sort({ state: order })
+      .lean();
+
+    if (!statesDocs || statesDocs.length === 0) {
       return res.json({
         success: true,
         data: {
-          updatedAt: doc.updatedAt || null,
-          states: arr
-        }
+          updatedAt: null,
+          states: [],
+        },
       });
-    } catch (err) {
-      console.error('listStatesAlphabetical error:', err);
-      return res.status(500).json({ success: false, message: 'Internal server error' });
     }
-  };
-  
+
+    // 🔹 latest updatedAt (max date)
+    const latestUpdatedAt = statesDocs.reduce(
+      (latest, item) =>
+        !latest || item.updatedAt > latest ? item.updatedAt : latest,
+      null
+    );
+
+    // 🔹 reshape for frontend
+    const states = statesDocs.map((doc) => ({
+      state: doc.state,
+      cng: doc.cng ?? 0,
+      petrol: doc.petrol,
+      diesel: doc.diesel,
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        updatedAt: latestUpdatedAt,
+        states,
+      },
+    });
+  } catch (error) {
+    console.error("listStatesAlphabetical error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+

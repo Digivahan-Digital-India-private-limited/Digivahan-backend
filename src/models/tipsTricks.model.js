@@ -16,38 +16,24 @@ const pointSchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const tipsTricksSchema = new mongoose.Schema(
   {
-    banner: {
-      type: String,
-      required: true,
-    },
-    banner_public_id: {
-      type: String,
-      required: true,
-    },
-    title: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    summary: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    points: {
-      type: [pointSchema],
-      required: true,
-    },
+    banner: { type: String, required: true },
+    banner_public_id: { type: String, required: true, index: true },
+    title: { type: String, required: true, trim: true, index: true },
+    summary: { type: String, required: true, trim: true },
+    points: { type: [pointSchema], required: true },
   },
   {
     timestamps: true,
     versionKey: false,
-  }
+  },
 );
+
+// 🔥 Performance indexes
+tipsTricksSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("TipsTricks", tipsTricksSchema);

@@ -21,7 +21,7 @@ router.post(
 router.post(
   API_ROUTES.CONTACT.SEND_SMS_NOTIFICATION,
   [handleValidationErrors],
-  sendSMSNotificationToUser,
+  sendSMSNotificationToUser,  
 );
 
 module.exports = router;

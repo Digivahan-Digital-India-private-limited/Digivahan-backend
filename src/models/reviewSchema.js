@@ -60,9 +60,12 @@ const feedBackSchema = new mongoose.Schema(
   },
   {
     timestamps: true, // auto createdAt + updatedAt
-  }
+  },
 );
 
-feedBackSchema.index({ product_type: 1, createdAt: -1 });
+feedBackSchema.index({ user_id: 1, order_id: 1 }, { unique: true }); // prevent duplicate review
+feedBackSchema.index({ product_type: 1, createdAt: -1 }); // already present
+feedBackSchema.index({ order_id: 1 }); // faster order review lookup
+feedBackSchema.index({ user_id: 1 }); // faster user review lookup
 
 module.exports = mongoose.model("Feedback", feedBackSchema);

@@ -5,74 +5,68 @@ const UploadvehicleDoc = async (req, res) => {
   try {
     const { user_id, vehicle_id, doc_name, doc_type, doc_number } = req.body;
 
-    // File uploaded from Cloudinary
     const pdfUrl = req.file?.path;
     const publicId = req.file?.filename;
 
     if (!pdfUrl || !publicId) {
       return res.status(400).json({
         success: false,
-        message: "Document upload failed. No file received.",
+        message: "Document upload failed",
       });
     }
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
+    // 1️⃣ Check if doc already exists (FAST)
+    const exists = await User.findOne({
+      _id: user_id,
+      "garage.vehicles.vehicle_id": vehicle_id,
+      "garage.vehicles.vehicle_doc.documents.doc_type": doc_type,
+    }).select("_id");
 
-    // 2️⃣ Find vehicle inside user's garage
-    const vehicle = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id
-    );
-
-    if (!vehicle) {
-      return res.status(404).json({
-        success: false,
-        message: "Vehicle not found in user's garage",
-      });
-    }
-
-    // 3️⃣ Check if document with same doc_type already exists ❗
-    const isDocAlreadyExists = vehicle.vehicle_doc.documents.some(
-      (doc) => doc.doc_type === doc_type
-    );
-
-    if (isDocAlreadyExists) {
+    if (exists) {
       return res.status(409).json({
         success: false,
-        message: `Document with type '${doc_type}' already available`,
+        message: `${doc_type} document already exists`,
       });
     }
 
-    // 4️⃣ Push document inside vehicle_doc.documents ✅
-    vehicle.vehicle_doc.documents.push({
-      doc_name,
-      doc_type,
-      doc_number,
-      doc_url: pdfUrl,
-      public_id: publicId,
-    });
+    // 2️⃣ Atomic push (FASTEST METHOD)
+    const result = await User.updateOne(
+      {
+        _id: user_id,
+        "garage.vehicles.vehicle_id": vehicle_id,
+      },
+      {
+        $push: {
+          "garage.vehicles.$.vehicle_doc.documents": {
+            doc_name,
+            doc_type,
+            doc_number,
+            doc_url: pdfUrl,
+            public_id: publicId,
+            uploaded_at: new Date(),
+          },
+        },
+      }
+    );
 
-    // 5️⃣ Save user
-    await user.save();
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle not found",
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Vehicle document uploaded successfully",
-      data: vehicle.vehicle_doc.documents.at(-1),
+      message: "Document uploaded successfully",
     });
+
   } catch (error) {
-    console.log("UploadvehicleDoc Error:", error);
+    console.error(error);
 
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -82,64 +76,87 @@ const deleteVehicleDoc = async (req, res) => {
   try {
     const { user_id, vehicle_id, doc_type } = req.body;
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({
+    // ✅ validation
+    if (!user_id || !vehicle_id || !doc_type) {
+      return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "user_id, vehicle_id and doc_type are required",
       });
     }
 
-    // 2️⃣ Find vehicle in user's garage
-    const vehicle = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id
-    );
+    // 1️⃣ Find document public_id ONLY (light query)
+    const user = await User.findOne(
+      {
+        _id: user_id,
+        "garage.vehicles.vehicle_id": vehicle_id,
+        "garage.vehicles.vehicle_doc.documents.doc_type": doc_type,
+      },
+      {
+        "garage.vehicles.$": 1,
+      }
+    ).lean();
 
-    if (!vehicle) {
+    if (!user || !user.garage?.vehicles?.length) {
       return res.status(404).json({
         success: false,
-        message: "Vehicle not found in user's garage",
+        message: "Vehicle or document not found",
       });
     }
 
-    // 3️⃣ Find document index inside vehicle_doc.documents
-    const docIndex = vehicle.vehicle_doc.documents.findIndex(
+    const vehicle = user.garage.vehicles[0];
+
+    const document = vehicle.vehicle_doc.documents.find(
       (doc) => doc.doc_type === doc_type
     );
 
-    if (docIndex === -1) {
+    if (!document) {
       return res.status(404).json({
         success: false,
-        message: "Document not found for this vehicle",
+        message: "Document not found",
       });
     }
 
-    const document = vehicle.vehicle_doc.documents[docIndex];
-
-    // 4️⃣ Delete from Cloudinary
+    // 2️⃣ Delete from Cloudinary first
     if (document.public_id) {
       await deleteFromCloudinary(document.public_id);
     }
 
-    // 5️⃣ Remove document from documents array
-    vehicle.vehicle_doc.documents.splice(docIndex, 1);
+    // 3️⃣ Atomic delete from DB (FASTEST)
+    const result = await User.updateOne(
+      {
+        _id: user_id,
+        "garage.vehicles.vehicle_id": vehicle_id,
+      },
+      {
+        $pull: {
+          "garage.vehicles.$.vehicle_doc.documents": {
+            doc_type: doc_type,
+          },
+        },
+      }
+    );
 
-    // 6️⃣ Save user
-    await user.save();
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Document not deleted",
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Vehicle document deleted successfully",
     });
+
   } catch (error) {
     console.error("deleteVehicleDoc Error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
+
 
 module.exports = { UploadvehicleDoc, deleteVehicleDoc };

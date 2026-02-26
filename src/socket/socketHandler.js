@@ -19,12 +19,12 @@ const setupSocketIO = (io) => {
 
         // Convert userId to string for safer matching
         const isMember = room.members.some(
-          (m) => m.user_id.toString() === userId.toString()
+          (m) => m.user_id.toString() === userId.toString(),
         );
 
         if (!isMember) {
           return console.log(
-            `❌ User ${userId} is NOT part of this room (not allowed to join)`
+            `❌ User ${userId} is NOT part of this room (not allowed to join)`,
           );
         }
 
@@ -59,7 +59,7 @@ const setupSocketIO = (io) => {
 
         // Validate that sender is in the room
         const isMember = room.members.some(
-          (m) => m.user_id.toString() === socket.userId.toString()
+          (m) => m.user_id.toString() === socket.userId.toString(),
         );
 
         if (!isMember) {
@@ -83,6 +83,21 @@ const setupSocketIO = (io) => {
     /**
      * DISCONNECT
      */
+
+    // 👑 ADMIN JOINS ADMIN ROOM
+    socket.on("join_admin_room", ({ adminId }) => {
+      if (!adminId) {
+        console.log("❌ Admin ID missing");
+        return;
+      }
+
+      socket.adminId = adminId;
+
+      // Join common admin room
+      socket.join("join_admin_room");
+      console.log(`👑 Admin ${adminId} joined admin_room`);
+    });
+
     socket.on("disconnect", () => {
       console.log(`User ${socket.userId} disconnected`);
     });

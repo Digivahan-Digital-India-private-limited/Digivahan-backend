@@ -10,7 +10,7 @@ const {
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 const {
   SendUserMessage,
-  getallChatDetails,
+  getallChats,
 } = require("../controllers/chatController.js");
     
 
@@ -24,7 +24,7 @@ router.post(
 router.get(
   API_ROUTES.CHAT.GET_MESSAGES,
   [handleValidationErrors],
-  getallChatDetails
+  getallChats
 );
 
 module.exports = router;

@@ -1,57 +1,52 @@
-const PROFILE_FIELDS = {
-  basic_details: [
+const ACCOUNT_CREATE_PERCENT = 20;
+const EMERGENCY_CONTACT_PERCENT = 40;
+const REMAINING_PERCENT = 40;
+
+const TOTAL_FIELDS = 11; // basic + public
+const PER_FIELD_PERCENT = REMAINING_PERCENT / TOTAL_FIELDS;
+
+const isValid = (val) =>
+  val !== undefined && val !== null && val !== "" && val !== 0;
+
+const calculateProfileCompletion = (user) => {
+  let percent = ACCOUNT_CREATE_PERCENT;
+
+  let completedFields = 0;
+
+  // basic
+  const basic = user.basic_details || {};
+  const basicFields = [
     "profile_pic",
     "first_name",
     "last_name",
     "phone_number",
     "email",
     "occupation",
-  ],
-  public_details: ["public_pic", "nick_name", "address", "age", "gender"],
-  emergency_contacts: [
-    "first_name",
-    "last_name",
-    "relation",
-    "phone_number",
-    "email",
-  ],
-};
+  ];
 
-const TOTAL_FIELDS =
-  PROFILE_FIELDS.basic_details.length + PROFILE_FIELDS.public_details.length;
-const PER_FIELD_PERCENT = Math.floor(100 / TOTAL_FIELDS);
-
-// Calculator profile percentage function
-const calculateProfileCompletion = (user) => {
-  let completed = 0;
-
-  // ✅ basic details check
-  PROFILE_FIELDS.basic_details.forEach((field) => {
-    const val = user.basic_details?.[field];
-    if (val !== undefined && val !== null && val !== "" && val !== 0) {
-      completed++;
-    }
+  basicFields.forEach((field) => {
+    if (isValid(basic[field])) completedFields++;
   });
 
-  // ✅ public details check
-  PROFILE_FIELDS.public_details.forEach((field) => {
-    const val = user.public_details?.[field];
-    if (val !== undefined && val !== null && val !== "" && val !== 0) {
-      completed++;
-    }
+  // public
+  const pub = user.public_details || {};
+  const publicFields = ["public_pic", "nick_name", "address", "age", "gender"];
+
+  publicFields.forEach((field) => {
+    if (isValid(pub[field])) completedFields++;
   });
 
-  // ✅ emergency contact check (minimum 1 required)
-  const hasEmergencyContact =
+  percent += completedFields * PER_FIELD_PERCENT;
+
+  // emergency contact
+  if (
     Array.isArray(user.emergency_contacts) &&
-    user.emergency_contacts.length >= 1;
-
-  // 🔥 FINAL DECISION
-  if (completed === TOTAL_FIELDS && hasEmergencyContact) {
-    return 100;
+    user.emergency_contacts.length > 0
+  ) {
+    percent += EMERGENCY_CONTACT_PERCENT;
   }
 
-  return Math.min(completed * PER_FIELD_PERCENT, 99);
+  return Math.min(Math.round(percent), 100);
 };
 
 module.exports = calculateProfileCompletion;

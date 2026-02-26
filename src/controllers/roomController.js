@@ -10,20 +10,27 @@ const createRoom = async (req, res) => {
     // VALIDATIONS
     // ===============================
     if (!createdBy)
-      return res.status(400).json({ message: "createdBy user_id is required" });
+      return res.status(400).json({
+        status: false,
+        message: "createdBy user_id is required",
+      });
 
     if (!type)
-      return res
-        .status(400)
-        .json({ message: "type is required (direct/group)" });
+      return res.status(400).json({
+        status: false,
+        message: "type is required (direct/group)",
+      });
 
     // Fetch Creator
     const creator = await User.findById(createdBy).select(
-      "basic_details.profile_pic basic_details.first_name basic_details.last_name"
+      "basic_details.profile_pic basic_details.first_name basic_details.last_name",
     );
 
     if (!creator)
-      return res.status(404).json({ message: "Creator user not found" });
+      return res.status(404).json({
+        status: false,
+        message: "Creator user not found",
+      });
 
     // ====================================================
     // 🔵 DIRECT CHAT LOGIC
@@ -31,19 +38,24 @@ const createRoom = async (req, res) => {
     if (type === "direct") {
       if (members.length !== 1)
         return res.status(400).json({
+          status: false,
           message: "Direct chat requires ONLY 1 targetUserId",
         });
 
       const targetUserId = members[0];
 
+      // 🔥 Fetch target user
       const target = await User.findById(targetUserId).select(
-        "basic_details.profile_pic basic_details.first_name basic_details.last_name"
+        "basic_details.profile_pic basic_details.first_name basic_details.last_name",
       );
 
       if (!target)
-        return res.status(404).json({ message: "Target user not found" });
+        return res.status(404).json({
+          status: false,
+          message: "Target user not found",
+        });
 
-      // Check existing direct room
+      // 🔥 Check existing room
       const existingRoom = await Room.findOne({
         type: "direct",
         "members.user_id": { $all: [createdBy, targetUserId] },
@@ -51,8 +63,10 @@ const createRoom = async (req, res) => {
       });
 
       if (existingRoom) {
-        await pushRoomToUserChatbox(createdBy, existingRoom);
-        await pushRoomToUserChatbox(targetUserId, existingRoom);
+        await Promise.all([
+          pushRoomToUserChatbox(createdBy, existingRoom),
+          pushRoomToUserChatbox(targetUserId, existingRoom),
+        ]);
 
         return res.status(200).json({
           status: true,
@@ -61,7 +75,7 @@ const createRoom = async (req, res) => {
         });
       }
 
-      // Members of the new room
+      // 🔥 Prepare members
       const roomMembers = [
         {
           user_id: createdBy,
@@ -79,7 +93,7 @@ const createRoom = async (req, res) => {
         },
       ];
 
-      // Create Room
+      // 🔥 Create Room
       const newRoom = await Room.create({
         name: creator.basic_details.first_name,
         type: "direct",
@@ -88,9 +102,11 @@ const createRoom = async (req, res) => {
         isPrivate: true,
       });
 
-      // Push to chat_box of both users
-      await pushRoomToUserChatbox(createdBy, newRoom);
-      await pushRoomToUserChatbox(targetUserId, newRoom);
+      // 🔥 Push to chatbox in parallel (OPTIMIZED)
+      await Promise.all([
+        pushRoomToUserChatbox(createdBy, newRoom),
+        pushRoomToUserChatbox(targetUserId, newRoom),
+      ]);
 
       return res.status(201).json({
         status: true,
@@ -104,15 +120,18 @@ const createRoom = async (req, res) => {
     // ====================================================
     if (type === "group") {
       if (members.length < 2)
-        return res
-          .status(400)
-          .json({ message: "Group must contain at least 2 members" });
+        return res.status(400).json({
+          status: false,
+          message: "Group must contain at least 2 members",
+        });
 
-      // Ensure creator is included
+      // Ensure creator included
       if (!members.includes(createdBy)) members.push(createdBy);
 
-      const users = await User.find({ _id: { $in: members } }).select(
-        "basic_details.profile_pic basic_details.first_name basic_details.last_name"
+      const users = await User.find({
+        _id: { $in: members },
+      }).select(
+        "basic_details.profile_pic basic_details.first_name basic_details.last_name",
       );
 
       const roomMembers = users.map((u) => ({
@@ -132,51 +151,49 @@ const createRoom = async (req, res) => {
         isPrivate,
       });
 
-      // Push to chat_box of all members
-      for (let m of roomMembers) {
-        await pushRoomToUserChatbox(m.user_id, groupRoom);
-      }
+      // 🔥 Push chatbox in parallel (OPTIMIZED)
+      await Promise.all(
+        roomMembers.map((member) =>
+          pushRoomToUserChatbox(member.user_id, groupRoom),
+        ),
+      );
 
       return res.status(201).json({
+        status: true,
         message: "Group chat created successfully",
         room: groupRoom,
       });
     }
+
+    return res.status(400).json({
+      status: false,
+      message: "Invalid room type",
+    });
   } catch (err) {
     console.error("Error creating room:", err);
-    res.status(500).json({ status: false, message: err.message });
+
+    return res.status(500).json({
+      status: false,
+      message: err.message,
+    });
   }
 };
 
 // =========================================================
 // 🔥 Helper Function: Push Room to User.chat_box
 // =========================================================
-async function pushRoomToUserChatbox(userId, room) {
+async function pushRoomToUserChatbox(userId, roomId) {
   try {
-    const objectId = new mongoose.Types.ObjectId(userId);
-
-    const user = await User.findById(objectId);
-    if (!user) return;
-
-    if (!user.chat_box) user.chat_box = [];
-
-    // Check if already exists
-    const exists = user.chat_box.some(
-      (cb) => cb.roomId.toString() === room._id.toString()
+    await User.updateOne(
+      { _id: userId },
+      {
+        $addToSet: {
+          chat_rooms: roomId,
+        },
+      },
     );
-
-    if (!exists) {
-      user.chat_box.push({
-        roomId: room._id,
-        type: room.type,
-        members: room.members,
-        lastMessage: "",
-      });
-
-      await user.save();
-    }
   } catch (err) {
-    console.log("Error updating chat_box:", err);
+    console.log("Error updating chat_rooms:", err);
   }
 }
 
@@ -184,11 +201,22 @@ const getAllChatRoomFromUserAccount = async (req, res) => {
   try {
     const { user_id } = req.body;
 
-    // Convert to ObjectId
-    const objectId = new mongoose.Types.ObjectId(user_id);
+    /* ===============================
+       1️⃣ Validate user_id
+    =============================== */
 
-    // Find user
-    const user = await User.findById(objectId).select("chat_box");
+    if (!user_id || !mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Valid user_id is required",
+      });
+    }
+
+    /* ===============================
+       2️⃣ Find user and get room ids
+    =============================== */
+
+    const user = await User.findById(user_id).select("chat_rooms").lean();
 
     if (!user) {
       return res.status(404).json({
@@ -197,16 +225,43 @@ const getAllChatRoomFromUserAccount = async (req, res) => {
       });
     }
 
+    const roomIds = user.chat_rooms || [];
+
+    if (roomIds.length === 0) {
+      return res.status(200).json({
+        status: true,
+        message: "No rooms found",
+        total_rooms: 0,
+        rooms: [],
+      });
+    }
+
+    /* ===============================
+       3️⃣ Fetch full room details
+    =============================== */
+
+    const rooms = await Room.find({
+      _id: { $in: roomIds },
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    /* ===============================
+       4️⃣ Return full Room documents
+    =============================== */
+
     return res.status(200).json({
       status: true,
-      message: "Chat list fetched successfully",
-      chat_list: user.chat_box || [],
+      message: "Rooms fetched successfully",
+      total_rooms: rooms.length,
+      rooms: rooms,
     });
   } catch (error) {
-    console.error("Error fetching chat list:", error);
+    console.error("Error fetching rooms:", error);
+
     return res.status(500).json({
       status: false,
-      message: "Server error",
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -216,15 +271,18 @@ const GetChatRoomInfo = async (req, res) => {
   try {
     const { room_id } = req.params;
 
-    if (!room_id) {
+    // ✅ Validate room_id
+    if (!room_id || !mongoose.Types.ObjectId.isValid(room_id)) {
       return res.status(400).json({
         status: false,
-        message: "room_id is required",
+        message: "Valid room_id is required",
       });
     }
 
-    // 🔍 Find room by _id
-    const room = await Room.findById(room_id);
+    // ✅ Fetch room with lean (faster)
+    const room = await Room.findById(room_id)
+      .select("-__v") // optional: remove unnecessary field
+      .lean();
 
     if (!room) {
       return res.status(404).json({
@@ -244,10 +302,8 @@ const GetChatRoomInfo = async (req, res) => {
     return res.status(500).json({
       status: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
-
 
 module.exports = { createRoom, getAllChatRoomFromUserAccount, GetChatRoomInfo };

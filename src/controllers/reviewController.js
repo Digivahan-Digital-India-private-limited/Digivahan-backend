@@ -13,8 +13,25 @@ const addUserReview = async (req, res) => {
       review_text,
     } = req.body;
 
-    // ===== 1️⃣ Find User & Get first_name + profile_pic =====
-    const user = await User.findById(user_id).select("basic_details");
+    // ✅ Validation
+    if (
+      !user_id ||
+      !order_id ||
+      !product_type ||
+      !rating ||
+      !review_title ||
+      !review_text
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Required fields missing",
+      });
+    }
+
+    // ✅ Fetch only required user fields (lean = faster)
+    const user = await User.findById(user_id)
+      .select("basic_details.first_name basic_details.profile_pic")
+      .lean();
 
     if (!user) {
       return res.status(404).json({
@@ -26,95 +43,87 @@ const addUserReview = async (req, res) => {
     const username = user.basic_details?.first_name || "User";
     const profile_image = user.basic_details?.profile_pic || "";
 
-    // ===== 2️⃣ Check Existing Review =====
-    const existingReview = await Feedback.findOne({
-      user_id,
-      order_id,
-    });
+    // ✅ Atomic UPSERT (Create or Update in ONE query)
+    const review = await Feedback.findOneAndUpdate(
+      {
+        user_id,
+        order_id,
+      },
+      {
+        $set: {
+          product_type,
+          rating,
+          review_title,
+          review_text,
+          username,
+          profile_image,
+        },
+        $addToSet: {
+          product_image: {
+            $each: Array.isArray(product_image) ? product_image : [],
+          },
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+      },
+    ).lean();
 
-    // ===== 3️⃣ Update Review If Exists =====
-    if (existingReview) {
-      existingReview.product_type = product_type;
-      existingReview.rating = rating;
-      existingReview.review_title = review_title;
-      existingReview.review_text = review_text;
-
-      // 🔥 product_image is array of string
-      if (Array.isArray(product_image) && product_image.length > 0) {
-        existingReview.product_image.push(...product_image);
-      }
-
-      await existingReview.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "Review updated successfully",
-        data: existingReview,
-      });
-    }
-
-    // ===== 4️⃣ Create New Review =====
-    const newReview = await Feedback.create({
-      user_id,
-      username,
-      profile_image,
-      order_id,
-      product_type,
-      rating,
-      product_image: Array.isArray(product_image) ? product_image : [],
-      review_title,
-      review_text,
-    });
-
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: "Review added successfully",
-      data: newReview,
+      message: "Review saved successfully",
+      data: review,
     });
   } catch (error) {
     console.error("addUserReview Error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
 
 const FetchUserFeedBack = async (req, res) => {
   try {
-    let { product_type, limit, page } = req.body;
+    let { product_type, limit = 10, page = 1 } = req.body;
 
-    // Default pagination values
-    limit = parseInt(limit) || 10; // items per page
-    page = parseInt(page) || 1; // current page
+    limit = Math.min(parseInt(limit) || 10, 50); // max limit protection
+    page = parseInt(page) || 1;
+
     const skip = (page - 1) * limit;
 
-    // ===== Build Query =====
-    let query = {};
+    // ✅ Optimized query object
+    const query = product_type ? { product_type } : {};
 
-    if (product_type) {
-      query.product_type = product_type;
-    }
+    // ✅ Run queries in parallel (faster)
+    const [feedbackList, totalRecords] = await Promise.all([
+      Feedback.find(query)
+        .select(
+          "user_id username profile_image order_id product_type rating product_image review_title review_text createdAt",
+        )
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(), // 🔥 VERY IMPORTANT (3x faster)
 
-    // ===== Fetch Data with Pagination =====
-    const feedbackList = await Feedback.find(query)
-      .populate("user_id", "name email") // optional: show user info
-      .sort({ createdAt: -1 }) // latest first
-      .skip(skip)
-      .limit(limit);
+      Feedback.countDocuments(query),
+    ]);
 
-    // ===== Count Total for Pagination =====
-    const totalRecords = await Feedback.countDocuments(query);
     const totalPages = Math.ceil(totalRecords / limit);
 
     return res.status(200).json({
       success: true,
       message: "Feedback fetched successfully",
-      current_page: page,
-      total_pages: totalPages,
-      total_records: totalRecords,
-      limit: limit,
+      pagination: {
+        current_page: page,
+        total_pages: totalPages,
+        total_records: totalRecords,
+        limit,
+        has_next_page: page < totalPages,
+      },
       data: feedbackList,
     });
   } catch (error) {
@@ -123,7 +132,6 @@ const FetchUserFeedBack = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
-      error: error.message,
     });
   }
 };

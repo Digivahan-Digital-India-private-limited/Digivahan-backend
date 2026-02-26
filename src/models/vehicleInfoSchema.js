@@ -1,13 +1,14 @@
 const mongoose = require("mongoose");
-
-const vehicleInfo = new mongoose.Schema({
-  vehicle_id: String,
-  api_data: mongoose.Schema.Types.Mixed,  // <-- ANY data will be accepted
+const vehicleInfoSchema = new mongoose.Schema({
+  vehicle_id: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true, // 🔥 FAST LOOKUP
+  },
+  api_data: mongoose.Schema.Types.Mixed,
+  data_source: String,
+  last_updated: Date,
 });
 
-
-const VehicleInfoSchema = new mongoose.Schema({
-  vehicles: [vehicleInfo],
-});
-
-module.exports = mongoose.model("VehicleInfoData", VehicleInfoSchema);
+module.exports = mongoose.model("VehicleInfoData", vehicleInfoSchema);

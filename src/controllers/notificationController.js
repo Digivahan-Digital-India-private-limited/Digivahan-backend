@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Notification = require("../models/notification.model");
 const ChatList = require("../models/Chat");
 const axios = require("axios");
 const mongoose = require("mongoose");
@@ -6,72 +7,39 @@ const mongoose = require("mongoose");
 const sendNotification = async (req, res) => {
   try {
     let {
-      sender_id, // ❗ optional (web me nahi aayega)
-      receiver_id, // ✅ always required
+      sender_id,
+      receiver_id,
       notification_type,
       notification_title,
-      link,
-      vehicle_id,
-      order_id,
-      message,
-      issue_type,
-      chat_room_id,
-      latitude,
-      longitude,
-      incident_proof,
-      inapp_notification,
-      seen_status,
+      link = "",
+      vehicle_id = null,
+      order_id = null,
+      message = "",
+      issue_type = "",
+      chat_room_id = null,
+      latitude = "",
+      longitude = "",
+      incident_proof = [],
+      inapp_notification = true,
+      seen_status = false,
     } = req.body;
 
     const GUEST_ID = process.env.GUEST_QR_USER_ID;
 
-    /* -----------------------------
-       1️⃣ RESOLVE SENDER (APP vs WEB)
-    ------------------------------ */
+    /* ===============================
+       1️⃣ VALIDATE RECEIVER
+    =============================== */
 
-    let sender;
-    let senderName = "Guest User";
-    let senderPic = "";
-
-    if (sender_id) {
-      // 🟢 APP CASE
-      sender = await User.findById(sender_id).select(
-        "basic_details.first_name basic_details.last_name basic_details.profile_pic",
-      );
-
-      if (!sender) {
-        return res.status(404).json({
-          status: false,
-          message: "Sender not found",
-        });
-      }
-
-      senderName = `${sender.basic_details.first_name || ""} ${
-        sender.basic_details.last_name || ""
-      }`.trim();
-
-      senderPic = sender.basic_details.profile_pic || "";
-    } else {
-      // 🌐 WEB / GUEST CASE
-      sender_id = GUEST_ID;
-
-      sender = await User.findById(sender_id).select(
-        "basic_details.first_name basic_details.last_name basic_details.profile_pic",
-      );
-
-      if (sender) {
-        senderName = `${sender.basic_details.first_name || "Guest"} ${
-          sender.basic_details.last_name || ""
-        }`.trim();
-        senderPic = sender.basic_details.profile_pic || "";
-      }
+    if (!receiver_id) {
+      return res.status(400).json({
+        status: false,
+        message: "receiver_id is required",
+      });
     }
 
-    /* -----------------------------
-       2️⃣ FIND RECEIVER
-    ------------------------------ */
-
-    const receiver = await User.findById(receiver_id);
+    const receiver = await User.findById(receiver_id).select(
+      "_id is_notification_sound_on",
+    );
 
     if (!receiver) {
       return res.status(404).json({
@@ -80,9 +48,27 @@ const sendNotification = async (req, res) => {
       });
     }
 
-    /* -----------------------------
-       4️⃣ NORMALIZE INCIDENT PROOF
-    ------------------------------ */
+    /* ===============================
+       2️⃣ RESOLVE SENDER
+    =============================== */
+
+    sender_id = sender_id || GUEST_ID;
+
+    const sender = await User.findById(sender_id).select(
+      "basic_details.first_name basic_details.last_name basic_details.profile_pic",
+    );
+
+    const senderName = sender
+      ? `${sender.basic_details.first_name || ""} ${
+          sender.basic_details.last_name || ""
+        }`.trim() || "Guest User"
+      : "Guest User";
+
+    const senderPic = sender?.basic_details?.profile_pic || "";
+
+    /* ===============================
+       3️⃣ NORMALIZE INCIDENT PROOF
+    =============================== */
 
     const incidentProofArray = Array.isArray(incident_proof)
       ? incident_proof
@@ -90,20 +76,21 @@ const sendNotification = async (req, res) => {
         ? [incident_proof]
         : [];
 
-    /* -----------------------------
-       5️⃣ SAVE NOTIFICATION (DB)
-    ------------------------------ */
+    /* ===============================
+       4️⃣ CREATE NOTIFICATION OBJECT
+    =============================== */
 
-    receiver.notifications.push({
+    const response = await Notification.create({
       sender_id,
+      receiver_id,
       sender_pic: senderPic,
-      name: senderName,
+      sender_name: senderName,
       notification_type,
       notification_title,
+      message,
       link,
       vehicle_id,
       order_id,
-      message,
       issue_type,
       chat_room_id,
       latitude,
@@ -111,18 +98,18 @@ const sendNotification = async (req, res) => {
       incident_proof: incidentProofArray,
       inapp_notification,
       seen_status,
-      time: new Date(), // 🔥 IMPORTANT for limit check
     });
 
-    await receiver.save();
+    await User.updateOne(
+      { _id: receiver_id },
+      { $inc: { notification_count: 1 } },
+    );
 
-    const savedNotification = receiver.notifications.at(-1);
-
-    /* -----------------------------
+    /* ===============================
        6️⃣ ANDROID CHANNEL LOGIC
-    ------------------------------ */
+    =============================== */
 
-    const ANDROID_CHANNEL_MAP = {
+    const CHANNEL_MAP = {
       no_parking: "0b251d79-aa58-4410-ac8b-a810849ce1c6",
       congested_parking: "5fbca66a-703c-459e-bcfa-c3815f25b2bb",
       road_block_alert: "1f097e17-2009-4dd5-b27e-cb84a52cb7c5",
@@ -134,21 +121,18 @@ const sendNotification = async (req, res) => {
       accident_alert: "99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
     };
 
-    const DEFAULT_ANDROID_CHANNEL = "328b98de-49cc-47b2-85b4-733547c953d4";
+    const DEFAULT_CHANNEL = "328b98de-49cc-47b2-85b4-733547c953d4";
 
-    let androidChannelId = DEFAULT_ANDROID_CHANNEL;
+    const androidChannelId = receiver.is_notification_sound_on
+      ? CHANNEL_MAP[issue_type] || DEFAULT_CHANNEL
+      : DEFAULT_CHANNEL;
 
-    if (receiver.is_notification_sound_on === true) {
-      androidChannelId =
-        ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL;
-    }
-
-    /* -----------------------------
-       7️⃣ SEND ONESIGNAL PUSH
-    ------------------------------ */
+    /* ===============================
+       7️⃣ SEND PUSH NOTIFICATION
+    =============================== */
 
     await sendOneSignalNotification({
-      externalUserId: receiver._id.toString(),
+      externalUserId: receiver_id.toString(),
       title: notification_title,
       message,
       data: {
@@ -158,25 +142,29 @@ const sendNotification = async (req, res) => {
         vehicle_id: vehicle_id || "",
         chat_room_id: chat_room_id || "",
         issue_type: issue_type || "",
-        latitude: latitude || "",
-        longitude: longitude || "",
+        latitude,
+        longitude,
       },
       androidChannelId,
-      largeIconUrl: incident_proof?.[0] || undefined,
-      bigPictureUrl: incident_proof?.[0] || undefined,
+      largeIconUrl: incidentProofArray[0],
+      bigPictureUrl: incidentProofArray[0],
     });
+
+    /* ===============================
+       8️⃣ SUCCESS RESPONSE
+    =============================== */
 
     return res.status(201).json({
       status: true,
       message: "Notification sent successfully",
-      data: savedNotification,
+      data: response,
     });
   } catch (error) {
     console.error("Send notification error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -185,26 +173,36 @@ const sendNotificationForCall = async (req, res) => {
   try {
     const { sender_id, receiver_id } = req.body;
 
-    let message = "Incoming call Request";
-    let sender;
-    let senderName = "Unknow User";
-
-    if (sender_id) {
-      sender = await User.findById(sender_id).select(
-        "basic_details.first_name basic_details.last_name",
-      );
-
-      if (!sender) {
-        return res.status(404).json({
-          status: false,
-          message: "Sender not found",
-        });
-      }
-
-      senderName = `${sender.public_details.nick_name || ""}`.trim();
+    if (!receiver_id) {
+      return res.status(400).json({
+        status: false,
+        message: "receiver_id is required",
+      });
     }
 
-    const receiver = await User.findById(receiver_id);
+    if (!mongoose.Types.ObjectId.isValid(receiver_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid receiver_id",
+      });
+    }
+
+    if (sender_id && !mongoose.Types.ObjectId.isValid(sender_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid sender_id",
+      });
+    }
+
+    // 🔥 Fetch sender & receiver in parallel (faster)
+    const [sender, receiver] = await Promise.all([
+      sender_id
+        ? User.findById(sender_id).select(
+            "basic_details.first_name basic_details.last_name",
+          )
+        : null,
+      User.findById(receiver_id).select("_id is_notification_sound_on"),
+    ]);
 
     if (!receiver) {
       return res.status(404).json({
@@ -213,85 +211,38 @@ const sendNotificationForCall = async (req, res) => {
       });
     }
 
+    let senderName = "Unknown User";
+
+    if (sender) {
+      senderName = `${sender.basic_details.first_name || ""} ${
+        sender.basic_details.last_name || ""
+      }`.trim();
+    }
+
+    const message = "Incoming call request";
+
     const androidChannelId = "0f86d5a8-1877-4a8a-ad45-d609c14d16bd";
 
+    // 🔥 Send push (non-blocking safe pattern)
     await sendOneSignalNotification({
       externalUserId: receiver._id.toString(),
       title: senderName,
       message,
       data: {
-        sender_id,
+        sender_id: sender_id || "",
+        type: "call",
       },
       androidChannelId,
     });
 
-    return res.status(201).json({
+    return res.status(200).json({
       status: true,
-      message: "Notification sent successfully",
-      details: {
-        sender_id,
-        senderName: senderName,
-        message,
-      },
+      message: "Call notification sent successfully",
     });
   } catch (error) {
-    console.error("Send notification error:", error);
+    console.error("Send call notification error:", error);
     return res.status(500).json({
       status: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-
-const sendSMSNotificationToUser = async (req, res) => {
-  try {
-    const { user_id } = req.params;
-
-    if (!user_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User ID required" });
-    }
-
-    // 1. Find user
-    const user = await User.findById(user_id);
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    // 3. Get phone number
-    const phone = user?.basic_details?.phone_number;
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "User phone number not found",
-      });
-    }
-
-    // 4. Send SMS
-    const smsSent = await sendOTPViaSMS(phone, "verify");
-
-    if (!smsSent) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send SMS",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "SMS sent successfully to offline user",
-      phone,
-    });
-  } catch (error) {
-    console.error("sendSMSNotificationToUser Error:", error);
-    return res.status(500).json({
-      success: false,
       message: "Internal server error",
     });
   }
@@ -321,6 +272,7 @@ const sendOneSignalNotification = async ({
 
       // App-side logic data (unchanged)
       data,
+
       large_icon: largeIconUrl,
       android_big_picture: bigPictureUrl,
 
@@ -349,64 +301,74 @@ const sendOneSignalNotification = async ({
 const getAllNotification = async (req, res) => {
   try {
     const { user_id } = req.params;
-    let { current_page } = req.query;
+    let { current_page = 1 } = req.query;
 
-    // 🧠 default page = 1
     current_page = parseInt(current_page) || 1;
 
     const PAGE_SIZE = 20;
     const skip = (current_page - 1) * PAGE_SIZE;
 
-    if (!user_id) {
+    // Validate user_id
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
       return res.status(400).json({
         status: false,
-        message: "user_id is required",
+        message: "Invalid user_id",
       });
     }
 
-    // 👤 only notifications fetch karo
-    const user = await User.findById(user_id).select("notifications");
+    const receiverObjectId = new mongoose.Types.ObjectId(user_id);
 
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
+    /* ===============================
+       1️⃣ Fetch notifications
+    =============================== */
 
-    const notifications = user.notifications || [];
+    const notifications = await Notification.find({
+      receiver_id: receiverObjectId,
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .skip(skip)
+      .limit(PAGE_SIZE)
+      .lean();
 
-    // 🔔 unseen notifications count
-    const unseenCount = notifications.filter(
-      (n) => n.seen_status === false,
-    ).length;
+    /* ===============================
+       2️⃣ Get total & unseen count
+    =============================== */
 
-    // ⏰ latest notifications on top
-    const sortedNotifications = notifications.sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
-    );
+    const [totalNotifications, unseenCount] = await Promise.all([
+      Notification.countDocuments({
+        receiver_id: receiverObjectId,
+      }),
 
-    // 📄 pagination logic
-    const totalNotifications = sortedNotifications.length;
+      Notification.countDocuments({
+        receiver_id: receiverObjectId,
+        seen_status: false,
+      }),
+    ]);
+
     const totalPages = Math.ceil(totalNotifications / PAGE_SIZE);
 
-    // ✅ ONLY current page ka data
-    const pageData = sortedNotifications.slice(skip, skip + PAGE_SIZE);
+    /* ===============================
+       3️⃣ Response
+    =============================== */
 
     return res.status(200).json({
       status: true,
       message: "Notifications fetched successfully",
+
       unseen_count: unseenCount,
+
       pagination: {
         current_page,
         page_size: PAGE_SIZE,
         total_pages: totalPages,
         total_notifications: totalNotifications,
       },
-      data: pageData,
+
+      data: notifications,
     });
   } catch (error) {
     console.error("Get notifications error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Internal server error",
@@ -419,187 +381,60 @@ const seenNotificationByUser = async (req, res) => {
   try {
     const { user_id, notification_id } = req.body;
 
-    // 🔍 validation
-    if (!notification_id) {
+    // 1️⃣ Validate ObjectIds
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(notification_id)
+    ) {
       return res.status(400).json({
         status: false,
-        message: "notification_id are required",
+        message: "Valid user_id and notification_id required",
       });
     }
 
-    // 👤 find user
-    const user = await User.findById(user_id);
+    const receiverObjectId = new mongoose.Types.ObjectId(user_id);
+    const notificationObjectId = new mongoose.Types.ObjectId(notification_id);
 
-    if (!user) {
+    // 2️⃣ Atomic update directly in Notification collection
+    const updatedNotification = await Notification.findOneAndUpdate(
+      {
+        _id: notificationObjectId,
+        receiver_id: receiverObjectId,
+      },
+      {
+        $set: {
+          seen_status: true,
+          seen_at: new Date(),
+        },
+      },
+      {
+        new: true, // return updated document
+      },
+    );
+
+    // 3️⃣ If not found
+    if (!updatedNotification) {
       return res.status(404).json({
         status: false,
-        message: "User not found",
+        message: "Notification not found for this user",
       });
     }
 
-    // 🔔 find notification inside user's notifications array
-    const notification = user.notifications.id(notification_id);
-
-    if (!notification) {
-      return res.status(404).json({
-        status: false,
-        message: "Notification not found",
-      });
-    }
-
-    // ✅ mark as seen
-    notification.seen_status = true;
-
-    // 💾 save user document
-    await user.save();
-
+    // 4️⃣ Success response
     return res.status(200).json({
       status: true,
       message: "Notification marked as seen",
+      data: {
+        notification_id: updatedNotification._id,
+        seen_status: updatedNotification.seen_status,
+        seen_at: updatedNotification.seen_at,
+      },
     });
   } catch (error) {
     console.error("Seen notification error:", error);
+
     return res.status(500).json({
       status: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-
-const checkSecurityCode = async (req, res) => {
-  try {
-    const { user_id, vehicle_id } = req.body;
-
-    // 1️⃣ Validate input
-    if (!user_id || !vehicle_id) {
-      return res.status(400).json({
-        success: false,
-        message: "user_id and vehicle_id are required",
-      });
-    }
-
-    // 2️⃣ Find user
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // 3️⃣ Find vehicle inside garage
-    const vehicle = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id,
-    );
-
-    if (!vehicle) {
-      return res.status(404).json({
-        success: false,
-        message: "Vehicle not found for this user",
-      });
-    }
-
-    // 4️⃣ Generate 6-digit random security code
-    const securityCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 5️⃣ Save security code in vehicle_doc
-    vehicle.vehicle_doc.security_code = securityCode;
-
-    await user.save();
-
-    // 6️⃣ Auto clear after 10 minutes
-    setTimeout(
-      async () => {
-        try {
-          const freshUser = await User.findById(user_id);
-          if (!freshUser) return;
-
-          const freshVehicle = freshUser.garage.vehicles.find(
-            (v) => v.vehicle_id === vehicle_id,
-          );
-
-          if (freshVehicle) {
-            freshVehicle.vehicle_doc.security_code = "";
-            await freshUser.save();
-          }
-        } catch (err) {
-          console.error("Security code auto-clear error:", err);
-        }
-      },
-      10 * 60 * 1000,
-    ); // 10 minutes
-
-    return res.status(200).json({
-      success: true,
-      message: "Security code generated successfully",
-      security_code: securityCode, // (SMS / frontend me bhejne ke liye)
-      expires_in: "10 minutes",
-      vehicle_doc_data: vehicle.vehicle_doc.documents,
-    });
-  } catch (error) {
-    console.error("checkSecurityCode Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-
-const verifySecurityCode = async (req, res) => {
-  try {
-    const { user_id, vehicle_id, security_code } = req.body;
-
-    if (!user_id || !vehicle_id || !security_code) {
-      return res.status(400).json({
-        success: false,
-        message: "user_id, vehicle_id and security_code are required",
-      });
-    }
-
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // 2️⃣ Find vehicle inside garage
-    const vehicle = user.garage.vehicles.find(
-      (v) => v.vehicle_id === vehicle_id,
-    );
-
-    if (!vehicle) {
-      return res.status(404).json({
-        success: false,
-        message: "Vehicle not found",
-      });
-    }
-
-    // 3️⃣ Check security code
-    if (vehicle.vehicle_doc.security_code !== security_code) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid security code",
-      });
-    }
-
-    // 4️⃣ Success → return all documents
-    return res.status(200).json({
-      success: true,
-      message: "Security code verified successfully",
-      data: {
-        documents: vehicle.vehicle_doc.documents,
-      },
-    });
-  } catch (error) {
-    console.error("verifySecurityCode Error:", error);
-    return res.status(500).json({
-      success: false,
       message: "Internal server error",
       error: error.message,
     });
@@ -608,44 +443,49 @@ const verifySecurityCode = async (req, res) => {
 
 const isOnnotification = async (req, res) => {
   try {
-    console.log("click");
-
     const { user_id, is_notification_on } = req.body;
 
-    // ------------------ VALIDATION ------------------
-    if (typeof is_notification_on !== "boolean") {
+    // ✅ Validation
+    if (typeof is_notification_on !== "boolean" || !user_id) {
       return res.status(400).json({
         status: false,
         message: "Invalid parameters",
       });
     }
 
-    // ------------------ FIND USER ------------------
-    let user;
+    // ✅ Build query (NO multiple DB calls)
+    let query;
 
     if (mongoose.Types.ObjectId.isValid(user_id)) {
-      user = await User.findById(user_id);
+      query = { _id: user_id };
     } else if (user_id.includes("@")) {
-      user = await User.findOne({
-        "basic_details.email": user_id.toLowerCase(),
-      });
+      query = { "basic_details.email": user_id.toLowerCase().trim() };
     } else {
-      user = await User.findOne({
-        "basic_details.phone_number": String(user_id),
-      });
+      query = { "basic_details.phone_number": String(user_id).trim() };
     }
 
-    if (!user) {
+    // ✅ Atomic update (FASTEST METHOD)
+    const updatedUser = await User.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          is_notification_sound_on: is_notification_on,
+        },
+      },
+      {
+        new: true,
+        projection: {
+          is_notification_sound_on: 1,
+        },
+      },
+    ).lean();
+
+    if (!updatedUser) {
       return res.status(404).json({
         status: false,
         message: "User not found",
       });
     }
-
-    // ------------------ UPDATE BOOLEAN ------------------
-    user.is_notification_sound_on = is_notification_on;
-
-    await user.save();
 
     return res.status(200).json({
       status: true,
@@ -653,11 +493,12 @@ const isOnnotification = async (req, res) => {
         is_notification_on ? "enabled" : "disabled"
       } successfully`,
       data: {
-        is_notification_on: user.is_notification_sound_on,
+        is_notification_on: updatedUser.is_notification_sound_on,
       },
     });
   } catch (error) {
     console.error("Notification toggle error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Internal server error",
@@ -665,74 +506,13 @@ const isOnnotification = async (req, res) => {
   }
 };
 
-const sendOTPViaSMS = async (phone, templateType = "verify") => {
-  try {
-    // PRP SMS API configuration
-    const prpSmsConfig = {
-      apiUrl:
-        process.env.PRP_SMS_API_URL ||
-        "https://api.prpsms.biz/BulkSMSapi/keyApiSendSMS/SendSmsTemplateName",
-      apiKey: process.env.PRP_SMS_API_KEY,
-      sender: process.env.PRP_SMS_SENDER || "DGVAHN",
-      templates: {
-        verify: process.env.PRP_SMS_2FA_TEMPLATE_NAME || "2FA_Verification_OTP",
-      },
-    };
-
-    // Validate configuration
-    if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
-      console.error(
-        "PRP SMS configuration missing. Please check environment variables.",
-      );
-      return false;
-    }
-
-    // Get template name based on type
-    const templateName = prpSmsConfig.templates[templateType];
-    if (!templateName) {
-      console.error(`Template name not found for type: ${templateType}`);
-      return false;
-    }
-
-    // Prepare SMS payload for PRP SMS API
-    const smsPayload = {
-      sender: prpSmsConfig.sender,
-      templateName: templateName,
-      smsReciever: [
-        {
-          mobileNo: phone,
-        },
-      ],
-    };
-
-    // Send SMS via PRP SMS API
-    const response = await axios.post(prpSmsConfig.apiUrl, smsPayload, {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        apikey: prpSmsConfig.apiKey,
-      },
-      timeout: 10000, // 10 second timeout
-    });
-
-    // Check response status
-    if (response.data.isSuccess) {
-      console.log(`📱 SMS sent successfully to ${phone} via PRP SMS`);
-      console.log(`Response:`, response.data);
-      return true;
-    } else {
-      console.error("PRP SMS API error:", response.data);
-      return false;
-    }
-  } catch (error) {
-    console.error("Error sending SMS via PRP SMS:", error.message);
-    return false;
-  }
-};
-
 const DeleteNotification = async (req, res) => {
   try {
     const { user_id, notification_id, chat_room_id } = req.body;
+
+    /* ===============================
+       1️⃣ Validate input
+    =============================== */
 
     if (!user_id || !notification_id) {
       return res.status(400).json({
@@ -741,51 +521,75 @@ const DeleteNotification = async (req, res) => {
       });
     }
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
-
-    if (!user) {
-      return res.status(404).json({
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(notification_id)
+    ) {
+      return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "Invalid ID format",
       });
     }
 
-    // 2️⃣ Find notification object
-    const notification = user.notifications.find(
-      (n) => n._id.toString() === notification_id.toString(),
-    );
+    const receiverObjectId = new mongoose.Types.ObjectId(user_id);
+    const notificationObjectId = new mongoose.Types.ObjectId(notification_id);
 
-    if (!notification) {
+    /* ===============================
+       2️⃣ Find and delete notification
+    =============================== */
+
+    const deletedNotification = await Notification.findOneAndDelete({
+      _id: notificationObjectId,
+      receiver_id: receiverObjectId,
+    });
+
+    if (!deletedNotification) {
       return res.status(404).json({
         success: false,
-        message: "Notification not found",
+        message: "Notification not found for this user",
       });
     }
 
-    // 3️⃣ If notification type is chat → delete chats
-    if (notification.notification_type === "chat" && chat_room_id) {
-      await ChatList.findOneAndUpdate(
-        { chat_room_id: chat_room_id },
-        { $set: { chats: [] } },
-      );
-    }
+    /* ===============================
+       3️⃣ Decrease notification count
+    =============================== */
 
-    // 4️⃣ Pull notification from array
     await User.updateOne(
-      { _id: user_id },
-      { $pull: { notifications: { _id: notification_id } } },
+      { _id: receiverObjectId },
+      {
+        $inc: { notification_count: -1 },
+      },
     );
+
+    /* ===============================
+       4️⃣ Delete chat messages if exists
+    =============================== */
+
+    if (chat_room_id && mongoose.Types.ObjectId.isValid(chat_room_id)) {
+      await ChatList.deleteMany({
+        chat_room_id: new mongoose.Types.ObjectId(chat_room_id),
+      });
+    }
+
+    /* ===============================
+       5️⃣ Success response
+    =============================== */
 
     return res.status(200).json({
       success: true,
       message: "Notification deleted successfully",
+      data: {
+        notification_id,
+        chat_room_id: chat_room_id || null,
+      },
     });
   } catch (error) {
     console.error("DeleteNotification error:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Something went wrong",
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -793,11 +597,8 @@ const DeleteNotification = async (req, res) => {
 module.exports = {
   sendNotification,
   sendNotificationForCall,
-  sendSMSNotificationToUser,
   getAllNotification,
   DeleteNotification,
-  checkSecurityCode,
-  verifySecurityCode,
   seenNotificationByUser,
   isOnnotification,
 };

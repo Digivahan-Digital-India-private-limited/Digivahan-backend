@@ -42,14 +42,13 @@ const AppInfoSchema = new mongoose.Schema({
     terms_condition: { type: TermsSchema, default: {} },
     About_page: { type: AboutSchema, default: {} },
   },
-  
   // ✅ NEW FIELD
   api_key: {
     razorpay_key_id: { type: String, trim: true },
     is_payment: { type: Boolean, default: true },
   },
 
-  // Zigo Data
+  // Zigo Data 
   zigoApp_data: {
     zigoAppID: { type: String, default: "" },
     zigoAppSignKey: { type: String, default: "" },

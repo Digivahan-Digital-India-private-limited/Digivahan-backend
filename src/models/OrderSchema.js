@@ -1,84 +1,194 @@
 const mongoose = require("mongoose");
+const { Schema } = mongoose;
 
-const orderItemSchema = new mongoose.Schema({
-  vehicle_id: { type: String, default: "" },
-  makers_model: { type: String, default: "" },
-  makers_name: { type: String, default: "" },
-  order_type: { type: String, default: "" },
-  name: { type: String, required: true },
-  sku: { type: String, default: "QR-001" },
-  units: { type: Number, required: true },
-  selling_price: { type: Number, required: true },
-  selling_price_currency: { type: String, default: "INR" },
-  weight: { type: Number, default: 0.05 },
-});
+/* ----------------------------------
+   ORDER ITEM
+-----------------------------------*/
+const orderItemSchema = new Schema(
+  {
+    vehicle_id: String,
 
-const shiprocketStatusSchema = new mongoose.Schema({
-  order_id: { type: String, required: true }, // change from Number -> String
-  channel_order_id: { type: String, required: true },
-  shipment_id: { type: Number, default: null },
-  status: { type: String, default: "" },
-  status_code: { type: Number, default: 5 },
-  onboarding_completed_now: { type: Number, default: 0 },
-  awb_code: { type: String, default: "" },
-  courier_company_id: { type: String, default: "" },
-  courier_name: { type: String, default: "" },
-  new_channel: { type: Boolean, default: false },
-  delivery_code: { type: String, default: "" },
-});
+    order_type: {
+      type: String,
+      enum: ["Prepaid", "COD"],
+      default: "Prepaid",
+    },
 
-const orderSchema = new mongoose.Schema(
+    name: String,
+
+    sku: {
+      type: String,
+      default: "QR-001",
+    },
+
+    units: Number,
+
+    selling_price: Number,
+
+    selling_price_currency: {
+      type: String,
+      default: "INR",
+    },
+
+    weight: Number,
+  },
+  { _id: false },
+);
+
+/* ----------------------------------
+   MAIN ORDER SCHEMA
+-----------------------------------*/
+const orderSchema = new Schema(
   {
     user_id: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
-    order_id: { type: String, required: true },
-    courier_company_id: { type: String, required: true },
-    order_date: { type: String, required: true },
 
-    sub_total: { type: Number, required: true },
-    order_value: { type: Number, required: true },
-    order_status: { type: String, default: "NEW" },
+    order_id: {
+      type: String,
+      required: true,
+    },
 
-    payment_method: { type: String, default: "Prepaid" },
-    is_prepared: { type: Boolean, default: false },
-    shipping_is_billing: { type: Number, default: 1 },
-    is_return: { type: Number, default: 0 },
-    declared_value: { type: Number, required: true },
+    order_date: {
+      type: Date,
+      default: Date.now,
+    },
 
-    shipping_customer_name: { type: String, required: true },
-    shipping_last_name: { type: String, required: true },
-    shipping_phone: { type: String, required: true },
-    shipping_address: { type: String, required: true },
-    shipping_address_2: { type: String, default: "" },
-    shipping_city: { type: String, required: true },
-    shipping_state: { type: String, required: true },
-    shipping_country: { type: String, required: true },
-    shipping_pincode: { type: String, required: true },
-    shipping_email: { type: String, required: true },
+    order_status: {
+      type: String,
+      enum: [
+        "NEW",
+        "PENDING",
+        "CONFIRMED",
+        "SHIPPED",
+        "DELIVERED",
+        "CANCELED",
+        "RETURNED",
+        "PICKUP SCHEDULED",
+        "PICKED UP",
+        "IN_TRANSIT"
+      ],
+      default: "NEW",
+    },
 
-    billing_customer_name: { type: String, required: true },
-    billing_last_name: { type: String, required: true },
-    billing_phone: { type: String, required: true },
-    billing_address: { type: String, required: true },
-    billing_address_2: { type: String, default: "" },
-    billing_city: { type: String, required: true },
-    billing_state: { type: String, required: true },
-    billing_country: { type: String, required: true },
-    billing_pincode: { type: String, required: true },
+    canceled_at: Date,
 
-    length: { type: Number, default: 20 },
-    breadth: { type: Number, default: 15 },
-    height: { type: Number, default: 10 },
-    weight: { type: Number, default: 0.05 },
+    active_partner: {
+      type: String,
+      enum: ["shiprocket", "delivery", "manual"],
+      required: true,
+      index: true,
+    },
 
-    order_items: [orderItemSchema],
+    partner_order_created: {
+      type: Boolean,
+      default: false,
+    },
 
-    ship_rocket: shiprocketStatusSchema,
+    shipping_mode: {
+      type: String,
+      default: "Surface",
+    },
+
+    payment_method: {
+      type: String,
+      enum: ["Prepaid", "COD"],
+      default: "Prepaid",
+    },
+
+    is_prepared: {
+      type: Boolean,
+      default: false,
+    },
+
+    shipping_is_billing: {
+      type: Boolean,
+      default: true,
+    },
+
+    is_return: {
+      type: Boolean,
+      default: false,
+    },
+
+    sub_total: Number,
+
+    order_value: Number,
+
+    declared_value: Number,
+
+    courier_company_id: {
+      type: Number,
+      index: true,
+    },
+
+    courier_name: {
+      type: String,
+      index: true,
+    },
+
+    shipping: {
+      first_name: String,
+      last_name: String,
+      phone: String,
+      email: String,
+      address1: String,
+      address2: String,
+      city: String,
+      state: String,
+      country: String,
+      pincode: String,
+    },
+
+    billing: {
+      first_name: String,
+      last_name: String,
+      phone: String,
+      address1: String,
+      address2: String,
+      city: String,
+      state: String,
+      country: String,
+      pincode: String,
+    },
+
+    parcel: {
+      length: Number,
+      breadth: Number,
+      height: Number,
+      weight: Number,
+    },
+
+    order_items: {
+      type: [orderItemSchema],
+      required: true,
+    },
+    last_tracked_at: Date,
   },
-  { timestamps: true }
+  { timestamps: true },
 );
+
+orderSchema.index({ order_id: 1 });
+
+orderSchema.index({ user_id: 1, createdAt: -1 });
+
+orderSchema.index({ order_status: 1, createdAt: -1 });
+
+orderSchema.index({ active_partner: 1, createdAt: -1 });
+
+orderSchema.index({ courier_company_id: 1, createdAt: -1 });
+
+orderSchema.index({ partner_order_created: 1, order_status: 1 });
+
+orderSchema.index({ "shipping.phone": 1 });
+
+orderSchema.index({ "shipping.pincode": 1 });
+
+orderSchema.index({ createdAt: -1 });
+
+orderSchema.index({ order_id: 1, user_id: 1 });
 
 module.exports = mongoose.model("Order", orderSchema);

@@ -1,131 +1,145 @@
 const ChatList = require("../models/Chat");
 const RoomSchema = require("../models/RoomSchema");
+const mongoose = require("mongoose");
 
 const SendUserMessage = async (req, res) => {
   try {
     const { chat_room_id, sender_id, message, latitude, longitude } = req.body;
 
-    // 🔴 Basic validation
+    // ✅ validation
     if (!chat_room_id || !sender_id) {
       return res.status(400).json({
-        success: false,
-        message: "chat_room_id and sender_id are required",
+        status: false,
+        message: "chat_room_id and sender_id required",
       });
     }
 
-    // 1️⃣ Find chat room
-    const room = await RoomSchema.findById(chat_room_id);
+    if (
+      !mongoose.Types.ObjectId.isValid(chat_room_id) ||
+      !mongoose.Types.ObjectId.isValid(sender_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid IDs",
+      });
+    }
+
+    // ✅ check room exists & sender is member
+    const room = await RoomSchema.findOne({
+      _id: chat_room_id,
+      "members.user_id": sender_id,
+    }).select("_id");
 
     if (!room) {
-      return res.status(404).json({
-        success: false,
-        message: "Chat room not found",
-      });
-    }
-
-    // 2️⃣ Check sender is member of room
-    const isMember = room.members.some(
-      (member) => member.user_id.toString() === sender_id.toString()
-    );
-
-    if (!isMember) {
       return res.status(403).json({
-        success: false,
-        message: "Sender is not a member of this chat room",
+        status: false,
+        message: "Not authorized or room not found",
       });
     }
 
-    // 3️⃣ Get images from Cloudinary (form-data)
-    let imageUrls = [];
+    // ✅ images from cloudinary
+    const imageUrls = req.files?.map((file) => file.path) || [];
 
-    if (req.files && req.files.length > 0) {
-      imageUrls = req.files.map((file) => file.path); // ✅ Cloudinary URL
-    }
-
-    // ❗ Message ya image me se kuch ek required
     if (!message && imageUrls.length === 0) {
       return res.status(400).json({
-        success: false,
-        message: "Message or image is required",
+        status: false,
+        message: "Message or image required",
       });
     }
 
-    // 4️⃣ Message object (jo chats array me jayega)
-    const chatMessage = {
+    // ✅ save message (FAST)
+    const newMessage = await ChatList.create({
+      chat_room_id,
       sender_id,
       message: message || "",
       images: imageUrls,
-      latitude: latitude || "",
-      longitude: longitude || "",
-      deleted_by: [],
-      message_timestamp: new Date(),
-    };
+      location: {
+        latitude: latitude || "",
+        longitude: longitude || "",
+      },
+    });
 
-    // 5️⃣ Find chat list by room
-    let chatList = await ChatList.findOne({ chat_room_id });
-
-    if (!chatList) {
-      // 🆕 First message of room
-      chatList = await ChatList.create({
-        chat_room_id,
-        chats: [chatMessage],
-      });
-    } else {
-      // ➕ Push new message
-      chatList.chats.push(chatMessage);
-      await chatList.save();
-    }
+    // ✅ update last message in room (optional but recommended)
+    await RoomSchema.updateOne(
+      { _id: chat_room_id },
+      { lastMessage: newMessage._id },
+    );
 
     return res.status(201).json({
       status: true,
-      message: "Message sent successfully",
-      data: chatMessage,
+      message: "Message sent",
+      data: newMessage,
     });
   } catch (error) {
     console.error("SendUserMessage Error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
 
-const getallChatDetails = async (req, res) => {
+const getallChats = async (req, res) => {
   try {
     const { chat_room_id } = req.params;
 
-    // 🔴 Validation
-    if (!chat_room_id) {
+    // ✅ validation
+    if (!mongoose.Types.ObjectId.isValid(chat_room_id)) {
       return res.status(400).json({
-        success: false,
-        message: "chat_room_id is required",
+        status: false,
+        message: "Invalid chat_room_id",
       });
     }
 
-    // 1️⃣ Check room exists
-    const room = await RoomSchema.findById(chat_room_id);
+    // ✅ find room
+    const room = await RoomSchema.findById(chat_room_id)
+      .select("members")
+      .lean();
+
     if (!room) {
       return res.status(404).json({
-        success: false,
+        status: false,
         message: "Chat room not found",
       });
     }
 
-    // 2️⃣ Fetch all messages of this room
-    const chats = await ChatList.find({ chat_room_id })
-      .sort({ message_timestamp: -1 }) // latest first
-      .populate("chats.sender_id", "name avatar") // optional
+    // ✅ fetch messages
+    const messages = await ChatList.find({ chat_room_id })
+      .sort({ message_timestamp: 1 }) // oldest first like WhatsApp
       .lean();
 
+    // ✅ transform into chats array format
+    const chats = messages.map((msg) => ({
+      _id: msg._id,
+      sender_id: msg.sender_id,
+      message: msg.message,
+      images: msg.images || [],
+      latitude: msg.location?.latitude || "",
+      longitude: msg.location?.longitude || "",
+      deleted_by: msg.deleted_by || [],
+      message_timestamp: msg.message_timestamp,
+    }));
+
+    // ✅ final response (exact format same as old)
     return res.status(200).json({
       status: true,
       totalMessages: chats.length,
       members: room.members,
-      data: chats,
+      data: [
+        {
+          _id: messages[0]?._id || null,
+          chat_room_id,
+          chats,
+          createdAt: messages[0]?.createdAt || null,
+          updatedAt: messages[messages.length - 1]?.updatedAt || null,
+        },
+      ],
     });
+
   } catch (error) {
     console.error("Get chat details error:", error);
+
     return res.status(500).json({
       status: false,
       message: "Internal server error",
@@ -133,4 +147,5 @@ const getallChatDetails = async (req, res) => {
   }
 };
 
-module.exports = { SendUserMessage, getallChatDetails };
+
+module.exports = { SendUserMessage, getallChats };

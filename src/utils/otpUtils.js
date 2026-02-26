@@ -41,9 +41,8 @@ const generateVerificationId = () => {
  * @param {string} templateType - Type of OTP (signup, login, reset)
  * @returns {Promise<boolean>} - Success status
  */
-const sendOTPViaSMS = async (phone, otp, templateType= "signup") => {
+const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
   try {
-    // PRP SMS API configuration
     const prpSmsConfig = {
       apiUrl:
         process.env.PRP_SMS_API_URL ||
@@ -58,25 +57,20 @@ const sendOTPViaSMS = async (phone, otp, templateType= "signup") => {
       },
     };
 
-    // Validate configuration
     if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
-      console.error(
-        "PRP SMS configuration missing. Please check environment variables."
-      );
+      console.error("❌ PRP SMS config missing");
       return false;
     }
 
-    // Get template name based on type
     const templateName = prpSmsConfig.templates[templateType];
     if (!templateName) {
-      console.error(`Template name not found for type: ${templateType}`);
+      console.error(`❌ Template not found: ${templateType}`);
       return false;
     }
 
-    // Prepare SMS payload for PRP SMS API
     const smsPayload = {
       sender: prpSmsConfig.sender,
-      templateName: templateName,
+      templateName,
       smsReciever: [
         {
           mobileNo: phone,
@@ -85,27 +79,32 @@ const sendOTPViaSMS = async (phone, otp, templateType= "signup") => {
       ],
     };
 
-    // Send SMS via PRP SMS API
+    console.log("📤 Sending SMS payload:", smsPayload);
+
     const response = await axios.post(prpSmsConfig.apiUrl, smsPayload, {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         apikey: prpSmsConfig.apiKey,
       },
-      timeout: 10000, // 10 second timeout
+      timeout: 30000, // ⬅️ 30 sec
     });
 
-    // Check response status
-    if (response.data.isSuccess) {
-      console.log(`📱 SMS sent successfully to ${phone} via PRP SMS`);
-      console.log(`Response:`, response.data);
+    console.log("📥 SMS API response:", response.data);
+
+    if (response.data?.isSuccess === true) {
+      console.log(`📱 SMS sent to ${phone}`);
       return true;
     } else {
-      console.error("PRP SMS API error:", response.data);
+      console.error("❌ PRP SMS failed:", response.data);
       return false;
     }
   } catch (error) {
-    console.error("Error sending SMS via PRP SMS:", error.message);
+    console.error("❌ SMS error full:", {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+    });
     return false;
   }
 };

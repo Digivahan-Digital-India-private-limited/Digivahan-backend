@@ -1,7 +1,7 @@
 const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
-const calculateProfileCompletion = require("../middleware/profileCompletionCalculator");
+const mongoose = require("mongoose");
 
 const AddEmergencyContact = async (req, res) => {
   try {
@@ -15,7 +15,17 @@ const AddEmergencyContact = async (req, res) => {
       });
     }
 
-    const user = await User.findById(user_id);
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    // 🔥 Fetch only required fields
+    const user = await User.findById(user_id).select(
+      "basic_details public_details emergency_contacts",
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -24,73 +34,68 @@ const AddEmergencyContact = async (req, res) => {
       });
     }
 
-    if (user.basic_details.phone_number === phone_number) {
-      return res.status(404).json({
+    const normalizedPhone = phone_number.trim();
+    const normalizedFirstName = first_name.trim().toLowerCase();
+    const normalizedLastName = last_name?.trim().toLowerCase() || "";
+
+    // 🚫 User cannot add his own number
+    if (user.basic_details.phone_number === normalizedPhone) {
+      return res.status(400).json({
         status: false,
         error_type: "phone_number",
-        message:
-          "This Phone number is already use In User Account Please use another Phone Number",
+        message: "This phone number already belongs to the user account",
       });
     }
 
-    // 🔍 CHECK DUPLICATE
-    const isAlreadyExist = user.emergency_contacts.some((contact) => {
+    // 🔍 Duplicate check (phone OR full name match)
+    const duplicate = user.emergency_contacts.some((contact) => {
       return (
-        contact.phone_number === phone_number ||
-        contact.first_name.toLowerCase() === first_name.toLowerCase() ||
-        contact.last_name.toLowerCase() === last_name.toLowerCase()
+        contact.phone_number === normalizedPhone ||
+        (contact.first_name?.toLowerCase() === normalizedFirstName &&
+          contact.last_name?.toLowerCase() === normalizedLastName)
       );
     });
 
-    if (isAlreadyExist) {
+    if (duplicate) {
       return res.status(409).json({
         status: false,
         message: "This emergency contact is already added",
       });
     }
 
+    // =============================
+    // 🔥 Optional Image Upload
+    // =============================
     let profile_pic = "";
     let public_id = "";
 
-    // ✅ OPTIONAL IMAGE LOGIC
-    if (req.file) {
-      const buffer = req.file.buffer;
-
+    if (req.file?.buffer) {
       const uploadResult = await new Promise((resolve, reject) => {
         cloudinary.uploader
           .upload_stream(
-            {
-              folder: "uploads",
-              resource_type: "image",
-            },
+            { folder: "emergency_contacts", resource_type: "image" },
             (error, result) => {
               if (error) reject(error);
               else resolve(result);
             },
           )
-          .end(buffer);
+          .end(req.file.buffer);
       });
 
       profile_pic = uploadResult.secure_url;
       public_id = uploadResult.public_id;
     }
 
-    // 🧾 CREATE CONTACT (works for both cases)
-    const newContact = {
-      first_name,
-      last_name,
-      relation,
-      phone_number,
-      email,
+    // 🔥 Push contact
+    user.emergency_contacts.push({
+      first_name: first_name.trim(),
+      last_name: last_name?.trim() || "",
+      relation: relation?.trim() || "",
+      phone_number: normalizedPhone,
+      email: email?.trim().toLowerCase() || "",
       profile_pic,
       public_id,
-    };
-
-    user.emergency_contacts.push(newContact);
-
-    // 🟢 6️⃣ Recalculate profile completion %
-    user.basic_details.profile_completion_percent =
-      calculateProfileCompletion(user);
+    });
 
     await user.save();
 
@@ -127,8 +132,21 @@ const UpdateUserEmergencyContact = async (req, res) => {
       });
     }
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(contact_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid ID format",
+      });
+    }
+
+    // 🔥 Fetch only required fields
+    const user = await User.findById(user_id).select(
+      "basic_details public_details emergency_contacts",
+    );
+
     if (!user) {
       return res.status(404).json({
         status: false,
@@ -136,19 +154,8 @@ const UpdateUserEmergencyContact = async (req, res) => {
       });
     }
 
-    if (user.basic_details.phone_number === phone_number) {
-      return res.status(404).json({
-        status: false,
-        error_type: "phone_number",
-        message:
-          "This Phone number is already use In User Account Please use another Phone Number",
-      });
-    }
-
-    // 2️⃣ Find emergency contact
-    const contact = user.emergency_contacts.find((c) =>
-      c._id.equals(contact_id),
-    );
+    // 🔥 Find contact
+    const contact = user.emergency_contacts.id(contact_id);
 
     if (!contact) {
       return res.status(404).json({
@@ -157,46 +164,75 @@ const UpdateUserEmergencyContact = async (req, res) => {
       });
     }
 
-    const profilePicFile = req.file;
+    const normalizedPhone = phone_number?.trim();
 
-    // 3️⃣ PROFILE PIC LOGIC (2 CASES)
-    if (profilePicFile) {
-      const buffer = profilePicFile.buffer;
+    // 🚫 Prevent using user's own number
+    if (
+      normalizedPhone &&
+      user.basic_details.phone_number === normalizedPhone
+    ) {
+      return res.status(400).json({
+        status: false,
+        error_type: "phone_number",
+        message: "This phone number already belongs to the user account",
+      });
+    }
 
-      // 🔹 CASE 1: old image exists → replace it
+    // 🔍 Duplicate phone check (excluding current contact)
+    if (normalizedPhone) {
+      const duplicate = user.emergency_contacts.some(
+        (c) =>
+          c._id.toString() !== contact_id && c.phone_number === normalizedPhone,
+      );
+
+      if (duplicate) {
+        return res.status(409).json({
+          status: false,
+          message: "This phone number already exists in emergency contacts",
+        });
+      }
+    }
+
+    // =============================
+    // 🔥 Profile Pic Update
+    // =============================
+    if (req.file?.buffer) {
+      // Delete old image if exists
       if (contact.public_id) {
-        await cloudinary.uploader.destroy(contact.public_id);
+        await cloudinary.uploader
+          .destroy(contact.public_id)
+          .catch(console.error);
       }
 
-      // 🔹 CASE 2: old image does NOT exist → fresh upload
       const uploadResult = await new Promise((resolve, reject) => {
         cloudinary.uploader
           .upload_stream(
-            {
-              folder: "uploads",
-              resource_type: "image",
-            },
+            { folder: "emergency_contacts", resource_type: "image" },
             (error, result) => {
               if (error) reject(error);
               else resolve(result);
             },
           )
-          .end(buffer);
+          .end(req.file.buffer);
       });
 
-      // 🔹 Save in both cases
       contact.profile_pic = uploadResult.secure_url;
       contact.public_id = uploadResult.public_id;
     }
 
-    // 4️⃣ Update other fields
-    if (first_name) contact.first_name = first_name;
-    if (last_name) contact.last_name = last_name;
-    if (relation) contact.relation = relation;
-    if (phone_number) contact.phone_number = phone_number;
-    if (email) contact.email = email;
+    // =============================
+    // 🔥 Update Fields (Safe + Trim)
+    // =============================
+    if (first_name !== undefined) contact.first_name = first_name.trim();
 
-    // 5️⃣ Save user
+    if (last_name !== undefined) contact.last_name = last_name.trim();
+
+    if (relation !== undefined) contact.relation = relation.trim();
+
+    if (normalizedPhone) contact.phone_number = normalizedPhone;
+
+    if (email !== undefined) contact.email = email.trim().toLowerCase();
+
     await user.save();
 
     return res.status(200).json({
@@ -208,7 +244,7 @@ const UpdateUserEmergencyContact = async (req, res) => {
     console.error("UpdateUserEmergencyContact error:", error);
     return res.status(500).json({
       status: false,
-      message: error.message,
+      message: "Internal server error",
     });
   }
 };
@@ -217,42 +253,67 @@ const DeleteUserEmergencyContact = async (req, res) => {
   try {
     const { user_id, contact_id } = req.body;
 
-    // 1️⃣ Find user
-    const user = await User.findById(user_id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    if (!user_id || !contact_id) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id and contact_id are required",
+      });
     }
 
-    // 2️⃣ Find contact inside emergency_contact array
-    const contact = user.emergency_contacts.id(contact_id);
-    if (!contact) {
-      return res.status(404).json({ message: "Emergency contact not found" });
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(contact_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid ID format",
+      });
     }
 
-    // 3️⃣ Delete profile image from Cloudinary if exists
-    if (contact.public_id) {
-      try {
-        await deleteFromCloudinary(contact.public_id);
-      } catch (err) {
-        console.log("Cloudinary delete failed:", err);
-      }
-    }
-
-    // 4️⃣ Remove contact from array
-    user.emergency_contacts = user.emergency_contacts.filter(
-      (item) => item._id.toString() !== contact_id,
+    // 🔥 Fetch only required fields
+    const user = await User.findById(user_id).select(
+      "basic_details public_details emergency_contacts",
     );
 
-    // 5️⃣ Save updated user
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const contact = user.emergency_contacts.id(contact_id);
+
+    if (!contact) {
+      return res.status(404).json({
+        status: false,
+        message: "Emergency contact not found",
+      });
+    }
+
+    const oldPublicId = contact.public_id || null;
+
+    // 🔥 Remove contact using mongoose built-in method
+    contact.deleteOne();
+
     await user.save();
 
+    // 🔥 Delete image AFTER successful save (non-blocking)
+    if (oldPublicId) {
+      deleteFromCloudinary(oldPublicId).catch(console.error);
+    }
+
     return res.status(200).json({
+      status: true,
       message: "Emergency contact deleted successfully",
-      emergency_contact: user.emergency_contacts,
+      emergency_contacts: user.emergency_contacts,
     });
   } catch (error) {
     console.error("DeleteUserEmergencyContact Error:", error);
-    return res.status(500).json({ message: "Server error", error });
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
   }
 };
 

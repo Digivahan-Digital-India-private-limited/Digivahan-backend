@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload } = require("../middleware/cloudinary.js");
+const { bypassupload } = require("../middleware/bypassCloudinary.js");
 
 const {
   handleValidationErrors,
@@ -11,7 +11,7 @@ const { authenticateToken } = require("../middleware/auth.js");
 
 const {
   UpdateUserDetails,
-  getUserDetails
+  getUserDetails,
 } = require("../controllers/profileUpdateController.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
@@ -19,7 +19,7 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 router.put(
   API_ROUTES.UPDATE_USER.UPDATE,
   authenticateToken,
-  upload.fields([
+  bypassupload.fields([
     { name: "profile_pic", maxCount: 1 },
     { name: "public_pic", maxCount: 1 },
   ]),
@@ -27,15 +27,14 @@ router.put(
     commonValidations.userId("user_id"), // ⬅️ ONLY validating user_id
     handleValidationErrors,
   ],
-  UpdateUserDetails
+  UpdateUserDetails,
 );
 
 router.post(
   API_ROUTES.UPDATE_USER.GET_USER_DETAILS,
   authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
-  getUserDetails
+  getUserDetails,
 );
-
 
 module.exports = router;

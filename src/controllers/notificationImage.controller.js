@@ -54,28 +54,27 @@ exports.uploadNotificationImage = async (req, res) => {
 };
 
 exports.deleteNotificationImage = async (req, res) => {
-    try {
-      const { public_id } = req.body;
-  
-      if (!public_id) {
-        return res.status(400).json({
-          success: false,
-          message: "public_id is required",
-        });
-      }
-  
-      await cloudinary.uploader.destroy(public_id);
-  
-      return res.json({
-        success: true,
-        message: "Image deleted successfully",
-      });
-    } catch (error) {
-      console.error("Delete Notification Image Error:", error);
-      return res.status(500).json({
+  try {
+    const { public_id } = req.body;
+
+    if (!public_id) {
+      return res.status(400).json({
         success: false,
-        message: "Image delete failed",
+        message: "public_id is required",
       });
     }
-  };
-  
+
+    await cloudinary.uploader.destroy(public_id);
+
+    return res.json({
+      success: true,
+      message: "Image deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Notification Image Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Image delete failed",
+    });
+  }
+};

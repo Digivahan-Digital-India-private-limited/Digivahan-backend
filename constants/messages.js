@@ -299,7 +299,7 @@ const ERROR_MESSAGES = {
   PHONE_VERIFIED_SUCCESS: "Phone number verified successfully",
 
   // OTP errors
-  OTP_LIMIT_REACHED: "OTP limit reached for today. Try again tomorrow.",
+  OTP_LIMIT_REACHED: "OTP limit reached for today. Try again after 24 hours",
   OTP_EXPIRED: "OTP has expired",
   OTP_ALREADY_USED: "OTP has already been used",
   MAX_ATTEMPTS_REACHED: "Maximum OTP attempts reached. Please try again later.",

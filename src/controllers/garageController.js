@@ -314,7 +314,7 @@ const addVehicleInUsergarage = async (req, res) => {
       status: true,
       message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
       data: {
-        vehicle: maskVehicleResponse(matchedVehicle.api_data),
+        vehicle: matchedVehicle.api_data,
       },
     });
   } catch (error) {

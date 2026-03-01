@@ -298,7 +298,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
         throw new Error("Shiprocket order creation failed");
 
       const AWBpayload = {
-        shipment_id: response.shipment_id,
+        shipment_id: String(response.shipment_id),
         courier_company_id: order.courier_company_id,
       };
 

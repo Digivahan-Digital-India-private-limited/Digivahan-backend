@@ -69,7 +69,7 @@ const orderSchema = new Schema(
         "RETURNED",
         "PICKUP SCHEDULED",
         "PICKED UP",
-        "IN_TRANSIT"
+        "IN_TRANSIT",
       ],
       default: "NEW",
     },
@@ -121,7 +121,7 @@ const orderSchema = new Schema(
     declared_value: Number,
 
     courier_company_id: {
-      type: Number,
+      type: String,
       index: true,
     },
 

@@ -26,7 +26,6 @@ const GenerateOrderByUser = async (req, res) => {
       shipping_is_billing,
       shipping,
       billing,
-      parcel,
       order_items,
     } = req.body;
 
@@ -105,13 +104,13 @@ const GenerateOrderByUser = async (req, res) => {
       },
 
       parcel: {
-        length: parcel.length,
+        length: 9,
 
-        breadth: parcel.breadth,
+        breadth: 8,
 
-        height: parcel.height,
+        height: 1,
 
-        weight: parcel.weight,
+        weight: 0.05,
       },
 
       order_items: order_items.map((item) => ({

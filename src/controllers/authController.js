@@ -594,10 +594,20 @@ const ChangeUserpassword = async (req, res) => {
       });
     }
 
-    // 🔥 Only required fields select
     const user = await User.findById(user_id).select(
-      "basic_details.password old_passwords is_active is_logged_in",
+      "+basic_details.password +old_passwords",
     );
+
+    if (!user) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    if (!user.basic_details?.password) {
+      return res.status(400).json({
+        status: false,
+        message: "Password missing in DB",
+      });
+    }
 
     if (!user) {
       return res.status(404).json({

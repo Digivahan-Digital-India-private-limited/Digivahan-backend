@@ -14,13 +14,20 @@ exports.createNews = async (req, res) => {
       });
     }
 
-    const { news_type, heading, sub_heading, news } = req.body;
+    const { news_type, heading, sub_heading } = req.body;
+
+    let news = req.body.news;
 
     if (!news_type || !heading || !news) {
       return res.status(400).json({
         success: false,
         message: "news_type, heading and news are required",
       });
+    }
+
+    // Replace literal \n with real newline
+    if (news) {
+      news = news.replace(/\\n/g, "\n");
     }
 
     const createdNews = await News.create({

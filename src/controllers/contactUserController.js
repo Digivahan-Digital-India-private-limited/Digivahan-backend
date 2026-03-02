@@ -18,7 +18,7 @@ const contactToUser = async (req, res) => {
     const payload = new URLSearchParams({
       api_id: process.env.Mask_Calling_API_ID,
       api_password: process.env.Mask_Calling_API_PASSWORD,
-      ivr_number: process.env.IVR_NUMBER,
+      ivr_number: process.env.Mask_Calling_IVR_NUMBER,
       dial: "agent",
       receiver_number: String(receiver),
       agent_number: String(agent),

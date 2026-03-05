@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const QRAssignment = require("../models/QRAssignment");
 const VehicleInfoData = require("../models/vehicleInfoSchema");
 const axios = require("axios");
 const redis = require("../utils/redis");
@@ -526,7 +527,7 @@ const removeVehicle = async (req, res) => {
       });
     }
 
-    // 🔥 Build user query dynamically
+    // 🔎 Build user query
     let userQuery = {};
 
     if (mongoose.Types.ObjectId.isValid(user_id)) {
@@ -537,11 +538,45 @@ const removeVehicle = async (req, res) => {
       userQuery["basic_details.phone_number"] = String(user_id);
     }
 
-    // 🔥 Atomic pull (NO full user fetch)
-    const result = await User.updateOne(
+    // ✅ Step 1: Get vehicle + qr_list
+    const user = await User.findOne({
+      ...userQuery,
+      "garage.vehicles.vehicle_id": vehicle_number,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: ERROR_MESSAGES.VEHICLE_NOT_FOUND_IN_GARAGE,
+      });
+    }
+
+    const vehicle = user.garage.vehicles.find(
+      (v) => v.vehicle_id === vehicle_number,
+    );
+
+    const qrIds = vehicle?.qr_list || [];
+
+    // ✅ Step 2: Unassign all related QR
+    if (qrIds.length > 0) {
+      await QRAssignment.updateMany(
+        { qr_id: { $in: qrIds } },
+        {
+          $set: {
+            qr_status: "unassigned",
+            assigned_to: null,
+            assigned_by: null,
+            vehicle_id: null,
+            assigned_at: null,
+          },
+        },
+      );
+    }
+
+    // ✅ Step 3: Remove vehicle
+    await User.updateOne(
       {
         ...userQuery,
-        "garage.vehicles.vehicle_id": vehicle_number, // ensure exists
       },
       {
         $pull: {
@@ -550,19 +585,12 @@ const removeVehicle = async (req, res) => {
       },
     );
 
-    // 🚫 Nothing removed
-    if (result.modifiedCount === 0) {
-      return res.status(404).json({
-        status: false,
-        message: ERROR_MESSAGES.VEHICLE_NOT_FOUND_IN_GARAGE,
-      });
-    }
-
     return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.VEHICLE_REMOVED_FROM_GARAGE,
       data: {
         vehicle_id: vehicle_number,
+        unassigned_qr: qrIds,
       },
     });
   } catch (error) {

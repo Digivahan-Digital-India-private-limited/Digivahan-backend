@@ -146,8 +146,8 @@ const API_ROUTES = {
     ADD_USER_GARAGE: "/v1/user/add-garage",
     GET_GARAGE: "/v1/garage/:user_id",
     REMOVE_VEHICLE: "/v1/garage/remove-vehicle",
-    CHECK_SECURITY_CODE: "/check/security-code",
-    VERIFY_SECURITY_CODE: "/verify/security-code",
+    CHECK_SECURITY_CODE: "/notifications/check/security-code",
+    VERIFY_SECURITY_CODE: "/notifications/verify/security-code",
   },
 
   // Trending Cars routes

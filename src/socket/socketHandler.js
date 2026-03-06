@@ -1,4 +1,5 @@
 const Room = require("../models/RoomSchema");
+const ChatList = require("../models/Chat");
 
 const setupSocketIO = (io) => {
   io.on("connection", (socket) => {
@@ -51,32 +52,46 @@ const setupSocketIO = (io) => {
     /**
      * SEND MESSAGE TO ROOM MEMBERS
      */
-    socket.on("send_message", async ({ roomId, message }) => {
+    socket.on("send_message", async (data) => {
       try {
-        const room = await Room.findById(roomId);
+        const { roomId, message, images, location } = data;
 
+        const room = await Room.findById(roomId);
         if (!room) return;
 
-        // Validate that sender is in the room
         const isMember = room.members.some(
           (m) => m.user_id.toString() === socket.userId.toString(),
         );
 
         if (!isMember) {
-          console.log("❌ Sender is not a member of room");
+          console.log("❌ Sender not a member of room");
           return;
         }
 
-        // Emit message to all members inside the room
-        io.to(roomId).emit("receive_message", {
-          roomId,
-          from: socket.userId,
-          message,
+        // ✅ SAVE MESSAGE
+        const newMessage = await ChatList.create({
+          chat_room_id: roomId,
+          sender_id: socket.userId,
+          message: message || "",
+          images: images || [],
+          location: {
+            latitude: location?.latitude || "",
+            longitude: location?.longitude || "",
+          },
         });
 
-        console.log(`📨 Message sent in room ${roomId}`);
+        // update last message
+        await Room.updateOne({ _id: roomId }, { lastMessage: newMessage._id });
+
+        // ✅ EMIT REALTIME MESSAGE
+        io.to(roomId).emit("receive_message", {
+          ...newMessage.toObject(),
+          from: socket.userId,
+        });
+
+        console.log("📨 Message saved + sent");
       } catch (err) {
-        console.error("Error sending message:", err);
+        console.error("Socket message error:", err);
       }
     });
 

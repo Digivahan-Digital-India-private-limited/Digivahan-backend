@@ -704,7 +704,7 @@ const checkSecurityCode = async (req, res) => {
     const vehicle = user.garage.vehicles[0];
 
     // 🔥 Generate secure 6 digit code
-    const securityCode = Math.floor(1000 + Math.random() * 900000).toString();
+    const securityCode = Math.floor(1000 + Math.random() * 9000).toString();
 
     // 🔥 Redis key
     const redisKey = `vehicleSecurity:${user_id}:${vehicle_id}`;

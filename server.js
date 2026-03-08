@@ -101,13 +101,13 @@ app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
 // app.get("/", (req, res) => {
-//   res.status(200).json({ message: "Welcome To Digivahan Server" });
+//   res.sendFile(path.join(__dirname, "index.html"));
 // });
+
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Welcome To Digivahan Server" });
+});
 
 // -------------------- SERVER SETUP --------------------
 const PORT = process.env.PORT || 3000;

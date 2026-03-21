@@ -10,6 +10,7 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 const {
   createQrScanner,
+  createQrWithQrId,
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
@@ -17,12 +18,20 @@ const {
   CreateSingleQRTemplate,
   getUploadedTemplateImage,
   GetUserdetailsThrowTheQRId,
+  filterQrlist,
+  QrBlockedByAdmin,
 } = require("../controllers/QrController.js");
 
 router.post(
   API_ROUTES.QR.GENERATE_QR,
   [commonValidations.unitno("unit"), handleValidationErrors],
   createQrScanner,
+);
+
+router.post(
+  API_ROUTES.QR.GENERATE_QR_WITH_ID,
+  [handleValidationErrors],
+  createQrWithQrId,
 );
 
 router.get(API_ROUTES.QR.QR_DETAILS, [handleValidationErrors], getQrDetails);
@@ -39,7 +48,7 @@ router.post(
   CheckQrInUser,
 );
 
-router.get(
+router.post(
   API_ROUTES.QR.GET_QR_TEMPLATES_BULK,
   [handleValidationErrors],
   CreateQrTemplateInBulk,
@@ -61,6 +70,18 @@ router.get(
   API_ROUTES.QR.GET_USER_DETAILS,
   [handleValidationErrors],
   GetUserdetailsThrowTheQRId,
+);
+
+router.get(
+  API_ROUTES.QR.ADMIN_FILTER_QR,
+  [handleValidationErrors],
+  filterQrlist,
+);
+
+router.post(
+  API_ROUTES.QR.ADMIN_BLOCKED_QR,
+  [handleValidationErrors],
+  QrBlockedByAdmin,
 );
 
 module.exports = router;

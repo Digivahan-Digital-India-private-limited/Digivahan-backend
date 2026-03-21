@@ -11,6 +11,7 @@ const {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
   GenerateOrderManifest,
+  PrintBulkManifest,
   GenerateShiprocketLabel,
   GenerateDeliveryLabel,
   getUserAllOrder,
@@ -35,6 +36,12 @@ router.post(
   API_ROUTES.ORDER.ADMIN_CONFIRM_ORDER,
   [commonValidations.orderId("order_id"), handleValidationErrors],
   ConfirmOrderByAdmin,
+);
+
+router.post(
+  API_ROUTES.ORDER.ADMIN_PRINT_MANIFEST_INBULK,
+  [handleValidationErrors],
+  PrintBulkManifest,
 );
 
 router.get(

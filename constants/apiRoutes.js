@@ -119,6 +119,7 @@ const API_ROUTES = {
     BASE: "/api",
     CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
+    GENERATE_QR_WITH_ID:"/generate-qr-id",
     QR_DETAILS: "/qr/:qr_id",
     GET_QR_TEMPLATES_BULK: "/create/qr-template-in-bluk",
     GET_QR_TEMPLATE_USER: "/create/qr-template-user/:qr_id",
@@ -128,6 +129,8 @@ const API_ROUTES = {
     QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
     GET_USER_DETAILS: "/user-details/:qr_id",
+    ADMIN_FILTER_QR:"/admin/filter-qr-list/:qr_types",
+    ADMIN_BLOCKED_QR:"/admin/qr-blocked"
   },
 
   // Fuel Price routes
@@ -146,8 +149,8 @@ const API_ROUTES = {
     ADD_USER_GARAGE: "/v1/user/add-garage",
     GET_GARAGE: "/v1/garage/:user_id",
     REMOVE_VEHICLE: "/v1/garage/remove-vehicle",
-    CHECK_SECURITY_CODE: "/notifications/check/security-code",
-    VERIFY_SECURITY_CODE: "/notifications/verify/security-code",
+    CHECK_SECURITY_CODE: "/check/security-code",
+    VERIFY_SECURITY_CODE: "/verify/security-code",
   },
 
   // Trending Cars routes
@@ -367,8 +370,10 @@ const API_ROUTES = {
     USER_CREATE_ORDER: "/user/create-order",
     GET_ALL_NEW_ORDER_BYADMIN: "/admin/all-new-order",
     ADMIN_CONFIRM_ORDER: "/admin/order-confirm",
+    ADMIN_PRINT_MANIFEST_INBULK: "/admin/prints-manifest",
     ADMIN_GENERATE_MANIFEST: "/admin/generate-manifests/:order_id",
-    ADMIN_GENERATE_SHIPROCKET_LABEL: "/admin/generate-shiprocket-label/:order_id",
+    ADMIN_GENERATE_SHIPROCKET_LABEL:
+      "/admin/generate-shiprocket-label/:order_id",
     ADMIN_GENERATE_DELIVERY_LABEL: "/admin/generate-delivery-label/:order_id",
     // find from user myorder node
     USER_ORDERS: "/orders-user-list",
@@ -391,6 +396,8 @@ const API_ROUTES = {
     GET_USER_REVIEWS: "/reviews/user/:user_id",
     GET_AVERAGE_RATING: "/reviews/rating/:product_type",
     USER_FEEDBACK: "/user-feedback",
+    REVIEW_ANALYTICS: "/review/review-analytics",
+    REPLY: "/review/reply-review",
   },
 
   // Chat routes
@@ -418,6 +425,12 @@ const API_ROUTES = {
     ADD_SERVICE: "/add/google-service",
     GET_SERVICE: "/get/all-service",
     UPDATE_SERVICE: "/update/google-service",
+  },
+
+  QUERY: {
+    BASE: "/api",
+    RAISE_QUERY: "/user/submit-query",
+    GET_QUERY: "/admin/get-all-query",
   },
 };
 

@@ -57,6 +57,17 @@ const feedBackSchema = new mongoose.Schema(
       required: true,
       maxlength: 500,
     },
+    admin_reply: {
+      message: {
+        type: String,
+        trim: true,
+        default: ""
+      },
+      replied_at: {
+        type: Date,
+        default: null
+      }
+    },
   },
   {
     timestamps: true, // auto createdAt + updatedAt

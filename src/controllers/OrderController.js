@@ -26,6 +26,7 @@ const GenerateOrderByUser = async (req, res) => {
       shipping_is_billing,
       shipping,
       billing,
+      parcel,
       order_items,
     } = req.body;
 
@@ -104,13 +105,13 @@ const GenerateOrderByUser = async (req, res) => {
       },
 
       parcel: {
-        length: 9,
+        length: parcel.length,
 
-        breadth: 8,
+        breadth: parcel.breadth,
 
-        height: 1,
+        height: parcel.height,
 
-        weight: 0.05,
+        weight: parcel.weight,
       },
 
       order_items: order_items.map((item) => ({
@@ -300,6 +301,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
         shipment_id: String(response.shipment_id),
         courier_company_id: order.courier_company_id,
       };
+      
 
       const awbResponse = await GenerateAWBShipment(AWBpayload);
 
@@ -801,6 +803,110 @@ const GenerateOrderManifest = async (req, res) => {
       status: false,
       message: "Failed to generate manifest",
       error: error?.response?.data || error.message,
+    });
+  }
+};
+
+const PrintBulkManifest = async (req, res) => {
+  try {
+    const { order_ids } = req.body;
+
+    /* 1️⃣ Validate */
+    if (!order_ids || !Array.isArray(order_ids) || order_ids.length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "order_ids array is required",
+      });
+    }
+
+    /* 2️⃣ Find Shiprocket Orders */
+    const shiprocketOrders = await ShiprocketOrder.find({
+      order_id: { $in: order_ids },
+    }).select("order_id shipment_id status");
+
+    if (!shiprocketOrders.length) {
+      return res.status(404).json({
+        status: false,
+        message: "No Shiprocket orders found",
+      });
+    }
+
+    /* 3️⃣ Extract valid shipment_ids */
+    const shipmentIds = [];
+    const skippedOrders = [];
+
+    for (const order of shiprocketOrders) {
+      if (order.status === "CANCELED") {
+        skippedOrders.push({
+          order_id: order.order_id,
+          reason: "Shipment canceled",
+        });
+        continue;
+      }
+
+      if (!order.shipment_id) {
+        skippedOrders.push({
+          order_id: order.order_id,
+          reason: "Shipment ID missing",
+        });
+        continue;
+      }
+
+      shipmentIds.push(order.shipment_id);
+    }
+
+    if (!shipmentIds.length) {
+      return res.status(400).json({
+        status: false,
+        message: "No valid shipment IDs found",
+        skippedOrders,
+      });
+    }
+
+    /* 4️⃣ Call Shiprocket Manifest API */
+    const response = await axios.post(
+      "https://apiv2.shiprocket.in/v1/external/manifests/generate",
+      {
+        shipment_id: shipmentIds, // 🔥 Bulk array
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SHIP_ROCKET_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    const manifestUrl = response?.data?.manifest_url;
+
+    if (!manifestUrl) {
+      return res.status(500).json({
+        status: false,
+        message: "Manifest generation failed",
+        shiprocket_response: response.data,
+      });
+    }
+
+    /* 5️⃣ Just Return Manifest URL (No DB Update) */
+    return res.status(200).json({
+      status: true,
+      message: "Manifest generated successfully",
+      data: {
+        manifest_url: manifestUrl,
+        total_shipments: shipmentIds.length,
+        skipped_orders: skippedOrders,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "PrintBulkManifest Error:",
+      error?.response?.data || error.message,
+    );
+
+    return res.status(error.response?.status || 500).json({
+      status: false,
+      message: error.response?.data?.message || "Failed to generate manifest",
+      error: error.response?.data || error.message,
     });
   }
 };
@@ -2371,6 +2477,7 @@ module.exports = {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
   GenerateOrderManifest,
+  PrintBulkManifest,
   GenerateShiprocketLabel,
   GenerateDeliveryLabel,
   getUserAllOrder,

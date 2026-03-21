@@ -39,6 +39,14 @@ const trendingCarsRoutes = require("./src/routes/trendingCars.route.js");
 const CompareVehicleRoutes = require("./src/routes/vehicleComparison.routes.js");
 const contactUserRoutes = require("./src/routes/contactUser.routes.js");
 const googleServiceRoutes = require("./src/routes/googleService.routes.js");
+const queryRoutes = require("./src/routes/query.routes.js")
+
+const faqRoutes = require("./src/routes/faq.routes");
+const appointmentRoutes = require("./src/routes/appointment.routes");
+const concernRoutes = require("./src/routes/concern.routes");
+const userRoutes = require("./src/routes/user.routes");
+const deleteAccountRoutes = require("./src/routes/deleteAccount.routes");
+const reportIssueRoutes = require("./src/routes/reportIssue.routes");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -68,6 +76,9 @@ app.use(async (req, res, next) => {
 });
 
 // Hasan Routes Code
+app.use("/api/faq", faqRoutes);
+app.use("/api/appointment", appointmentRoutes);
+app.use("/api/concern",concernRoutes);
 app.use(appInfoRoutes);
 app.use(fuelRoutes);
 app.use(uploadRoutes);
@@ -77,6 +88,9 @@ app.use(qrBenefitsRoutes);
 app.use(newsRoutes);
 app.use(tipsTricksRoutes);
 app.use(notificationImageRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/delete-account",deleteAccountRoutes);
+app.use("/api/report-issue",reportIssueRoutes);
 
 // -------------------- ROUTES --------------------
 
@@ -98,6 +112,8 @@ app.use(API_ROUTES.VEHICLE_COMPARISON_UPDATE.BASE, CompareVehicleRoutes);
 app.use(API_ROUTES.CHAT.BASE, chatRoutes);
 app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
 app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
+app.use(API_ROUTES.QUERY.BASE, queryRoutes)
+
 
 // -------------------- HEALTH CHECK --------------------
 // Serve HTML file

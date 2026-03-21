@@ -8,7 +8,7 @@ const {
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
-const { addUserReview, FetchUserFeedBack } = require("../controllers/reviewController.js");
+const { addUserReview, FetchUserFeedBack, getReviewAnalytics, replyToReview } = require("../controllers/reviewController.js");
 
 router.post(
   API_ROUTES.REVIEW.SUBMIT_REVIEW,
@@ -27,5 +27,16 @@ router.post(
   ],
   FetchUserFeedBack
 )
+
+
+router.get(
+  API_ROUTES.REVIEW.REVIEW_ANALYTICS,
+  getReviewAnalytics
+);
+
+router.post(
+  API_ROUTES.REVIEW.REPLY,
+  replyToReview
+);
 
 module.exports = router;

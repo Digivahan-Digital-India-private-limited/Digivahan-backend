@@ -55,6 +55,10 @@ const qrAssignmentSchema = new mongoose.Schema(
       index: true,
     },
 
+    blocked_reason: {
+      type: String,
+    },
+
     vehicle_id: {
       type: String,
       default: null,

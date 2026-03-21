@@ -10,6 +10,18 @@ const {
 const generateQRTemplate = require("../utils/generateQRTemplate");
 const zipAndClearFiles = require("../utils/zipAndClearFiles");
 
+const generateRandomId = (length = 10) => {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  return result;
+};
+
 const createQrScanner = async (req, res) => {
   try {
     const { unit } = req.body;
@@ -74,16 +86,65 @@ const createQrScanner = async (req, res) => {
   }
 };
 
-const generateRandomId = (length = 10) => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
+const createQrWithQrId = async (req, res) => {
+  try {
+    const { qr_id } = req.body;
 
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    if (!qr_id) {
+      return res.status(400).json({
+        status: false,
+        message: "QR ID is required",
+      });
+    }
+
+    // 🔴 check duplicate qr_id
+    const existing = await QRAssignment.findOne({ qr_id });
+    if (existing) {
+      return res.status(400).json({
+        status: false,
+        message: "QR ID already exists",
+      });
+    }
+
+    // 🔥 get next sequence number
+    const [qr_no] = await QRAssignment.getNextQrSequence(1);
+
+    const BASE_URL = `https://digicapital.co.in/send-notification/${qr_id}`;
+
+    // 🔥 generate QR
+    const qrBuffer = await generateQRCode(BASE_URL);
+
+    // 🔥 upload to cloudinary
+    const uploadResult = await uploadQrToCloudinary(qrBuffer, qr_id);
+
+    // 🔥 save in DB
+    const newQr = await QRAssignment.create({
+      qr_no,
+      qr_id,
+      qr_img: uploadResult.secure_url,
+      qr_image_public_id: uploadResult.public_id,
+
+      qr_status: "unassigned",
+      product_type: "vehicle",
+      status: "active",
+      is_printed: false,
+    });
+
+    return res.status(201).json({
+      status: true,
+      message: "QR created successfully",
+      data: newQr,
+    });
+
+  } catch (error) {
+    console.error("Create QR with ID Error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "QR creation failed",
+      error: error.message,
+    });
   }
-
-  return result;
 };
 
 const getQrDetails = async (req, res) => {
@@ -456,6 +517,7 @@ const CheckQrInUser = async (req, res) => {
 const CreateQrTemplateInBulk = async (req, res) => {
   try {
     const { template_type } = req.body;
+
     const qrList = await QRAssignment.find({
       is_printed: false,
       qr_status: "unassigned",
@@ -599,7 +661,6 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
     =============================== */
 
     const user = await User.findById(qrData.assigned_to, {
-      "basic_details.first_name": 1,
       "basic_details.phone_number": 1,
       "public_details.nick_name": 1,
       "public_details.public_pic": 1,
@@ -782,8 +843,80 @@ const CreateSingleQRTemplate = async (req, res) => {
   }
 };
 
+const filterQrlist = async (req, res) => {
+  try {
+    const { qr_types } = req.params;
+
+    let filter = {};
+
+    // agar admin specific status bhejta hai
+    if (qr_types && qr_types !== "all") {
+      filter.qr_status = qr_types;
+    }
+
+    // only active QR (recommended)
+    filter.status = "active";
+
+    const qrList = await QRAssignment.find(filter).sort({ qr_no: 1 }).lean();
+
+    return res.status(200).json({
+      success: true,
+      total: qrList.length,
+      data: qrList,
+    });
+  } catch (error) {
+    console.error("Filter QR Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error filtering QR list",
+    });
+  }
+};
+
+const QrBlockedByAdmin = async (req, res) => {
+  try {
+    const { qr_id, reason } = req.body;
+
+    if (!qr_id) {
+      return res.status(400).json({
+        success: false,
+        message: "QR ID is required",
+      });
+    }
+
+    const qr = await QRAssignment.findOne({ qr_id });
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    qr.qr_status = "blocked";
+    qr.blocked_reason = reason || "Blocked by admin";
+
+    await qr.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "QR blocked successfully",
+      data: qr,
+    });
+  } catch (error) {
+    console.error("QR Block Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error blocking QR",
+    });
+  }
+};
+
 module.exports = {
   createQrScanner,
+  createQrWithQrId,
   getQrDetails,
   AssignedQrtoUser,
   CheckQrInUser,
@@ -791,4 +924,6 @@ module.exports = {
   CreateSingleQRTemplate,
   getUploadedTemplateImage,
   GetUserdetailsThrowTheQRId,
+  filterQrlist,
+  QrBlockedByAdmin,
 };

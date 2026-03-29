@@ -119,7 +119,7 @@ const API_ROUTES = {
     BASE: "/api",
     CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
-    GENERATE_QR_WITH_ID:"/generate-qr-id",
+    GENERATE_QR_WITH_ID: "/generate-qr-id",
     QR_DETAILS: "/qr/:qr_id",
     GET_QR_TEMPLATES_BULK: "/create/qr-template-in-bluk",
     GET_QR_TEMPLATE_USER: "/create/qr-template-user/:qr_id",
@@ -129,8 +129,8 @@ const API_ROUTES = {
     QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
     GET_USER_DETAILS: "/user-details/:qr_id",
-    ADMIN_FILTER_QR:"/admin/filter-qr-list/:qr_types",
-    ADMIN_BLOCKED_QR:"/admin/qr-blocked"
+    ADMIN_FILTER_QR: "/admin/filter-qr-list/:qr_types",
+    ADMIN_BLOCKED_QR: "/admin/qr-blocked",
   },
 
   // Fuel Price routes
@@ -431,6 +431,18 @@ const API_ROUTES = {
     BASE: "/api",
     RAISE_QUERY: "/user/submit-query",
     GET_QUERY: "/admin/get-all-query",
+  },
+
+  BBPS: {
+    BASE: "/api",
+    GET_MINIKYC_DETAILS: "/get-minikyc/data",
+    GET_CATEGORY: "/get-biller/category",
+    GET_BILLER_LIST: "/biller-list",
+    GET_BILLER_DETAILS: "/biller-details",
+    GET_BILLER_ENQUIRY: "/biller-enquiry",
+    VALIDATE_BILLER: "/validate-biller",
+    PAYMENT_SERVICE: "/user/payment-service",
+    GET_PAYMENT_DETAILS: "/user/payment-details/:user_id",
   },
 };
 

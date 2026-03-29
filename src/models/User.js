@@ -265,6 +265,13 @@ const userSchema = new mongoose.Schema(
         index: true,
       },
     ],
+    paymentId: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "paymentDeatils",
+        index: true,
+      },
+    ],
     emergency_contacts: [emergencyContactSchema],
     garage: garageSchema,
     is_active: { type: Boolean, default: true },

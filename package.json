@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start":"npm start"
+    "start": "npm start"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,7 @@
     "canvas": "^3.2.0",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-validator": "^7.3.1",

@@ -48,6 +48,10 @@ const userRoutes = require("./src/routes/user.routes");
 const deleteAccountRoutes = require("./src/routes/deleteAccount.routes");
 const reportIssueRoutes = require("./src/routes/reportIssue.routes");
 
+// service apis routes
+
+const serviceRoutes = require("./src/routes/service.routes.js")
+
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
 
@@ -113,6 +117,7 @@ app.use(API_ROUTES.CHAT.BASE, chatRoutes);
 app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
 app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
 app.use(API_ROUTES.QUERY.BASE, queryRoutes)
+app.use(API_ROUTES.BBPS.BASE, serviceRoutes)
 
 
 // -------------------- HEALTH CHECK --------------------

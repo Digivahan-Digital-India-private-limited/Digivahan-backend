@@ -12,14 +12,6 @@ exports.createRazorpayOrder = async (req, res) => {
       });
     }
 
-    // Validate status field
-    if (!status || !["test", "live"].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "status is required and must be either 'test' or 'live'",
-      });
-    }
-
     // 🔑 Fetch both Razorpay Key IDs from DB based on status
     const appInfo = await AppInfo.findOne(
       {},
@@ -27,7 +19,7 @@ exports.createRazorpayOrder = async (req, res) => {
         "api_key.razorpay_key_id": 1,
         "api_key.razorpay_live_key_id": 1,
         "api_key.is_payment": 1,
-      }
+      },
     ).lean();
 
     if (!appInfo || !appInfo.api_key) {
@@ -48,9 +40,9 @@ exports.createRazorpayOrder = async (req, res) => {
     // 🔀 Select credentials based on status
     let razorpay_key_id, razorpay_key_secret;
 
-    if (status === "live") {
-      razorpay_key_id = appInfo.api_key.razorpay_live_key_id;
-      razorpay_key_secret = process.env.RAZORPAY_LIVE_KEY_SECRET;
+    if (status === "test") {
+      razorpay_key_id = appInfo.api_key.razorpay_key_id;
+      razorpay_key_secret = process.env.RAZORPAY_TEST_KEY_SECRET;
 
       if (!razorpay_key_id) {
         return res.status(500).json({
@@ -67,8 +59,8 @@ exports.createRazorpayOrder = async (req, res) => {
       }
     } else {
       // status === "test"
-      razorpay_key_id = appInfo.api_key.razorpay_key_id;
-      razorpay_key_secret = process.env.RAZORPAY_TEST_KEY_SECRET;
+      razorpay_key_id = appInfo.api_key.razorpay_live_key_id;
+      razorpay_key_secret = process.env.RAZORPAY_LIVE_KEY_SECRET;
 
       if (!razorpay_key_id) {
         return res.status(500).json({
@@ -99,7 +91,6 @@ exports.createRazorpayOrder = async (req, res) => {
       },
     };
 
-    
     // 🚀 Call Razorpay API
     const response = await axios.post(
       "https://api.razorpay.com/v1/orders",
@@ -109,7 +100,7 @@ exports.createRazorpayOrder = async (req, res) => {
           username: razorpay_key_id,
           password: razorpay_key_secret,
         },
-      }
+      },
     );
 
     // ✅ Final Response
@@ -123,7 +114,7 @@ exports.createRazorpayOrder = async (req, res) => {
   } catch (error) {
     console.error(
       "Razorpay Order Error:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
 
     return res.status(500).json({

@@ -9,7 +9,8 @@ const {
   updateAboutpage,
   getAndroidVersion,
   getIOSVersion,
-  updateRazorpayKey,
+  updateRazorpaytestKey,
+  updateRazorpayliveKey,
   getAppInfo,
   updateZigoAppData
 } = require("../controllers/appInfo.controller");
@@ -36,7 +37,9 @@ router.post("/api/v1/app-info/terms-condition", updateTermsCondition);
 router.post("/api/v1/app-info/about-page", updateAboutpage);
 
 // 🔑 RAZORPAY KEY ADD / UPDATE
-router.post("/api/v1/app-info/razorpay-key", updateRazorpayKey);
+router.post("/api/v1/app-info/razorpay-key", updateRazorpaytestKey);
+
+router.post("/api/v1/app-info/razorpay-live-key", updateRazorpayliveKey);
 
 router.post("/api/v1/app-info/zigo-app", updateZigoAppData)
 

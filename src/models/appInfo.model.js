@@ -45,6 +45,7 @@ const AppInfoSchema = new mongoose.Schema({
   // ✅ NEW FIELD
   api_key: {
     razorpay_key_id: { type: String, trim: true },
+    razorpay_live_key_id: { type: String, trim: true },
     is_payment: { type: Boolean, default: true },
   },
 

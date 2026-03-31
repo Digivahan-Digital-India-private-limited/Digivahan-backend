@@ -182,14 +182,14 @@ exports.updateZigoAppData = async (req, res) => {
 };
 
 // 🔑 ADD / UPDATE RAZORPAY KEY
-exports.updateRazorpayKey = async (req, res) => {
+exports.updateRazorpaytestKey = async (req, res) => {
   try {
     const { razorpay_key_id } = req.body;
 
     if (!razorpay_key_id) {
       return res.status(400).json({
         success: false,
-        message: "razorpay_key_id is required",
+        message: "razorpay_test_key_id is required",
       });
     }
 
@@ -203,16 +203,54 @@ exports.updateRazorpayKey = async (req, res) => {
       {
         new: true,
         upsert: true, // ⭐ agar document nahi hai to create karega
-      }
+      },
     );
 
     return res.json({
       success: true,
-      message: "Razorpay key updated successfully",
+      message: "Razorpay test key updated successfully",
       data: updated.api_key,
     });
   } catch (error) {
-    console.error("Razorpay Key Error:", error);
+    console.error("Razorpay test Key Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update Razorpay key",
+    });
+  }
+};
+
+exports.updateRazorpayliveKey = async (req, res) => {
+  try {
+    const { razorpay_live_key_id } = req.body;
+
+    if (!razorpay_live_key_id) {
+      return res.status(400).json({
+        success: false,
+        message: "razorpay_live_key_id is required",
+      });
+    }
+
+    const updated = await AppInfo.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          "api_key.razorpay_live_key_id": razorpay_live_key_id,
+        },
+      },
+      {
+        new: true,
+        upsert: true, // ⭐ agar document nahi hai to create karega
+      },
+    );
+
+    return res.json({
+      success: true,
+      message: "Razorpay live key updated successfully",
+      data: updated.api_key,
+    });
+  } catch (error) {
+    console.error("Razorpay live Key Error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to update Razorpay key",

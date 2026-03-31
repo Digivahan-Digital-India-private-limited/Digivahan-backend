@@ -111,7 +111,7 @@ const getbillcategoryByadmin = async (req, res) => {
           "Content-Type": "application/json",
           "X-Ipay-Auth-Code": "1",
           "X-Ipay-Client-Id": process.env.CLIENT_ID,
-          "X-Ipay-Client-Secret": process.env.CLIENT_SECRET,
+          "X-Ipay-Client-Secret": process.env.CLIENT_LIVE_SECRET,
           "X-Ipay-Endpoint-Ip": process.env.ENDPOINT_IP,
           "X-Ipay-Outlet-Id": process.env.OUTLET_ID,
         },
@@ -158,7 +158,7 @@ const getBillerlistByUser = async (req, res) => {
           "Content-Type": "application/json",
           "X-Ipay-Auth-Code": "1",
           "X-Ipay-Client-Id": process.env.CLIENT_ID,
-          "X-Ipay-Client-Secret": process.env.CLIENT_SECRET,
+          "X-Ipay-Client-Secret": process.env.CLIENT_LIVE_SECRET,
           "X-Ipay-Endpoint-Ip": process.env.ENDPOINT_IP,
           "X-Ipay-Outlet-Id": process.env.OUTLET_ID,
         },
@@ -196,7 +196,7 @@ const getBillerDetailsByUser = async (req, res) => {
           "Content-Type": "application/json",
           "X-Ipay-Auth-Code": "1",
           "X-Ipay-Client-Id": process.env.CLIENT_ID,
-          "X-Ipay-Client-Secret": process.env.CLIENT_SECRET,
+          "X-Ipay-Client-Secret": process.env.CLIENT_LIVE_SECRET,
           "X-Ipay-Endpoint-Ip": process.env.ENDPOINT_IP,
           "X-Ipay-Outlet-Id": process.env.OUTLET_ID,
         },
@@ -393,7 +393,7 @@ const paymentsService = async (req, res) => {
           "Content-Type": "application/json",
           "X-Ipay-Auth-Code": "1",
           "X-Ipay-Client-Id": process.env.CLIENT_ID,
-          "X-Ipay-Client-Secret": process.env.CLIENT_SECRET,
+          "X-Ipay-Client-Secret": process.env.CLIENT_TEST_SECRET,
           "X-Ipay-Endpoint-Ip": process.env.ENDPOINT_IP,
           "X-Ipay-Outlet-Id": process.env.OUTLET_ID,
         },
@@ -481,6 +481,7 @@ const getPaymentDeatils = async (req, res) => {
     });
   }
 };
+
 
 module.exports = {
   getbillcategoryByadmin,

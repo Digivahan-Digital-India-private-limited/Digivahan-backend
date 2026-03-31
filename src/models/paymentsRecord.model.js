@@ -24,6 +24,8 @@ const paymentSchema = new mongoose.Schema(
       default: "INIT",
     },
 
+    reason: { type: String },
+
     // 🔹 Full API response (Mixed)
     full_payment_details: {
       type: mongoose.Schema.Types.Mixed,

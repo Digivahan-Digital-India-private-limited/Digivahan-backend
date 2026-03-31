@@ -4,6 +4,58 @@ const User = require("../models/User");
 const crypto = require("crypto");
 const axios = require("axios");
 
+const PAYMENT_STATUS_CODES = {
+  TXN: "Transaction Successful",
+  TUP: "Transaction Under Process",
+  IRA: "Invalid Refill Amount",
+  RBT: "Refill Barred Temporarily",
+  IAN: "Invalid Account Number",
+  IAB: "Insufficient Wallet Balance",
+  DTX: "Duplicate Transaction",
+  ISE: "System Error",
+  IAT: "Invalid Access Token",
+  SPD: "Service Provider Downtime",
+  SPE: "Service Provider Error",
+  ITI: "Invalid Transaction ID",
+  DTB: "Denomination Temporarily Barred",
+  TSU: "Transaction Status Unavailable",
+  ISP: "Invalid Service Provider",
+  RPI: "Request Parameters are Invalid or Incomplete",
+  AAB: "Account Blocked, Contact Helpdesk",
+  ANF: "Account not found",
+  UED: "Unknown Error Description, Contact Helpdesk",
+  IEC: "Invalid or Unknown Error Code",
+  IRT: "Invalid Response Type",
+  IPE: "Internal Processing Error",
+  IAC: "Invalid Dealer Credentials",
+  UAD: "User Access Denied",
+  TRP: "Transaction Refund Processed",
+  TDE: "Transaction Dispute Error, Contact Helpdesk",
+  DLS: "Dispute Logged Successfully",
+  DID: "Duplicate Agent Transaction ID",
+  OUI: "Outlet Unauthorized or Inactive",
+  ODI: "Outlet Data Incorrect",
+  RNF: "Remitter Not Found",
+  RAR: "Remitter Already Registered",
+  UAR: "User Already Registered",
+  IVC: "Invalid Verification Code or OTP",
+  IUA: "Invalid User Account - Outlet",
+  SNA: "Service not available",
+  ERR: "Provider Failure",
+  FAB: "Failure at Bank end",
+  UFC: "Fare has been changed",
+  OTP: "OTP Successfully sent",
+  EOP: "OTP Expired",
+  OLR: "OTP limit reached",
+  ONV: "OTP not valid",
+  RAB: "Remitter Blocked",
+  VCI: "Version Compatablity Iussue",
+  OUE: "Unknown Method",
+  KYC: "KYC is mandatory to avail this service",
+  USM: "Under Scheduled Maintenance",
+  CNL: "Currently Not Live",
+};
+
 const encryptAadhaar = (aadhaarNumber) => {
   const encryptionKey = Buffer.from("6c338eb8b8d6fde26c338eb8b8d6fde2", "utf8"); // must be 32 bytes
 
@@ -350,10 +402,8 @@ const paymentsService = async (req, res) => {
     // 🟡 STEP 2: UPDATE USER WITH payment_id
     await User.findByIdAndUpdate(
       user_id,
-      {
-        $push: { paymentId: paymentDoc._id },
-      },
-      { new: true },
+      { $push: { paymentId: paymentDoc._id } },
+      { new: true }
     );
 
     // 🟡 STEP 3: CREATE PAYLOAD
@@ -361,9 +411,7 @@ const paymentsService = async (req, res) => {
       billerId,
       externalRef,
       enquiryReferenceId,
-      inputParameters: {
-        param1: vehicle_number,
-      },
+      inputParameters: { param1: vehicle_number },
       initChannel: "AGT",
       deviceInfo: {
         terminalId: "12813923",
@@ -374,16 +422,11 @@ const paymentsService = async (req, res) => {
         mac: "BC-BE-33-65-E6-AC",
       },
       paymentMode: "Cash",
-      paymentInfo: {
-        remarks: "CashPayment",
-      },
-      remarks: {
-        param1: Number(mobile),
-      },
+      paymentInfo: { remarks: "CashPayment" },
+      remarks: { param1: Number(mobile) },
       transactionAmount,
     };
 
-    // ⚠️ NOTE: Better use POST instead of GET
     const response = await axios.post(
       "https://api.instantpay.in/marketplace/utilityPayments/payment",
       payload,
@@ -397,21 +440,19 @@ const paymentsService = async (req, res) => {
           "X-Ipay-Endpoint-Ip": process.env.ENDPOINT_IP,
           "X-Ipay-Outlet-Id": process.env.OUTLET_ID,
         },
-      },
+      }
     );
 
-    // 🟢 STEP 4: UPDATE SAME PAYMENT DOC WITH RESPONSE
-    if (response.data.statuscode === "TXN") {
-      await Payment.findByIdAndUpdate(paymentDoc._id, {
-        status: "SUCCESS",
-        full_payment_details: response.data,
-      });
-    } else {
-      await Payment.findByIdAndUpdate(paymentDoc._id, {
-        status: "FAILED",
-        full_payment_details: response.data,
-      });
-    }
+    // 🟢 STEP 4: MATCH STATUS CODE → GET REASON → UPDATE PAYMENT DOC
+    const statusCode = response.data.statuscode;
+    const reason = PAYMENT_STATUS_CODES[statusCode] ?? "Unknown Status Code";
+    const isSuccess = statusCode === "TXN";
+
+    await Payment.findByIdAndUpdate(paymentDoc._id, {
+      status: isSuccess ? "SUCCESS" : "FAILED",
+      reason,
+      full_payment_details: response.data,
+    });
 
     return res.status(200).json({
       success: true,
@@ -421,15 +462,21 @@ const paymentsService = async (req, res) => {
   } catch (error) {
     console.error("API Error:", error.response?.data || error.message);
 
-    // 🔴 STEP 5: UPDATE STATUS FAILED
+    // 🔴 STEP 5: UPDATE STATUS FAILED WITH REASON
     if (req.body.user_id) {
+      const errorCode = error.response?.data?.statuscode;
+      const reason = errorCode
+        ? (PAYMENT_STATUS_CODES[errorCode] ?? "Unknown Status Code")
+        : "Internal Server Error";
+
       await Payment.findOneAndUpdate(
         { user_id: req.body.user_id },
         {
           status: "FAILED",
+          reason,
           full_payment_details: error.response?.data || error.message,
         },
-        { sort: { createdAt: -1 } },
+        { sort: { createdAt: -1 } }
       );
     }
 

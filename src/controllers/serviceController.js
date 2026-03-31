@@ -403,7 +403,7 @@ const paymentsService = async (req, res) => {
     await User.findByIdAndUpdate(
       user_id,
       { $push: { paymentId: paymentDoc._id } },
-      { new: true }
+      { new: true },
     );
 
     // 🟡 STEP 3: CREATE PAYLOAD
@@ -411,20 +411,26 @@ const paymentsService = async (req, res) => {
       billerId,
       externalRef,
       enquiryReferenceId,
-      inputParameters: { param1: vehicle_number },
+      inputParameters: {
+        param1: vehicle_number,
+      },
       initChannel: "AGT",
       deviceInfo: {
         terminalId: "12813923",
         mobile: mobile,
-        postalCode: "110059",
-        geoCode: "28.6326,77.2175",
-        ip: "223.233.65.6",
-        mac: "BC-BE-33-65-E6-AC",
+        postalCode: "110044",
+        geoCode: "34.2335,12.3325",
       },
       paymentMode: "Cash",
-      paymentInfo: { remarks: "CashPayment" },
-      remarks: { param1: Number(mobile) },
+      paymentInfo: {
+        Remarks: "CashPayment",
+      },
+      remarks: {
+        param1: mobile,
+      },
       transactionAmount,
+      customerPan: "",
+      remitterDetails: "",
     };
 
     const response = await axios.post(
@@ -440,7 +446,7 @@ const paymentsService = async (req, res) => {
           "X-Ipay-Endpoint-Ip": process.env.ENDPOINT_IP,
           "X-Ipay-Outlet-Id": process.env.OUTLET_ID,
         },
-      }
+      },
     );
 
     // 🟢 STEP 4: MATCH STATUS CODE → GET REASON → UPDATE PAYMENT DOC
@@ -476,7 +482,7 @@ const paymentsService = async (req, res) => {
           reason,
           full_payment_details: error.response?.data || error.message,
         },
-        { sort: { createdAt: -1 } }
+        { sort: { createdAt: -1 } },
       );
     }
 
@@ -528,7 +534,6 @@ const getPaymentDeatils = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   getbillcategoryByadmin,

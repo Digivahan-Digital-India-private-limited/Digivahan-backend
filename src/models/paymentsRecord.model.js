@@ -15,7 +15,7 @@ const paymentSchema = new mongoose.Schema(
     enquiryReferenceId: String,
     vehicle_number: String,
     mobile: String,
-    transactionAmount: Number,
+    transactionAmount: String,
 
     // 🔹 Status tracking
     status: {

@@ -39,6 +39,21 @@ const GenerateOrderByUser = async (req, res) => {
       });
     }
 
+      // ✅ PARCEL HANDLING (OPTIONAL + SAFE)
+    const p =
+      typeof _parcel === "object" &&
+      _parcel !== null &&
+      !Array.isArray(_parcel)
+        ? _parcel
+        : {};
+
+    const parcelData = {
+      length: p.length ?? 20,
+      breadth: p.breadth ?? 15,
+      height: p.height ?? 10,
+      weight: p.weight ?? 0.05,
+    };
+
     const order = await Order.create({
       user_id: user._id,
 
@@ -104,15 +119,7 @@ const GenerateOrderByUser = async (req, res) => {
         pincode: billing.pincode,
       },
 
-      parcel: (() => {
-        const p = (_parcel && !Array.isArray(_parcel) && typeof _parcel === 'object') ? _parcel : {};
-        return {
-          length: p.length ?? 20,
-          breadth: p.breadth ?? 15,
-          height: p.height ?? 10,
-          weight: p.weight ?? 0.05,
-        };
-      })(),
+      parcel: parcelData,
 
       order_items: (order_items || []).map((item) => ({
         vehicle_id: item.vehicle_id,

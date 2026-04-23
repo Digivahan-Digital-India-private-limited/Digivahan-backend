@@ -26,7 +26,7 @@ const GenerateOrderByUser = async (req, res) => {
       shipping_is_billing,
       shipping,
       billing,
-      parcel = {},
+      parcel: _parcel,
       order_items,
     } = req.body;
 
@@ -104,12 +104,15 @@ const GenerateOrderByUser = async (req, res) => {
         pincode: billing.pincode,
       },
 
-     parcel: {
-  length: parcel.length ?? 20,
-  breadth: parcel.breadth ?? 15,
-  height: parcel.height ?? 10,
-  weight: parcel.weight ?? 0.05,
-},
+      parcel: (() => {
+        const parcel = _parcel || {};
+        return {
+          length: parcel.length ?? 20,
+          breadth: parcel.breadth ?? 15,
+          height: parcel.height ?? 10,
+          weight: parcel.weight ?? 0.05,
+        };
+      })(),
 
       order_items: order_items.map((item) => ({
         vehicle_id: item.vehicle_id,

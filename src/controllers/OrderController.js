@@ -105,16 +105,16 @@ const GenerateOrderByUser = async (req, res) => {
       },
 
       parcel: (() => {
-        const parcel = _parcel || {};
+        const p = (_parcel && !Array.isArray(_parcel) && typeof _parcel === 'object') ? _parcel : {};
         return {
-          length: parcel.length ?? 20,
-          breadth: parcel.breadth ?? 15,
-          height: parcel.height ?? 10,
-          weight: parcel.weight ?? 0.05,
+          length: p.length ?? 20,
+          breadth: p.breadth ?? 15,
+          height: p.height ?? 10,
+          weight: p.weight ?? 0.05,
         };
       })(),
 
-      order_items: order_items.map((item) => ({
+      order_items: (order_items || []).map((item) => ({
         vehicle_id: item.vehicle_id,
 
         order_type: item.order_type,

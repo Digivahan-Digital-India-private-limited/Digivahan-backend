@@ -155,12 +155,12 @@ const orderSchema = new Schema(
       pincode: String,
     },
 
-    parcel: {
-      length: Number,
-      breadth: Number,
-      height: Number,
-      weight: Number,
-    },
+   parcel: {
+  length: { type: Number, default: 20 },
+  breadth: { type: Number, default: 15 },
+  height: { type: Number, default: 10 },
+  weight: { type: Number, default: 0.05 },
+},
 
     order_items: {
       type: [orderItemSchema],

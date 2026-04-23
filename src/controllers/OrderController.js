@@ -26,7 +26,6 @@ const GenerateOrderByUser = async (req, res) => {
       shipping_is_billing,
       shipping,
       billing,
-      parcel: _parcel,
       order_items,
     } = req.body;
 
@@ -38,21 +37,6 @@ const GenerateOrderByUser = async (req, res) => {
         message: "User not found",
       });
     }
-
-      // ✅ PARCEL HANDLING (OPTIONAL + SAFE)
-    const p =
-      typeof _parcel === "object" &&
-      _parcel !== null &&
-      !Array.isArray(_parcel)
-        ? _parcel
-        : {};
-
-    const parcelData = {
-      length: p.length ?? 20,
-      breadth: p.breadth ?? 15,
-      height: p.height ?? 10,
-      weight: p.weight ?? 0.05,
-    };
 
     const order = await Order.create({
       user_id: user._id,
@@ -119,9 +103,14 @@ const GenerateOrderByUser = async (req, res) => {
         pincode: billing.pincode,
       },
 
-      parcel: parcelData,
+     parcel: {
+  length: parcel?.length ?? 20,
+  breadth: parcel?.breadth ?? 15,
+  height: parcel?.height ?? 10,
+  weight: parcel?.weight ?? 0.05,
+},
 
-      order_items: (order_items || []).map((item) => ({
+      order_items: order_items.map((item) => ({
         vehicle_id: item.vehicle_id,
 
         order_type: item.order_type,

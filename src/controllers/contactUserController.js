@@ -17,7 +17,7 @@ const contactToUser = async (req, res) => {
     // ✅ IMPORTANT: URL encoded body
     const payload = new URLSearchParams({
       api_id: "APIo5fucvBO148375",
-      api_password: "[HitApi@123]",
+      api_password: "HitApi@123",
       ivr_number: "7971688940",
       dial: "agent",
       receiver_number: String(receiver),

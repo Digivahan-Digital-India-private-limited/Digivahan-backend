@@ -375,21 +375,13 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             phone: order.shipping.phone,
 
-            order: `${order.order_id}-${Date.now()}`,
+            order: order.order_id,
 
-            payment_mode: order.payment_method === "Prepaid" ? "Pre-paid" : order.payment_method,
+            payment_mode: order.payment_method,
 
             shipment_width: order.parcel.breadth?.toString() || "10",
 
             shipment_height: order.parcel.height?.toString() || "5",
-
-            shipment_length: order.parcel.length?.toString() || "10",
-
-            weight: order.parcel.weight?.toString() || "500",
-
-            total_amount: order.order_value || 0,
-
-            cod_amount: order.payment_method === "COD" ? (order.order_value || 0) : 0,
 
             shipping_mode: order.shipping_mode || "Surface",
           },
@@ -412,19 +404,12 @@ const ConfirmOrderByAdmin = async (req, res) => {
        VALIDATE RESPONSE
     ---------------------------------------- */
 
-      if (!response?.success || !response?.packages?.length || response?.packages?.[0]?.status === "Fail") {
+      if (!response?.success || !response?.packages?.length) {
         // Surface the actual Delhivery error message
-        let packageError = "";
-        if (response?.packages?.[0]?.remarks && Array.isArray(response.packages[0].remarks)) {
-          packageError = response.packages[0].remarks.join(", ");
-        } else if (response?.packages?.[0]?.remarks) {
-          packageError = String(response.packages[0].remarks);
-        }
-
         const delhiveryError =
-          packageError ||
-          response?.error ||
           response?.rmk ||
+          response?.error ||
+          (response?.packages?.[0]?.remarks) ||
           JSON.stringify(response);
         throw new Error(`Delivery order creation failed: ${delhiveryError}`);
       }
@@ -443,16 +428,8 @@ const ConfirmOrderByAdmin = async (req, res) => {
         expected_package_count: 1,
       };
 
-      let deliveryPickupresponse = null;
-      try {
-        deliveryPickupresponse = await GenerateDeliveryPickup(pickupPayload);
-      } catch (pickupError) {
-        console.warn("Delivery Pickup Error (Continuing order flow):", pickupError.message);
-        deliveryPickupresponse = { 
-          error: pickupError.message, 
-          note: "Pickup generation failed. Please schedule pickup manually from the Delhivery dashboard once the issue (e.g., wallet balance) is resolved." 
-        };
-      }
+      const deliveryPickupresponse =
+        await GenerateDeliveryPickup(pickupPayload);
 
       // console.log(deliveryPickupresponse);
 
@@ -715,13 +692,9 @@ const GenerateDeliveryPickup = async (pickupPayload) => {
       error?.response?.data || error.message,
     );
 
-    const errorMessage = 
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
-      JSON.stringify(error?.response?.data) ||
-      "Failed to create Delhivery pickup";
-
-    throw new Error(`Pickup Error: ${errorMessage}`);
+    throw new Error(
+      error?.response?.data?.message || "Failed to create Delhivery pickup",
+    );
   }
 };
 

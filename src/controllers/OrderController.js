@@ -371,17 +371,25 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             state: order.shipping.state,
 
-            country: order.shipping.country,
+            country: order.shipping.country || "India",
 
             phone: order.shipping.phone,
 
             order: order.order_id,
 
-            payment_mode: order.payment_method,
+            payment_mode: order.payment_method === "COD" ? "COD" : "Pre-paid",
 
-            shipment_width: order.parcel.breadth?.toString() || "10",
+            // ✅ Required by Delhivery - COD amount (0 for Prepaid)
+            cod_amount:
+              order.payment_method === "COD" ? String(order.order_value || 0) : "0",
 
-            shipment_height: order.parcel.height?.toString() || "5",
+            // ✅ Required dimensions
+            shipment_length: order.parcel.length?.toString() || "20",
+            shipment_width: order.parcel.breadth?.toString() || "15",
+            shipment_height: order.parcel.height?.toString() || "10",
+
+            // ✅ Required weight in kg
+            weight: order.parcel.weight?.toString() || "0.05",
 
             shipping_mode: order.shipping_mode || "Surface",
           },
@@ -392,20 +400,28 @@ const ConfirmOrderByAdmin = async (req, res) => {
         },
       };
 
+      console.log("📦 Delhivery payload:", JSON.stringify(Deliverypayload, null, 2));
+
       /* ----------------------------------------
        CREATE DELIVERY ORDER
     ---------------------------------------- */
 
       const response = await createDeliveryOrder(Deliverypayload);
 
-      console.log(response);
+      console.log("📬 Delhivery raw response:", JSON.stringify(response, null, 2));
 
       /* ----------------------------------------
        VALIDATE RESPONSE
     ---------------------------------------- */
 
       if (!response?.success || !response?.packages?.length) {
-        throw new Error("Delivery order creation failed");
+        // Surface the actual Delhivery error message
+        const delhiveryError =
+          response?.rmk ||
+          response?.error ||
+          (response?.packages?.[0]?.remarks) ||
+          JSON.stringify(response);
+        throw new Error(`Delivery order creation failed: ${delhiveryError}`);
       }
 
       const packageData = response.packages[0];
@@ -638,14 +654,22 @@ const createDeliveryOrder = async (payload) => {
 
     return response.data;
   } catch (error) {
+    // ✅ Log the FULL Delhivery error response for debugging
     console.error(
       "Delhivery Order Create Error:",
-      error?.response?.data || error.message,
+      JSON.stringify(error?.response?.data || error.message, null, 2),
     );
 
-    throw new Error(
-      error?.response?.data?.message || "Failed to create Delhivery order",
-    );
+    // Surface the real error from Delhivery, not a generic message
+    const delhiveryMsg =
+      error?.response?.data?.rmk ||
+      error?.response?.data?.error ||
+      error?.response?.data?.message ||
+      (typeof error?.response?.data === "string" ? error.response.data : null) ||
+      error.message ||
+      "Failed to create Delhivery order";
+
+    throw new Error(delhiveryMsg);
   }
 };
 

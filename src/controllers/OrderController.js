@@ -371,25 +371,17 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             state: order.shipping.state,
 
-            country: order.shipping.country || "India",
+            country: order.shipping.country,
 
             phone: order.shipping.phone,
 
             order: order.order_id,
 
-            payment_mode: order.payment_method === "COD" ? "COD" : "Pre-paid",
+            payment_mode: order.payment_method,
 
-            // ✅ Required by Delhivery - COD amount (0 for Prepaid)
-            cod_amount:
-              order.payment_method === "COD" ? String(order.order_value || 0) : "0",
+            shipment_width: order.parcel.breadth?.toString() || "10",
 
-            // ✅ Required dimensions
-            shipment_length: order.parcel.length?.toString() || "20",
-            shipment_width: order.parcel.breadth?.toString() || "15",
-            shipment_height: order.parcel.height?.toString() || "10",
-
-            // ✅ Required weight in kg
-            weight: order.parcel.weight?.toString() || "0.05",
+            shipment_height: order.parcel.height?.toString() || "5",
 
             shipping_mode: order.shipping_mode || "Surface",
           },
@@ -400,15 +392,13 @@ const ConfirmOrderByAdmin = async (req, res) => {
         },
       };
 
-      console.log("📦 Delhivery payload:", JSON.stringify(Deliverypayload, null, 2));
-
       /* ----------------------------------------
        CREATE DELIVERY ORDER
     ---------------------------------------- */
 
       const response = await createDeliveryOrder(Deliverypayload);
 
-      console.log("📬 Delhivery raw response:", JSON.stringify(response, null, 2));
+      console.log(response);
 
       /* ----------------------------------------
        VALIDATE RESPONSE
@@ -654,22 +644,14 @@ const createDeliveryOrder = async (payload) => {
 
     return response.data;
   } catch (error) {
-    // ✅ Log the FULL Delhivery error response for debugging
     console.error(
       "Delhivery Order Create Error:",
-      JSON.stringify(error?.response?.data || error.message, null, 2),
+      error?.response?.data || error.message,
     );
 
-    // Surface the real error from Delhivery, not a generic message
-    const delhiveryMsg =
-      error?.response?.data?.rmk ||
-      error?.response?.data?.error ||
-      error?.response?.data?.message ||
-      (typeof error?.response?.data === "string" ? error.response.data : null) ||
-      error.message ||
-      "Failed to create Delhivery order";
-
-    throw new Error(delhiveryMsg);
+    throw new Error(
+      error?.response?.data?.message || "Failed to create Delhivery order",
+    );
   }
 };
 

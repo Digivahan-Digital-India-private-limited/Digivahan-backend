@@ -1356,6 +1356,39 @@ const commonValidations = {
     const { body } = require("express-validator");
     return body(field).optional();
   },
+
+  // Razorpay Amount Validation
+razorpayAmount: (field = "amount") => {
+  const { body } = require("express-validator");
+
+  return body(field)
+    .notEmpty()
+    .withMessage("Amount is required")
+    .isFloat()
+    .withMessage("Amount must be greater than 0");
+},
+
+// Razorpay User ID Validation
+razorpayUserId: (field = "user_id") => {
+  const { body } = require("express-validator");
+  return body(field)
+    .notEmpty()
+    .withMessage("User ID is required")
+    .isLength({ min: 1, max: 50 })
+    .withMessage("User ID must be between 1 and 50 characters");
+},
+
+// Razorpay Purpose Validation
+razorpayPurpose: (field = "purpose") => {
+  const { body } = require("express-validator");
+  return body(field)
+    .notEmpty()
+    .withMessage("Purpose is required")
+    .isLength({ min: 3, max: 100 })
+    .withMessage("Purpose must be between 3 and 100 characters")
+    .trim();
+},
+
 };
 
 module.exports = {

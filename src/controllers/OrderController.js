@@ -375,7 +375,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             phone: order.shipping.phone,
 
-            order: order.order_id,
+            order: `${order.order_id}-${Date.now()}`,
 
             payment_mode: order.payment_method === "Prepaid" ? "Pre-paid" : order.payment_method,
 

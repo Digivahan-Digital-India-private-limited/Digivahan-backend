@@ -377,11 +377,15 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             order: order.order_id,
 
-            payment_mode: order.payment_method,
+            payment_mode: order.payment_method === "Prepaid" ? "Pre-paid" : order.payment_method,
 
             shipment_width: order.parcel.breadth?.toString() || "10",
 
             shipment_height: order.parcel.height?.toString() || "5",
+
+            shipment_length: order.parcel.length?.toString() || "20",
+
+            weight: order.parcel.weight ? (order.parcel.weight * 1000).toString() : "50",
 
             shipping_mode: order.shipping_mode || "Surface",
           },

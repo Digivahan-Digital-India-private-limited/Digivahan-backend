@@ -443,8 +443,16 @@ const ConfirmOrderByAdmin = async (req, res) => {
         expected_package_count: 1,
       };
 
-      const deliveryPickupresponse =
-        await GenerateDeliveryPickup(pickupPayload);
+      let deliveryPickupresponse = null;
+      try {
+        deliveryPickupresponse = await GenerateDeliveryPickup(pickupPayload);
+      } catch (pickupError) {
+        console.warn("Delivery Pickup Error (Continuing order flow):", pickupError.message);
+        deliveryPickupresponse = { 
+          error: pickupError.message, 
+          note: "Pickup generation failed. Please schedule pickup manually from the Delhivery dashboard once the issue (e.g., wallet balance) is resolved." 
+        };
+      }
 
       // console.log(deliveryPickupresponse);
 
@@ -707,9 +715,13 @@ const GenerateDeliveryPickup = async (pickupPayload) => {
       error?.response?.data || error.message,
     );
 
-    throw new Error(
-      error?.response?.data?.message || "Failed to create Delhivery pickup",
-    );
+    const errorMessage = 
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      JSON.stringify(error?.response?.data) ||
+      "Failed to create Delhivery pickup";
+
+    throw new Error(`Pickup Error: ${errorMessage}`);
   }
 };
 

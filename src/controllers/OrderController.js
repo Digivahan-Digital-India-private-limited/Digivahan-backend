@@ -25,6 +25,7 @@ const GenerateOrderByUser = async (req, res) => {
       declared_value,
       shipping_is_billing,
       shipping,
+       parcel,
       billing,
       order_items,
     } = req.body;

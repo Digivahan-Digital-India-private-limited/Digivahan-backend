@@ -377,11 +377,19 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             order: order.order_id,
 
-            payment_mode: order.payment_method,
+            payment_mode: order.payment_method === "Prepaid" ? "Pre-paid" : order.payment_method,
 
             shipment_width: order.parcel.breadth?.toString() || "10",
 
             shipment_height: order.parcel.height?.toString() || "5",
+
+            shipment_length: order.parcel.length?.toString() || "10",
+
+            weight: order.parcel.weight?.toString() || "500",
+
+            total_amount: order.order_value || 0,
+
+            cod_amount: order.payment_method === "COD" ? (order.order_value || 0) : 0,
 
             shipping_mode: order.shipping_mode || "Surface",
           },
@@ -404,12 +412,19 @@ const ConfirmOrderByAdmin = async (req, res) => {
        VALIDATE RESPONSE
     ---------------------------------------- */
 
-      if (!response?.success || !response?.packages?.length) {
+      if (!response?.success || !response?.packages?.length || response?.packages?.[0]?.status === "Fail") {
         // Surface the actual Delhivery error message
+        let packageError = "";
+        if (response?.packages?.[0]?.remarks && Array.isArray(response.packages[0].remarks)) {
+          packageError = response.packages[0].remarks.join(", ");
+        } else if (response?.packages?.[0]?.remarks) {
+          packageError = String(response.packages[0].remarks);
+        }
+
         const delhiveryError =
-          response?.rmk ||
+          packageError ||
           response?.error ||
-          (response?.packages?.[0]?.remarks) ||
+          response?.rmk ||
           JSON.stringify(response);
         throw new Error(`Delivery order creation failed: ${delhiveryError}`);
       }

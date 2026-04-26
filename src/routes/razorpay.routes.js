@@ -8,18 +8,18 @@ const { commonValidations, handleValidationErrors } = require("../middleware/val
 const { API_ROUTES } = require("../../constants");
 
 // 💳 CREATE RAZORPAY ORDER
-// router.post("/api/v1/razorpay/order", createRazorpayOrder); (pritam route)
+router.post("/api/v1/razorpay/order", createRazorpayOrder);
 
 
-router.post(
-  API_ROUTES.RAZORPAY.CREATE_ORDER, 
-  [
-    commonValidations.razorpayAmount(),
-    commonValidations.razorpayUserId(),
-    commonValidations.razorpayPurpose(),
-  ],
-  handleValidationErrors,
-  createRazorpayOrder
-);
+// router.post(
+//   API_ROUTES.RAZORPAY.CREATE_ORDER, 
+//   [
+//     commonValidations.razorpayAmount(),
+//     commonValidations.razorpayUserId(),
+//     commonValidations.razorpayPurpose(),
+//   ],
+//   handleValidationErrors,
+//   createRazorpayOrder
+// );
 
 module.exports = router;

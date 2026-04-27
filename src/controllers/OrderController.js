@@ -25,7 +25,7 @@ const GenerateOrderByUser = async (req, res) => {
       declared_value,
       shipping_is_billing,
       shipping,
-       parcel,
+      parcel,
       billing,
       order_items,
     } = req.body;
@@ -104,12 +104,12 @@ const GenerateOrderByUser = async (req, res) => {
         pincode: billing.pincode,
       },
 
-     parcel: {
-  length: parcel?.length ?? 20,
-  breadth: parcel?.breadth ?? 15,
-  height: parcel?.height ?? 10,
-  weight: parcel?.weight ?? 0.05,
-},
+      parcel: {
+        length: parcel?.length ?? 20,
+        breadth: parcel?.breadth ?? 15,
+        height: parcel?.height ?? 10,
+        weight: parcel?.weight ?? 0.05,
+      },
 
       order_items: order_items.map((item) => ({
         vehicle_id: item.vehicle_id,
@@ -298,7 +298,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
         shipment_id: String(response.shipment_id),
         courier_company_id: order.courier_company_id,
       };
-      
+
 
       const awbResponse = await GenerateAWBShipment(AWBpayload);
 
@@ -1195,11 +1195,52 @@ const getUserAllOrder = async (req, res) => {
       .sort({ createdAt: -1 }) // latest first
       .lean(); // faster performance
 
+    // Bulk fetch ShiprocketOrder details for all order _ids in one query
+    const orderIds = orders.map((o) => o._id);
+    const shiprocketDocs = await ShiprocketOrder.find(
+      { order_id: { $in: orderIds } },
+      {
+        order_id: 1,
+        shiprocket_order_id: 1,
+        shipment_id: 1,
+        awb_code: 1,
+        courier_company_id: 1,
+        courier_name: 1,
+        status: 1,
+        status_code: 1,
+        onboarding_completed_now: 1,
+        new_channel: 1,
+        manifest_url: 1,
+        label_url: 1,
+        tracking_data: 1,
+      }
+    ).lean();
+
+    // Build a quick lookup map: order_id (string) → shiprocket doc
+    const shiprocketMap = {};
+    for (const doc of shiprocketDocs) {
+      shiprocketMap[doc.order_id.toString()] = doc;
+    }
+
+    // Merge ship_rocket into each order in specific position
+    const enrichedOrders = orders.map((order) => {
+      const { order_items, order_date, createdAt, updatedAt, __v, ...rest } = order;
+      return {
+        ...rest,
+        order_items,
+        ship_rocket: shiprocketMap[order._id.toString()] || null,
+        order_date,
+        createdAt,
+        updatedAt,
+        __v,
+      };
+    });
+
     return res.status(200).json({
       status: true,
       message: "User orders fetched successfully",
-      total: orders.length,
-      orders,
+      total: enrichedOrders.length,
+      orders: enrichedOrders,
     });
   } catch (error) {
     console.error("getUserAllOrder Error:", error);
@@ -1413,14 +1454,14 @@ const findOrderByAdminThrowUserId = async (req, res) => {
     const [shiprocketOrders, deliveryOrders] = await Promise.all([
       shiprocketIds.length
         ? ShiprocketOrder.find({ order_id: { $in: shiprocketIds } }, null, {
-            lean: true,
-          })
+          lean: true,
+        })
         : [],
 
       deliveryIds.length
         ? DeliveryOrder.find({ order_id: { $in: deliveryIds } }, null, {
-            lean: true,
-          })
+          lean: true,
+        })
         : [],
     ]);
 
@@ -2244,7 +2285,7 @@ const checkShiprocketCouierService = async (delivery_postcode, compareOn) => {
       message: "Serviceability Fetched Successfully",
       is_fast_delivery:
         estimated1[0].estimated_delivery_days ===
-        estimated2[0].estimated_delivery_days
+          estimated2[0].estimated_delivery_days
           ? false
           : true,
       data: {

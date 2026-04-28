@@ -15,7 +15,7 @@ const adminConfigSchema = new Schema(
       of: Boolean,
       default: {
         shiprocket: true,
-        delivery: true,
+        delhivery: true,
         manual: false,
       },
     },

@@ -78,7 +78,7 @@ const orderSchema = new Schema(
 
     active_partner: {
       type: String,
-      enum: ["shiprocket", "delivery", "manual"],
+      enum: ["shiprocket", "delhivery", "manual"],
       required: true,
       index: true,
     },

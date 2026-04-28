@@ -353,7 +353,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
       order.is_prepared = true;
 
       await order.save();
-    } else if (order.active_partner === "delivery") {
+    } else if (order.active_partner === "delhivery") {
       /* ----------------------------------------
        BUILD DELIVERY PAYLOAD
     ---------------------------------------- */
@@ -956,7 +956,7 @@ const GenerateShiprocketLabel = async (req, res) => {
     if (order.active_partner !== "shiprocket") {
       return res.status(400).json({
         status: false,
-        message: "This order is not created with Delivery partner",
+        message: "This order is not created with Shiprocket partner",
       });
     }
 
@@ -1078,10 +1078,10 @@ const GenerateDeliveryLabel = async (req, res) => {
       });
     }
 
-    if (order.active_partner !== "delivery") {
+    if (order.active_partner !== "delhivery") {
       return res.status(400).json({
         status: false,
-        message: "This order is not created with Delivery partner",
+        message: "This order is not created with Delhivery partner",
       });
     }
 
@@ -1340,7 +1340,7 @@ const findOrderByAdminThrowOrderId = async (req, res) => {
         {},
         { lean: true },
       );
-    } else if (order.active_partner === "delivery") {
+    } else if (order.active_partner === "delhivery") {
       /* =====================================================
        🚚 DELIVERY FLOW
     ===================================================== */
@@ -1442,7 +1442,7 @@ const findOrderByAdminThrowUserId = async (req, res) => {
         shiprocketIds.push(order._id);
       }
 
-      if (order.active_partner === "delivery") {
+      if (order.active_partner === "delhivery") {
         deliveryIds.push(order._id);
       }
     });
@@ -1491,7 +1491,7 @@ const findOrderByAdminThrowUserId = async (req, res) => {
         partnerDetails = shiprocketMap[order._id.toString()] || null;
       }
 
-      if (order.active_partner === "delivery") {
+      if (order.active_partner === "delhivery") {
         partnerDetails = deliveryMap[order._id.toString()] || null;
       }
 

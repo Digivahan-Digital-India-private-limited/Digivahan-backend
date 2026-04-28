@@ -379,9 +379,19 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
             payment_mode: order.payment_method,
 
+            shipment_length: order.parcel.length?.toString() || "10",
+
             shipment_width: order.parcel.breadth?.toString() || "10",
 
             shipment_height: order.parcel.height?.toString() || "5",
+
+            weight: order.parcel.weight?.toString() || "0.05",
+
+            products_desc: order.order_items[0]?.name || "QR Code Sticker",
+
+            total_amount: order.sub_total?.toString() || "0",
+
+            cod_amount: order.payment_method === "COD" ? order.sub_total?.toString() : "0",
 
             shipping_mode: order.shipping_mode || "Surface",
           },
@@ -428,10 +438,14 @@ const ConfirmOrderByAdmin = async (req, res) => {
         expected_package_count: 1,
       };
 
-      const deliveryPickupresponse =
-        await GenerateDeliveryPickup(pickupPayload);
+      let deliveryPickupresponse = null;
 
-      // console.log(deliveryPickupresponse);
+      try {
+        deliveryPickupresponse = await GenerateDeliveryPickup(pickupPayload);
+      } catch (pickupError) {
+        console.error("Delhivery Pickup scheduling failed:", pickupError.message);
+        // We continue even if pickup fails, so waybill is saved.
+      }
 
       /* ----------------------------------------
        SAVE INTO DeliveryOrder COLLECTION
@@ -1197,38 +1211,50 @@ const getUserAllOrder = async (req, res) => {
 
     // Bulk fetch ShiprocketOrder details for all order _ids in one query
     const orderIds = orders.map((o) => o._id);
-    const shiprocketDocs = await ShiprocketOrder.find(
-      { order_id: { $in: orderIds } },
-      {
-        order_id: 1,
-        shiprocket_order_id: 1,
-        shipment_id: 1,
-        awb_code: 1,
-        courier_company_id: 1,
-        courier_name: 1,
-        status: 1,
-        status_code: 1,
-        onboarding_completed_now: 1,
-        new_channel: 1,
-        manifest_url: 1,
-        label_url: 1,
-        tracking_data: 1,
-      }
-    ).lean();
 
-    // Build a quick lookup map: order_id (string) → shiprocket doc
+    const [shiprocketDocs, deliveryDocs] = await Promise.all([
+      ShiprocketOrder.find({ order_id: { $in: orderIds } }).lean(),
+      DeliveryOrder.find({ order_id: { $in: orderIds } }).lean(),
+    ]);
+
+    // Build lookup maps
     const shiprocketMap = {};
-    for (const doc of shiprocketDocs) {
+    shiprocketDocs.forEach((doc) => {
       shiprocketMap[doc.order_id.toString()] = doc;
-    }
+    });
+
+    const deliveryMap = {};
+    deliveryDocs.forEach((doc) => {
+      deliveryMap[doc.order_id.toString()] = doc;
+    });
 
     // Merge ship_rocket into each order in specific position
     const enrichedOrders = orders.map((order) => {
       const { order_items, order_date, createdAt, updatedAt, __v, ...rest } = order;
+
+      let shipRocketParam = null;
+      let delhiveryDetails = null;
+
+      if (order.active_partner === "shiprocket") {
+        shipRocketParam = shiprocketMap[order._id.toString()] || null;
+      } else if (order.active_partner === "delhivery") {
+        const doc = deliveryMap[order._id.toString()];
+        if (doc) {
+          shipRocketParam = {
+            order_id: doc.order_id,
+            shipment_id: doc.waybill,
+            status: doc.status,
+            awb_code: doc.waybill,
+          };
+          delhiveryDetails = doc;
+        }
+      }
+
       return {
         ...rest,
         order_items,
-        ship_rocket: shiprocketMap[order._id.toString()] || null,
+        ship_rocket: shipRocketParam,
+        delhivery_details: delhiveryDetails,
         order_date,
         createdAt,
         updatedAt,

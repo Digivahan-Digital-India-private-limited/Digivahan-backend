@@ -2351,7 +2351,7 @@ const checkDeliverycouierService = async (delivery_postcode) => {
       },
     );
 
-    const tatData = tatResponse.data;
+    const tatData = tatResponse.data?.data || {};
 
     /* -----------------------------
        2️⃣ CALL CHARGES API

@@ -1236,7 +1236,20 @@ const getUserAllOrder = async (req, res) => {
       let delhiveryDetails = null;
 
       if (order.active_partner === "shiprocket") {
-        shipRocketParam = shiprocketMap[order._id.toString()] || null;
+        const fullDoc = shiprocketMap[order._id.toString()] || null;
+        if (fullDoc) {
+          shipRocketParam = {
+            order_id: fullDoc.order_id,
+            shipment_id: fullDoc.shipment_id,
+            status: fullDoc.status,
+            status_code: fullDoc.status_code,
+            onboarding_completed_now: fullDoc.onboarding_completed_now,
+            awb_code: fullDoc.awb_code,
+            courier_company_id: fullDoc.courier_company_id,
+            courier_name: fullDoc.courier_name,
+            new_channel: fullDoc.new_channel,
+          };
+        }
       } else if (order.active_partner === "delhivery") {
         const doc = deliveryMap[order._id.toString()];
         if (doc) {

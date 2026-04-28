@@ -1253,12 +1253,12 @@ const getUserAllOrder = async (req, res) => {
       } else if (order.active_partner === "delhivery") {
         const doc = deliveryMap[order._id.toString()];
         if (doc) {
-          shipRocketParam = {
-            order_id: doc.order_id,
-            shipment_id: doc.waybill,
-            status: doc.status,
-            awb_code: doc.waybill,
-          };
+          // shipRocketParam = {
+          //   order_id: doc.order_id,
+          //   shipment_id: doc.waybill,
+          //   status: doc.status,
+          //   awb_code: doc.waybill,
+          // };
           delhiveryDetails = doc;
         }
       }
@@ -1358,7 +1358,7 @@ const findOrderByAdminThrowOrderId = async (req, res) => {
        2️⃣ Find order
     ----------------------------- */
 
-    const order = await Order.findOne({ order_id }, {}, { lean: true });
+    const order = await Order.findOne({ order_id }).sort({ createdAt: -1 }).lean();
 
     if (!order) {
       return res.status(404).json({
@@ -1736,7 +1736,7 @@ const OrderCancelByAdmin = async (req, res) => {
        2️⃣ FIND ORDER USING order_id FIELD
     ----------------------------- */
 
-    const order = await Order.findOne({ order_id: order_id });
+    const order = await Order.findOne({ order_id: order_id }).sort({ createdAt: -1 });
 
     if (!order) {
       return res.status(404).json({
@@ -1953,7 +1953,7 @@ const TrackOrderwithOrderId = async (req, res) => {
        2️⃣ FIND ORDER USING BUSINESS order_id
     ----------------------------- */
 
-    const order = await Order.findOne({ order_id });
+    const order = await Order.findOne({ order_id }).sort({ createdAt: -1 });
 
     if (!order) {
       return res.status(404).json({

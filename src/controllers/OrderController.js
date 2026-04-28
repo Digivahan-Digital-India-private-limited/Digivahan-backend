@@ -1745,7 +1745,7 @@ const OrderCancelByAdmin = async (req, res) => {
       shiprocketOrder.status = "CANCELED";
       shiprocketOrder.canceled_at = new Date();
       await shiprocketOrder.save();
-    } else if (order.active_partner === "delivery") {
+    } else if (order.active_partner === "delhivery") {
       /* =====================================================
        🚚 DELIVERY FLOW
     ===================================================== */
@@ -1966,7 +1966,7 @@ const TrackOrderwithOrderId = async (req, res) => {
       shiprocketOrder.tracking_data = partnerResponse;
       shiprocketOrder.last_tracked_at = new Date();
       await shiprocketOrder.save();
-    } else if (order.active_partner === "delivery") {
+    } else if (order.active_partner === "delhivery") {
       /* =====================================================
        🚚 DELIVERY FLOW
     ===================================================== */
@@ -2167,7 +2167,7 @@ const CheckCourierService = async (req, res) => {
         freight_charge: srResponse.data.freight_charge,
         suppress_date: srResponse.data.suppress_date,
       };
-    } else if (activePartner === "delivery") {
+    } else if (activePartner === "delhivery") {
       /* =====================================================
        🚚 DELIVERY FLOW
     ===================================================== */
@@ -2180,7 +2180,7 @@ const CheckCourierService = async (req, res) => {
         });
       }
 
-      const tatData = dlResponse.data.tat?.data || {};
+      const tatData = dlResponse.data.tat || {};
       const chargesData = dlResponse.data.charges || {};
 
       normalizedResponse = {

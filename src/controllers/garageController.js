@@ -111,6 +111,7 @@ const maskVehicleResponse = (data) => {
       insurance_policy_number: custom.insurance_policy_number
         ? maskAlphaNumeric(custom.insurance_policy_number)
         : custom.insurance_policy_number,
+      category: custom.category || rto.vehicle?.category || "N/A",
     },
 
     rto_data: {
@@ -315,7 +316,7 @@ const addVehicleInUsergarage = async (req, res) => {
       status: true,
       message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
       data: {
-        vehicle: matchedVehicle.api_data,
+        vehicle: maskVehicleResponse(matchedVehicle.api_data),
       },
     });
   } catch (error) {
@@ -431,6 +432,7 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
       unloaded_weight: rtoData.vehicle?.unladenWeight?.toString() || "0",
       rc_status: rtoData.registration?.status?.active ? "Active" : "Inactive",
       insurance_policy_number: rtoData.insurance?.policyNumber || "N/A",
+      category: rtoData.vehicle?.category || "N/A",
     },
     rto_data: rtoData, // Store complete RTO data for reference
     added_at: new Date(),
@@ -485,7 +487,7 @@ const getGarage = async (req, res) => {
 
       return {
         vehicle_id: vehicle.vehicle_id,
-        api_data: apiVehicle?.api_data || null,
+        api_data: maskVehicleResponse(apiVehicle?.api_data) || null,
         data_source: apiVehicle?.data_source || null,
         qr_list: vehicle.qr_list || [],
         vehicle_doc: vehicle.vehicle_doc || {
@@ -632,7 +634,7 @@ const RefreshVehicleData = async (req, res) => {
       return res.status(200).json({
         status: true,
         message: "Vehicle data already up to date",
-        data: vehicleDoc.api_data,
+        data: maskVehicleResponse(vehicleDoc.api_data),
       });
     }
 
@@ -652,7 +654,7 @@ const RefreshVehicleData = async (req, res) => {
     return res.status(200).json({
       status: true,
       message: "Vehicle data refreshed successfully",
-      data: transformedData,
+      data: maskVehicleResponse(transformedData),
     });
   } catch (error) {
     console.error("RefreshVehicleData Error:", error);

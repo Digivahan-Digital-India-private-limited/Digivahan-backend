@@ -316,7 +316,7 @@ const addVehicleInUsergarage = async (req, res) => {
       status: true,
       message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
       data: {
-        vehicle: maskVehicleResponse(matchedVehicle.api_data),
+        vehicle: matchedVehicle.api_data,
       },
     });
   } catch (error) {
@@ -487,7 +487,7 @@ const getGarage = async (req, res) => {
 
       return {
         vehicle_id: vehicle.vehicle_id,
-        api_data: maskVehicleResponse(apiVehicle?.api_data) || null,
+        api_data: apiVehicle?.api_data || null,
         data_source: apiVehicle?.data_source || null,
         qr_list: vehicle.qr_list || [],
         vehicle_doc: vehicle.vehicle_doc || {
@@ -634,7 +634,7 @@ const RefreshVehicleData = async (req, res) => {
       return res.status(200).json({
         status: true,
         message: "Vehicle data already up to date",
-        data: maskVehicleResponse(vehicleDoc.api_data),
+        data: vehicleDoc.api_data,
       });
     }
 
@@ -654,7 +654,7 @@ const RefreshVehicleData = async (req, res) => {
     return res.status(200).json({
       status: true,
       message: "Vehicle data refreshed successfully",
-      data: maskVehicleResponse(transformedData),
+      data: transformedData,
     });
   } catch (error) {
     console.error("RefreshVehicleData Error:", error);

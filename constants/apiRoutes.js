@@ -444,6 +444,15 @@ const API_ROUTES = {
     PAYMENT_SERVICE: "/user/payment-service",
     GET_PAYMENT_DETAILS: "/user/payment-details/:user_id",
   },
+
+  // Challan Flow routes
+  CHALLAN_FLOW: {
+    BASE: "/api/challan-flow",
+    INIT: "/init",
+    VERIFY: "/verify",
+    HISTORY: "/history",
+    PAYMENT_URL: "/payment-url",
+  },
 };
 
 module.exports = {

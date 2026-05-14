@@ -51,6 +51,8 @@ const reportIssueRoutes = require("./src/routes/reportIssue.routes");
 // service apis routes
 
 const serviceRoutes = require("./src/routes/service.routes.js")
+const challanWebhookRoutes = require("./src/routes/challanWebhook.routes.js")
+const challanFlowRoutes = require("./src/routes/challanFlow.routes.js")
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -118,6 +120,8 @@ app.use(API_ROUTES.CONTACT.BASE, contactUserRoutes);
 app.use(API_ROUTES.SERVICE.BASE, googleServiceRoutes);
 app.use(API_ROUTES.QUERY.BASE, queryRoutes)
 app.use(API_ROUTES.BBPS.BASE, serviceRoutes)
+app.use("/api", challanWebhookRoutes)
+app.use(API_ROUTES.CHALLAN_FLOW.BASE, challanFlowRoutes)
 
 
 // -------------------- HEALTH CHECK --------------------

@@ -54,6 +54,9 @@ const AppInfoSchema = new mongoose.Schema({
     zigoAppID: { type: String, default: "" },
     zigoAppSignKey: { type: String, default: "" },
   },
+
+  // ✅ Challan Pay String Data
+  challanPay: { type: String, default: "" },
 });
 
 module.exports = mongoose.model("AppInfo", AppInfoSchema);

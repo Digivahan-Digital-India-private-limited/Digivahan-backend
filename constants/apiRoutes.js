@@ -119,7 +119,7 @@ const API_ROUTES = {
     BASE: "/api",
     CHECK_QR: "/check-qr",
     GENERATE_QR: "/generate-qr",
-    GENERATE_QR_WITH_ID:"/generate-qr-id",
+    GENERATE_QR_WITH_ID: "/generate-qr-id",
     QR_DETAILS: "/qr/:qr_id",
     GET_QR_TEMPLATES_BULK: "/create/qr-template-in-bluk",
     GET_QR_TEMPLATE_USER: "/create/qr-template-user/:qr_id",
@@ -129,8 +129,8 @@ const API_ROUTES = {
     QR_ASSIGNMENT: "/qr-assignment",
     VEHICLE_QR: "/vehicle-qr/:vehicleId",
     GET_USER_DETAILS: "/user-details/:qr_id",
-    ADMIN_FILTER_QR:"/admin/filter-qr-list/:qr_types",
-    ADMIN_BLOCKED_QR:"/admin/qr-blocked"
+    ADMIN_FILTER_QR: "/admin/filter-qr-list/:qr_types",
+    ADMIN_BLOCKED_QR: "/admin/qr-blocked"
   },
 
   // Fuel Price routes
@@ -443,6 +443,15 @@ const API_ROUTES = {
     VALIDATE_BILLER: "/validate-biller",
     PAYMENT_SERVICE: "/user/payment-service",
     GET_PAYMENT_DETAILS: "/user/payment-details/:user_id",
+  },
+
+  // Challan Flow routes
+  CHALLAN_FLOW: {
+    BASE: "/api/challan-flow",
+    INIT: "/init",
+    VERIFY: "/verify",
+    HISTORY: "/history",
+    PAYMENT_URL: "/payment-url",
   },
 };
 

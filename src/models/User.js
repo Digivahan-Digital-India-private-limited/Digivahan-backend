@@ -290,7 +290,7 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-userSchema.index({ "basic_details.email": 1 }, { unique: true });
+userSchema.index({ "basic_details.email": 1 }, { unique: true, sparse: true });
 userSchema.index({ "basic_details.phone_number": 1 }, { unique: true });
 userSchema.index({ account_status: 1 });
 userSchema.index({ deletion_date: 1 });

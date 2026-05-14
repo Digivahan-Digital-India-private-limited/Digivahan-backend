@@ -10,6 +10,10 @@ const challanWebhookSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     rcNumber: {
       type: String,
       trim: true,
@@ -54,6 +58,7 @@ const challanWebhookSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    
   },
   {
     timestamps: true,

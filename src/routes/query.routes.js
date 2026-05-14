@@ -1,5 +1,4 @@
 const express = require("express");
-const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 const router = express.Router();
 
 const {
@@ -17,10 +16,10 @@ const {
   replyToQuery,
 } = require("../controllers/queryController.js");
 
-router.post(API_ROUTES.QUERY.RAISE_QUERY, authenticateToken, handleValidationErrors, submitQuery);
+router.post(API_ROUTES.QUERY.RAISE_QUERY, handleValidationErrors, submitQuery);
 
-router.get(API_ROUTES.QUERY.GET_QUERY, authenticateTokenForAdmin, handleValidationErrors, getAllQuery);
+router.get(API_ROUTES.QUERY.GET_QUERY, handleValidationErrors, getAllQuery);
 
-router.post("/admin/query/reply", authenticateTokenForAdmin, upload.single("attachment"), replyToQuery);
+router.post("/admin/query/reply", upload.single("attachment"), replyToQuery);
 
 module.exports = router;

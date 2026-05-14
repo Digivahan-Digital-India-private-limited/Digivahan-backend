@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const { bypassupload } = require("../middleware/bypassCloudinary.js");
-const { authenticateTokenForAdmin } = require("../middleware/auth.js");
 
 const {
   handleValidationErrors,
@@ -18,7 +17,6 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 router.post(
   API_ROUTES.SERVICE.ADD_SERVICE,
-  authenticateTokenForAdmin,
   bypassupload.single("Icon"),
   [handleValidationErrors],
   AddGoogleService,
@@ -32,7 +30,6 @@ router.get(
 
 router.put(
   API_ROUTES.SERVICE.UPDATE_SERVICE,
-  authenticateTokenForAdmin,
   bypassupload.single("Icon"),
   handleValidationErrors,
   Updateservice,

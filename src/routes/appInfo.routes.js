@@ -1,5 +1,4 @@
 const express = require("express");
-const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 const router = express.Router();
 
 const {
@@ -23,26 +22,26 @@ router.get("/api/v1/app-info/android", getAndroidVersion);
 router.get("/api/v1/app-info/ios", getIOSVersion);
 
 // ANDROID VERSION UPDATE
-router.post("/api/v1/app-info/android", authenticateTokenForAdmin, updateAndroidVersion);
+router.post("/api/v1/app-info/android", updateAndroidVersion);
 
 // IOS VERSION UPDATE
-router.post("/api/v1/app-info/ios", authenticateTokenForAdmin, updateIOSVersion);
+router.post("/api/v1/app-info/ios", updateIOSVersion);
 
 // PRIVACY POLICY UPDATE
-router.post("/api/v1/app-info/privacy-policy", authenticateTokenForAdmin, updatePrivacyPolicy);
+router.post("/api/v1/app-info/privacy-policy", updatePrivacyPolicy);
 
 // TERMS & CONDITIONS UPDATE
-router.post("/api/v1/app-info/terms-condition", authenticateTokenForAdmin, updateTermsCondition);
+router.post("/api/v1/app-info/terms-condition", updateTermsCondition);
 
 // ABOUT & ABOUTPAGE
-router.post("/api/v1/app-info/about-page", authenticateTokenForAdmin, updateAboutpage);
+router.post("/api/v1/app-info/about-page", updateAboutpage);
 
 // 🔑 RAZORPAY KEY ADD / UPDATE
-router.post("/api/v1/app-info/razorpay-key", authenticateTokenForAdmin, updateRazorpaytestKey);
+router.post("/api/v1/app-info/razorpay-key", updateRazorpaytestKey);
 
-router.post("/api/v1/app-info/razorpay-live-key", authenticateTokenForAdmin, updateRazorpayliveKey);
+router.post("/api/v1/app-info/razorpay-live-key", updateRazorpayliveKey);
 
-router.post("/api/v1/app-info/zigo-app", authenticateTokenForAdmin, updateZigoAppData)
+router.post("/api/v1/app-info/zigo-app", updateZigoAppData)
 
 // GET FULL APP INFO (Android, iOS, Policies everything)
 router.get("/api/v1/app-info", getAppInfo);

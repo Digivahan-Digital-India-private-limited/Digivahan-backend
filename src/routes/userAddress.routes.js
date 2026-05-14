@@ -6,15 +6,12 @@ const {
   commonValidations,
 } = require("../middleware/validation.js");
 
-const { authenticateToken } = require("../middleware/auth.js");
-
 const { UserAddAddress, UpdateUserAddress, DeleteUserAddress } = require("../controllers/addressController.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 router.post(
     API_ROUTES.ADDRESSBOOK.ADD_ADDRESS, 
-   authenticateToken,
     [
         commonValidations.userId("user_id"),
         handleValidationErrors
@@ -24,7 +21,6 @@ router.post(
 
 router.put(
     API_ROUTES.ADDRESSBOOK.UPDATE_ADDRESSES,
-   authenticateToken,
     [
         commonValidations.userId("user_id"),
         commonValidations.addressId("address_id"),
@@ -35,7 +31,6 @@ router.put(
 
 router.post(
     API_ROUTES.ADDRESSBOOK.DELETE_ADDRESS,
-   authenticateToken,
     [
         commonValidations.userId("user_id"),
         commonValidations.addressId("address_id"),

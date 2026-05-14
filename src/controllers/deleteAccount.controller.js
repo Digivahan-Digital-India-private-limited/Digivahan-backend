@@ -2,6 +2,7 @@ const DeleteAccountRequest = require("../models/deleteAccountRequest.model");
 const User = require("../models/User");
 const UserDeletion = require("../models/UserDeletion");
 const QRAssignment = require("../models/QRAssignment");
+const mongoose = require("mongoose");
 
 
 
@@ -122,12 +123,16 @@ error:error.message
 
 // API 3 : UPDATE STATUS
 
-exports.updateDeleteRequestStatus = async (req,res)=>{
-
-try{
-
+exports.updateDeleteRequestStatus = async (req, res) => {
+  try {
     const { id } = req.params;
-    const { status, deletion_days } = req.body;
+    const rawDays = req.body.deletion_days;
+    const status = req.body.status;
+    const days = rawDays !== undefined && rawDays !== null && rawDays !== ""
+      ? Number(rawDays)
+      : 30; // Default 30 days
+
+    console.log(`[DeleteAccount] Updating request ${id} → status: ${status}, days: ${days}`);
 
     const request = await DeleteAccountRequest.findByIdAndUpdate(
       id,
@@ -144,86 +149,92 @@ try{
 
     // If status is checked/closed, handle deletion scheduling
     if (["checked", "closed"].includes(status)) {
-      const days = deletion_days !== undefined ? Number(deletion_days) : 30; // Default 30 days
-      const user = await User.findById(request.user_id);
-      
-      if (user) {
-        const isImmediate = days === 0;
-        const deletionDate = new Date();
-        deletionDate.setDate(deletionDate.getDate() + days);
+      const isImmediate = days === 0;
+      const deletionDate = new Date();
+      deletionDate.setDate(deletionDate.getDate() + days);
 
-        // 🔍 Fetch all active QR codes assigned to user
+      console.log(`[DeleteAccount] Scheduling deletion for user ${request.user_id}. Immediate: ${isImmediate}, Date: ${deletionDate}`);
+
+      const user = await User.findById(request.user_id);
+      if (!user) {
+        console.log(`[DeleteAccount] User ${request.user_id} not found!`);
+      } else {
         const assignedQRCodes = await QRAssignment.find({
           assigned_to: user._id,
           status: "active",
         }).select("qr_id");
         const qrList = assignedQRCodes.map((qr) => qr.qr_id);
 
-        // Create/Update UserDeletion Record
         await UserDeletion.findOneAndUpdate(
-          { user_id: user._id, status: "PENDING" },
+          { user_id: user._id },
           {
-            user_id: user._id,
-            deletion_type: isImmediate ? "IMMEDIATE" : "SCHEDULED",
-            reason: `Admin Action: ${request.reason}${request.otherReason ? " - " + request.otherReason : ""}`,
-            deletion_days: days * 24 * 60,
-            deletion_date: deletionDate,
-            status: isImmediate ? "COMPLETED" : "PENDING",
-            qr_ids: qrList,
-            qr_status: qrList.length > 0 ? "BLOCKED" : "NONE",
-            isImmediate: isImmediate,
+            $set: {
+              user_id: user._id,
+              deletion_type: isImmediate ? "IMMEDIATE" : "SCHEDULED",
+              reason: `Admin Action: ${request.reason}${request.otherReason ? " - " + request.otherReason : ""}`,
+              deletion_days: days * 24 * 60,
+              deletion_date: deletionDate,
+              status: isImmediate ? "COMPLETED" : "PENDING",
+              qr_ids: qrList,
+              qr_status: qrList.length > 0 ? "BLOCKED" : "NONE",
+              isImmediate: isImmediate,
+            }
           },
           { upsert: true, new: true }
         );
 
-        // Block QR Assignments
         await QRAssignment.updateMany(
           { assigned_to: user._id },
           { status: "inactive" }
         );
 
         if (isImmediate) {
-          // ❌ Hard delete the user immediately
           await User.findByIdAndDelete(user._id);
+          console.log(`[DeleteAccount] User ${user._id} IMMEDIATELY deleted`);
         } else {
-          // Update User Model for scheduled deletion
-          user.deletion_date = deletionDate;
-          user.account_status = "PENDING_DELETION";
-          await user.save();
+          await User.findByIdAndUpdate(user._id, {
+            $set: {
+              deletion_date: deletionDate,
+              account_status: "PENDING_DELETION",
+            }
+          });
+          console.log(`[DeleteAccount] User ${user._id} scheduled for deletion on ${deletionDate}`);
         }
       }
     }
 
     res.json({
       success: true,
-      message: deletion_days !== undefined ? "Request status updated and deletion scheduled" : "Request status updated",
+      message: days === 0
+        ? "Account deleted immediately"
+        : `Request status updated. Account scheduled for deletion in ${days} day(s).`,
       data: request,
     });
 
-}catch(error){
-
-res.status(500).json({
-success:false,
-error:error.message
-});
-
-}
-
+  } catch (error) {
+    console.error("[DeleteAccount] Error in updateDeleteRequestStatus:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 };
 
 // API 4 : GET USER DELETION STATUS (For Frontend)
 exports.getDeleteRequestStatus = async (req, res) => {
   try {
     const userId = req.user.userId;
+    console.log("Checking deletion status for userId:", userId);
     
     // Check if user has an active deletion scheduled
-    const user = await User.findById(userId);
+    const user = await User.findById(new mongoose.Types.ObjectId(userId));
     if (user && user.account_status === "PENDING_DELETION" && user.deletion_date) {
       const now = new Date();
       const deletionDate = new Date(user.deletion_date);
       const timeDiff = deletionDate.getTime() - now.getTime();
       const daysLeft = Math.ceil(timeDiff / (1000 * 3600 * 24));
       
+      console.log("Found SCHEDULED deletion for user");
       return res.json({
         success: true,
         data: {
@@ -236,10 +247,11 @@ exports.getDeleteRequestStatus = async (req, res) => {
 
     // Check if user has any existing request
     const pendingRequest = await DeleteAccountRequest.findOne({
-      user_id: userId
+      user_id: new mongoose.Types.ObjectId(userId)
     }).sort({createdAt: -1});
 
     if (pendingRequest) {
+      console.log("Found IN_PROGRESS request:", pendingRequest._id);
       return res.json({
         success: true,
         data: {
@@ -248,6 +260,7 @@ exports.getDeleteRequestStatus = async (req, res) => {
       });
     }
 
+    console.log("No deletion status found for user (NONE)");
     return res.json({
       success: true,
       data: {
@@ -256,6 +269,7 @@ exports.getDeleteRequestStatus = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Error in getDeleteRequestStatus:", error);
     res.status(500).json({
       success: false,
       error: error.message

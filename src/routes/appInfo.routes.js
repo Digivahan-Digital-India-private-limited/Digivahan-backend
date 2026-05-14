@@ -12,7 +12,8 @@ const {
   updateRazorpaytestKey,
   updateRazorpayliveKey,
   getAppInfo,
-  updateZigoAppData
+  updateZigoAppData,
+  updateChallanPay
 } = require("../controllers/appInfo.controller");
 
 // GET ANDROID VERSION
@@ -42,6 +43,9 @@ router.post("/api/v1/app-info/razorpay-key", updateRazorpaytestKey);
 router.post("/api/v1/app-info/razorpay-live-key", updateRazorpayliveKey);
 
 router.post("/api/v1/app-info/zigo-app", updateZigoAppData)
+
+//  CHALLAN PAY DATA ROUTES (Only POST to update)
+router.post("/api/v1/app-info/challan", updateChallanPay);
 
 // GET FULL APP INFO (Android, iOS, Policies everything)
 router.get("/api/v1/app-info", getAppInfo);

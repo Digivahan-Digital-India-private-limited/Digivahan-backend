@@ -42,8 +42,15 @@ exports.getAndroidVersion = async (req, res) => {
         .json({ success: false, message: "No Android version found" });
     }
 
-    return res.json({ success: true, data: doc.app_version.android });
+    // Merge android version data with challanPay
+    const responseData = {
+      ...doc.app_version.android.toObject(),
+      challanPay: doc.challanPay || ""
+    };
+
+    return res.json({ success: true, data: responseData });
   } catch (e) {
+    console.error("getAndroidVersion error:", e);
     return res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -255,6 +262,26 @@ exports.updateRazorpayliveKey = async (req, res) => {
       success: false,
       message: "Failed to update Razorpay key",
     });
+  }
+};
+
+// CHALLAN PAY DATA UPDATE
+exports.updateChallanPay = async (req, res) => {
+  try {
+    const { challanPay } = req.body;
+
+    const doc = await getMainDoc();
+    doc.challanPay = challanPay || "";
+    await doc.save();
+
+    return res.json({ 
+      success: true, 
+      message: "Challan Pay url data updated successfully",
+      data: doc.challanPay 
+    });
+  } catch (e) {
+    console.error("Challan Pay Update Error:", e);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

@@ -14,7 +14,7 @@ const fetchRealChallans = async (rcNumber) => {
   try {
     const url = process.env.RTO_CHALLAN_PLUS_URL || "https://core.kashidigitalapis.com/v1/challan-plus";
     console.log(`[ChallanFlow] Fetching challans for ${rcNumber} via ${url}`);
-    
+
     const response = await axios.post(
       url,
       { rcNumber: rcNumber.toUpperCase() },
@@ -33,7 +33,7 @@ const fetchRealChallans = async (rcNumber) => {
     if (response.data && (response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.code === 200)) {
       return response.data.data || [];
     }
-    
+
     return [];
   } catch (error) {
     console.error("[ChallanFlow] Challan Plus API Error:", error.response?.data || error.message);
@@ -205,8 +205,8 @@ const verifyChallanOtp = async (req, res) => {
         // 1. Check if we have cached challans for this rcNumber from the last 24 hours
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const cachedRecord = await RTOChallanCache.findOne({
-            rcNumber: flowData.rcNumber,
-            updatedAt: { $gte: oneDayAgo }
+          rcNumber: flowData.rcNumber,
+          updatedAt: { $gte: oneDayAgo }
         });
 
         if (cachedRecord) {
@@ -215,7 +215,7 @@ const verifyChallanOtp = async (req, res) => {
         } else {
           console.log(`[ChallanFlow] Fetching real challans for ${flowData.rcNumber} from API`);
           const fetchedChallans = await fetchRealChallans(flowData.rcNumber);
-          
+
           if (fetchedChallans && fetchedChallans.length > 0) {
             const mappedChallans = fetchedChallans.map(challan => ({
               challanNumber: challan.challanNumber || challan.challan_number,
@@ -236,23 +236,23 @@ const verifyChallanOtp = async (req, res) => {
 
             realChallans = mappedChallans;
           } else {
-             // Save empty array so we don't spam the API for 0 challan vehicles
-             await RTOChallanCache.findOneAndUpdate(
-               { rcNumber: flowData.rcNumber },
-               { $set: { challans: [] } },
-               { upsert: true, new: true }
-             );
+            // Save empty array so we don't spam the API for 0 challan vehicles
+            await RTOChallanCache.findOneAndUpdate(
+              { rcNumber: flowData.rcNumber },
+              { $set: { challans: [] } },
+              { upsert: true, new: true }
+            );
           }
         }
 
         // Add a single SEARCHED record into Webhook schema so user history tracks this search
         const userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: flowData.rcNumber });
         if (!userHasSearchRecord) {
-           await ChallanWebhook.create({
-             userId: user._id,
-             rcNumber: flowData.rcNumber,
-             transactionStatus: "SEARCHED",
-           });
+          await ChallanWebhook.create({
+            userId: user._id,
+            rcNumber: flowData.rcNumber,
+            transactionStatus: "SEARCHED",
+          });
         }
       } catch (webhookError) {
         console.error("[ChallanFlow] Failed to fetch or cache real challans:", webhookError);
@@ -368,8 +368,8 @@ const getChallanPaymentUrl = async (req, res) => {
         vehicleNumber: cleanVehicleNumber,
         challanNumber: Array.isArray(challanNumbers) ? challanNumbers : [challanNumbers],
       },
-      { 
-        headers: { 
+      {
+        headers: {
           "Content-Type": "application/json",
           "secretKey": process.env.INVINCIBLE_SECRET_KEY,
           "clientId": process.env.INVINCIBLE_CLIENT_ID
@@ -405,9 +405,92 @@ const getChallanPaymentUrl = async (req, res) => {
   }
 };
 
+const refreshChallans = async (req, res) => {
+  try {
+    const { rcNumber } = req.body;
+    if (!rcNumber) {
+      return res.status(400).json({ status: false, message: "RC Number is required" });
+    }
+
+    console.log(`[ChallanFlow] Refreshing real challans for ${rcNumber} from API`);
+    const fetchedChallans = await fetchRealChallans(rcNumber);
+    
+    let realChallans = [];
+    if (fetchedChallans && fetchedChallans.length > 0) {
+      realChallans = fetchedChallans.map(challan => ({
+        challanNumber: challan.challanNumber || challan.challan_number,
+        offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
+        amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
+        transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
+        location: challan.challanPlace || challan.location || "Unknown",
+        createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
+        receiptLink: challan.receipt_url || challan.receiptLink || ""
+      }));
+    }
+
+    // Overwrite realChallans status with real-time webhook status
+    const webhookRecords = await ChallanWebhook.find({
+      rcNumber: rcNumber,
+      transactionStatus: { $ne: "SEARCHED" }
+    }).sort({ createdAt: -1 });
+
+    if (realChallans.length > 0 && webhookRecords.length > 0) {
+       realChallans = realChallans.map(challan => {
+          const wh = webhookRecords.find(r => r.challanNumber === challan.challanNumber);
+          if (wh) {
+             let overrideStatus = challan.transactionStatus;
+             const txStatus = wh.transactionStatus?.toLowerCase();
+             const ioStatus = wh.ioStatus?.toLowerCase();
+
+             if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
+                 overrideStatus = "PAID";
+             } else if (txStatus === 'captured') {
+                 overrideStatus = "UNDER_PROCESS";
+             } else if (txStatus === 'failed' && ioStatus === 'refund') {
+                 overrideStatus = "UNPAID";
+             } else if (txStatus === 'initiated') {
+                 overrideStatus = "UNPAID";
+             }
+             
+             return {
+                 ...challan,
+                 transactionStatus: overrideStatus,
+                 _webhookRecord: wh
+             };
+          }
+          return challan;
+       });
+    }
+
+    if (realChallans.length > 0) {
+      await RTOChallanCache.findOneAndUpdate(
+        { rcNumber },
+        { $set: { challans: realChallans } },
+        { upsert: true, new: true }
+      );
+    } else {
+       await RTOChallanCache.findOneAndUpdate(
+         { rcNumber },
+         { $set: { challans: [] } },
+         { upsert: true, new: true }
+       );
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: "Challans refreshed successfully",
+      challans: realChallans
+    });
+  } catch (error) {
+    console.error("[ChallanFlow] Refresh error:", error);
+    return res.status(500).json({ status: false, message: "Failed to refresh challans" });
+  }
+};
+
 module.exports = {
   initChallanFlow,
   verifyChallanOtp,
   getChallanHistory,
   getChallanPaymentUrl,
+  refreshChallans,
 };

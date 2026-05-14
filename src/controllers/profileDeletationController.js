@@ -37,9 +37,9 @@ const DeleteByUser = async (req, res) => {
 
     // 🔍 Fetch all active QR codes assigned to user
     const assignedQRCodes = await QRAssignment.find({
-      user_id: user_id,
+      assigned_to: user_id,
       status: "active",
-    });
+    }).select("qr_id");
 
     const qrList = assignedQRCodes.map((qr) => qr.qr_id);
 
@@ -56,7 +56,7 @@ const DeleteByUser = async (req, res) => {
 
     if (isImmediate) {
       // Block / delete all QR assignments
-      await QRAssignment.updateMany({ user_id: user_id }, { status: "inactive" });
+      await QRAssignment.updateMany({ assigned_to: user_id }, { status: "inactive" });
 
       // Log deletion record
       await UserDeletion.create({
@@ -107,7 +107,7 @@ const DeleteByUser = async (req, res) => {
     await user.save();
 
     // Block QR codes
-    await QRAssignment.updateMany({ user_id: user_id }, { status: "inactive" });
+    await QRAssignment.updateMany({ assigned_to: user_id }, { status: "inactive" });
 
     return res.status(200).json({
       status: true,

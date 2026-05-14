@@ -17,20 +17,20 @@ const {
 
 router.post(
   API_ROUTES.CHAT.CREATE_ROOM_FOR_CHAT,
-  authenticateToken,
+ authenticateToken,
   createRoom
 );
 
 router.post(
   API_ROUTES.CHAT.GET_USER_CHATS_ROOM_DETAILS,
-  authenticateToken,
+ authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
   getAllChatRoomFromUserAccount
 );
 
 router.get(
   API_ROUTES.CHAT.GET_ROOM_DETAILS,
-  authenticateToken,
+ authenticateToken,
   [handleValidationErrors],
   GetChatRoomInfo
 );

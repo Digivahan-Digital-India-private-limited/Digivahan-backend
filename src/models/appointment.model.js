@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const appointmentSchema = new mongoose.Schema(
   {
+    ticketId: {
+      type: String,
+      unique: true,
+      index: true
+    },
     name: {
       type: String,
       required: true

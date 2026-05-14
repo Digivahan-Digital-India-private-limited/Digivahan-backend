@@ -9,15 +9,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer + Cloudinary storage
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: "uploads", // Cloudinary folder name
-    resource_type: "image", // use "image" for profile pics
-    allowed_formats: ["jpg", "jpeg", "png"],
-  },
-});
+// Multer memory storage (Manual upload in controller)
+const storage = multer.memoryStorage();
 
 // Upload middleware (single image)
 const upload = multer({ storage });

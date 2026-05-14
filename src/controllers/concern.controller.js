@@ -1,6 +1,7 @@
 const Concern = require("../models/concern.model");
 const User = require("../models/User");
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
+const cloudinary = require("cloudinary").v2;
 
 
 
@@ -12,22 +13,43 @@ exports.raiseConcern = async (req, res) => {
     const { name, phoneNumber, category, issueDescription } = req.body;
 
     // check registered user
-    const user = await User.findOne({
-      "basic_details.phone_number": phoneNumber
-    });
+    let user;
+    if (req.user && req.user.userId) {
+      user = await User.findById(req.user.userId);
+    }
+
+    if (!user && phoneNumber) {
+      user = await User.findOne({
+        "basic_details.phone_number": phoneNumber
+      });
+    }
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "You are not registered user",
+        message: "User not found or not registered",
       });
     }
 
-    // get uploaded image URLs from cloudinary
+    // get uploaded images and upload to cloudinary
     let incidentProof = [];
 
     if (req.files && req.files.length > 0) {
-      incidentProof = req.files.map((file) => file.path);
+      const uploadPromises = req.files.map((file) => {
+        return new Promise((resolve, reject) => {
+          cloudinary.uploader
+            .upload_stream(
+              { folder: "concerns", resource_type: "auto" },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result.secure_url);
+              }
+            )
+            .end(file.buffer);
+        });
+      });
+
+      incidentProof = await Promise.all(uploadPromises);
     }
 
     const concern = new Concern({
@@ -43,7 +65,7 @@ exports.raiseConcern = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `Concern raised successfully. Your ticket id is ${concern._id}`,
+      message: "Concern raised successfully",
       ticketId: concern._id,
       data: concern,
     });
@@ -103,6 +125,31 @@ exports.raiseConcern = async (req, res) => {
 
 //   }
 // };
+
+// GET SINGLE CONCERN BY ID (accessible by authenticated user)
+exports.getConcernById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const concern = await Concern.findById(id);
+
+    if (!concern) {
+      return res.status(404).json({
+        success: false,
+        message: "Concern not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: concern,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
 
 // DELETE CONCERN (single / multiple / by status)
 
@@ -175,39 +222,39 @@ exports.deleteConcern = async (req, res) => {
 
 // GET CONCERNS
 
-exports.getConcerns = async (req,res)=>{
+exports.getConcerns = async (req, res) => {
 
-try{
+  try {
 
-const {category,status,phoneNumber} = req.query;
+    const { category, status, phoneNumber } = req.query;
 
-let filter={};
+    let filter = {};
 
-if(category) filter.category=category;
-if(status) filter.status=status;
-if(phoneNumber) filter.phoneNumber=phoneNumber;
+    if (category) filter.category = category;
+    if (status) filter.status = status;
+    if (phoneNumber) filter.phoneNumber = phoneNumber;
 
-const concerns = await Concern
-.find(filter)
-.sort({createdAt:-1})
-.populate("user_id","name phoneNumber");
+    const concerns = await Concern
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .populate("user_id", "name phoneNumber");
 
-res.json({
+    res.json({
 
-success:true,
-total:concerns.length,
-data:concerns
+      success: true,
+      total: concerns.length,
+      data: concerns
 
-});
+    });
 
-}catch(error){
+  } catch (error) {
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
 
-}
+  }
 
 };
 
@@ -216,76 +263,80 @@ error:error.message
 
 // ADD MESSAGE IN CONVERSATION
 
-exports.addConversation = async (req,res)=>{
+exports.addConversation = async (req, res) => {
 
-try{
+  try {
 
-const {id} = req.params;
+    const { id } = req.params;
 
-const {sender,message} = req.body;
+    const { sender, message } = req.body;
 
-const concern = await Concern.findByIdAndUpdate(
+    let filter = { _id: id };
 
-id,
+    const concern = await Concern.findOneAndUpdate(
 
-{
-$push:{
-conversation:{
-sender,
-message
-}
-}
-},
+      filter,
 
-{new:true}
+      {
+        $push: {
+          conversation: {
+            sender,
+            message
+          }
+        }
+      },
 
-);
+      { new: true }
 
-res.json({
-success:true,
-data:concern
-});
+    );
 
-}catch(error){
+    res.json({
+      success: true,
+      data: concern
+    });
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+  } catch (error) {
 
-}
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+
+  }
 
 };
 
 // UPDATE STATUS
 
-exports.updateStatus = async (req,res)=>{
+exports.updateStatus = async (req, res) => {
 
-try{
+  try {
 
-const {id} = req.params;
-const {status} = req.body;
+    const { id } = req.params;
+    const { status } = req.body;
 
-const concern = await Concern.findByIdAndUpdate(
+    let filter = { _id: id };
 
-id,
-{status},
-{new:true}
+    const concern = await Concern.findOneAndUpdate(
 
-);
+      filter,
+      { status },
+      { new: true }
 
-res.json({
-success:true,
-data:concern
-});
+    );
 
-}catch(error){
+    res.json({
+      success: true,
+      data: concern
+    });
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+  } catch (error) {
 
-}
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+
+  }
 
 };

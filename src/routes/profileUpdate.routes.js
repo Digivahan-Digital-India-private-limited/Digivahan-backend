@@ -18,7 +18,7 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 router.put(
   API_ROUTES.UPDATE_USER.UPDATE,
-  authenticateToken,
+ authenticateToken,
   bypassupload.fields([
     { name: "profile_pic", maxCount: 1 },
     { name: "public_pic", maxCount: 1 },
@@ -32,7 +32,7 @@ router.put(
 
 router.post(
   API_ROUTES.UPDATE_USER.GET_USER_DETAILS,
-  authenticateToken,
+ authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
   getUserDetails,
 );

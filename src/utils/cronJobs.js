@@ -16,31 +16,28 @@ function startDeletionCron() {
       });
 
       for (const record of usersToDelete) {
-
         const userId = record.user_id;
 
-        // 1. Find all QR IDs assigned to this user
-        const assignedQRs = await QRAssignment.find({ user_id: userId });
-
-        // 2. Block all QR IDs
-        for (const qr of assignedQRs) {
-          qr.status = "inactive";     // BLOCKED
-          await qr.save();
-        }
-
-        // 3. Store saved QR IDs in deletion log
+        // 1. Fetch all active QR codes assigned to this user (for logging)
+        const assignedQRs = await QRAssignment.find({ assigned_to: userId }).select("qr_id");
         record.qr_ids = assignedQRs.map(q => q.qr_id);
         record.qr_status = "BLOCKED";
 
-        // 4. Delete the user
+        // 2. Block all QR assignments for this user (Optimized)
+        await QRAssignment.updateMany(
+          { assigned_to: userId },
+          { status: "inactive" }
+        );
+
+        // 3. Delete the user
         await User.findByIdAndDelete(userId);
 
-        // 5. Complete deletion process
+        // 4. Complete deletion process record
         record.status = "COMPLETED";
         record.completed_at = new Date();
         await record.save();
 
-        console.log(`User deleted & QR IDs blocked: ${userId}`);
+        console.log(`[CRON] User permanently deleted: ${userId}`);
       }
 
     } catch (error) {

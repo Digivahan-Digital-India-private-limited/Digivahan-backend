@@ -32,7 +32,13 @@ const authenticateToken = async (req, res, next) => {
       token,
       process.env.JWT_SECRET || "your-secret-key",
     );
-    const user = await User.findById(decoded.userId);
+    let user = await User.findById(decoded.userId);
+    let isAdmin = false;
+
+    if (!user) {
+      user = await Admin.findById(decoded.userId);
+      if (user) isAdmin = true;
+    }
 
     if (!user) {
       return res.status(401).json({
@@ -41,11 +47,11 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
-    // Check if user is active
+    // Check if user/admin is active
     if (!user.is_active) {
       return res.status(401).json({
         status: false,
-        message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
+        message: isAdmin ? "Admin account De-activated" : ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
       });
     }
 

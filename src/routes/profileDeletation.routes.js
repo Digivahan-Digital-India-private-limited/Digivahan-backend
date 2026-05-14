@@ -15,7 +15,7 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 router.post(
   API_ROUTES.USER.PROCESS_DELETIONS,
-  authenticateToken,
+ authenticateToken,
   [
     commonValidations.userId("user_id"),
     commonValidations.deletionReason("reason"),

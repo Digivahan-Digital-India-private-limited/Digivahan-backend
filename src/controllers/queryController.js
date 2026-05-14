@@ -49,4 +49,61 @@ const getAllQuery = async (req, res) => {
   }
 };
 
-module.exports = { submitQuery, getAllQuery };
+const { transporter } = require("../utils/sendEmail.js");
+
+const replyToQuery = async (req, res) => {
+  try {
+    const { email, replyText, customerName } = req.body;
+
+    if (!email || !replyText) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and reply text are required",
+      });
+    }
+
+    const mailOptions = {
+      from: process.env.FROM_EMAIL,
+      to: email,
+      subject: "Re: Your Query at Digivahan",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+          <h2 style="color: #2196F3;">DigiVahan Support</h2>
+          <p>Hi ${customerName || "Customer"},</p>
+          <p>Thank you for reaching out to us. Here is the response to your query:</p>
+          <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0; white-space: pre-wrap;">
+            ${replyText}
+          </div>
+          <p>If you have any further questions, feel free to reply to this email or contact our support team.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 12px; color: #888; text-align: center;">&copy; ${new Date().getFullYear()} DigiVahan. All rights reserved.</p>
+        </div>
+      `,
+    };
+
+    if (req.file) {
+      mailOptions.attachments = [
+        {
+          filename: req.file.originalname,
+          content: req.file.buffer,
+        },
+      ];
+    }
+
+    await transporter.sendMail(mailOptions);
+
+    return res.status(200).json({
+      success: true,
+      message: "Reply sent successfully",
+    });
+
+  } catch (error) {
+    console.error("Error sending query reply:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while sending the reply",
+    });
+  }
+};
+
+module.exports = { submitQuery, getAllQuery, replyToQuery };

@@ -22,13 +22,13 @@ default:Date.now
 );
 
 const concernSchema = new mongoose.Schema(
-{
-
-user_id:{
+  {
+    user_id:{
 type:mongoose.Schema.Types.ObjectId,
 ref:"User",
 index:true
 },
+
 
 name:{
 type:String,

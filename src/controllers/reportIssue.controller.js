@@ -5,313 +5,329 @@ const { deleteFromCloudinary } = require("../middleware/cloudinary");
 
 // CREATE ISSUE
 
-exports.createReportIssue = async (req,res)=>{
+exports.createReportIssue = async (req, res) => {
 
-try{
+    try {
 
-const {
-name,
-phoneNumber,
-email,
-issueType,
-priority,
-reportTitle,
-reportDetails
-} = req.body;
-
-
-// verify registered user
-
-const user = await User.findOne({
-"basic_details.phone_number":phoneNumber
-});
-
-if(!user){
-
-return res.status(400).json({
-success:false,
-message:"You are not registered user"
-});
-
-}
+        const {
+            name,
+            phoneNumber,
+            email,
+            issueType,
+            priority,
+            reportTitle,
+            reportDetails
+        } = req.body;
 
 
-// attachments
+        // verify registered user
 
-let attachments=[];
+        const user = await User.findOne({
+            "basic_details.phone_number": phoneNumber
+        });
 
-if(req.files && req.files.length>0){
+        if (!user) {
 
-attachments=req.files.map(file=>({
+            return res.status(400).json({
+                success: false,
+                message: "You are not registered user"
+            });
 
-url:file.path,
-public_id:file.filename
-
-}));
-
-}
-
-
-// generate ticket id
-
-const count = await ReportIssue.countDocuments();
-
-const ticketId=`DIGI-REP-${String(count+1).padStart(6,"0")}`;
+        }
 
 
-const report = new ReportIssue({
+        // attachments
+        const cloudinary = require("cloudinary").v2;
 
-ticketId,
-user_id:user._id,
-name,
-phoneNumber,
-email,
-issueType,
-priority,
-reportTitle,
-reportDetails,
-attachments,
+        let attachments = [];
 
-history:[
-{
-status:"pending",
-note:"Issue reported",
-updatedByName:name,
-updatedByPhone:phoneNumber
-}
-]
+        if (req.files && req.files.length > 0) {
+            const uploadPromises = req.files.map((file) => {
+                return new Promise((resolve, reject) => {
+                    cloudinary.uploader
+                        .upload_stream(
+                            { folder: "report_issues", resource_type: "auto" },
+                            (error, result) => {
+                                if (error) reject(error);
+                                else resolve({
+                                    url: result.secure_url,
+                                    public_id: result.public_id
+                                });
+                            }
+                        )
+                        .end(file.buffer);
+                });
+            });
 
-});
+            attachments = await Promise.all(uploadPromises);
+        }
 
-await report.save();
 
-res.status(201).json({
+        // generate ticket id
 
-success:true,
-message:"Issue reported successfully",
-ticketId:ticketId,
-data:report
+        const count = await ReportIssue.countDocuments();
 
-});
+        const ticketId = `DIGI-REP-${String(count + 1).padStart(6, "0")}`;
 
-}catch(error){
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+        const report = new ReportIssue({
 
-}
+            ticketId,
+            user_id: user._id,
+            name,
+            phoneNumber,
+            email,
+            issueType,
+            priority,
+            reportTitle,
+            reportDetails,
+            attachments,
+
+            history: [
+                {
+                    status: "pending",
+                    note: "Issue reported",
+                    updatedByName: name,
+                    updatedByPhone: phoneNumber
+                }
+            ]
+
+        });
+
+        await report.save();
+
+        res.status(201).json({
+
+            success: true,
+            message: "Issue reported successfully",
+            ticketId: ticketId,
+            data: report
+
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+
+    }
 
 };
 
 // GET LIST
 
-exports.getReportIssues = async (req,res)=>{
+exports.getReportIssues = async (req, res) => {
 
-try{
+    try {
 
-const {status}=req.query;
+        const { status } = req.query;
 
-let filter={};
+        let filter = {};
 
-if(status){
-filter.status=status;
-}
+        if (status) {
+            filter.status = status;
+        }
 
-const issues = await ReportIssue
-.find(filter)
-.sort({createdAt:-1});
+        const issues = await ReportIssue
+            .find(filter)
+            .sort({ createdAt: -1 });
 
-res.json({
+        res.json({
 
-success:true,
-total:issues.length,
-data:issues
+            success: true,
+            total: issues.length,
+            data: issues
 
-});
+        });
 
-}catch(error){
+    } catch (error) {
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
 
-}
+    }
 
 };
 
 // UPDATE ISSUE
 
-exports.updateReportIssue = async (req,res)=>{
+exports.updateReportIssue = async (req, res) => {
 
-try{
+    try {
 
-const {id}=req.params;
+        const { id } = req.params;
 
-const {
-status,
-note,
-updatedByName,
-updatedByPhone,
-agentName,
-agentPhone
-}=req.body;
-
-
-const issue = await ReportIssue.findById(id);
-
-if(!issue){
-
-return res.status(404).json({
-success:false,
-message:"Issue not found"
-});
-
-}
+        const {
+            status,
+            note,
+            updatedByName,
+            updatedByPhone,
+            agentName,
+            agentPhone
+        } = req.body;
 
 
-issue.status=status;
+        let issue;
+        if (id.startsWith("DIGI-REP-")) {
+            issue = await ReportIssue.findOne({ ticketId: id });
+        } else {
+            issue = await ReportIssue.findById(id);
+        }
 
-issue.assignedTo={
-name:agentName,
-phone:agentPhone
-};
+        if (!issue) {
 
-issue.history.push({
+            return res.status(404).json({
+                success: false,
+                message: "Issue not found"
+            });
 
-status,
-note,
-updatedByName,
-updatedByPhone
+        }
 
-});
 
-await issue.save();
+        issue.status = status;
 
-res.json({
+        issue.assignedTo = {
+            name: agentName,
+            phone: agentPhone
+        };
 
-success:true,
-message:"Issue updated successfully",
-data:issue
+        issue.history.push({
 
-});
+            status,
+            note,
+            updatedByName,
+            updatedByPhone
 
-}catch(error){
+        });
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+        await issue.save();
 
-}
+        res.json({
+
+            success: true,
+            message: "Issue updated successfully",
+            data: issue
+
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+
+    }
 
 };
 
 // DELETE ISSUE
 
-exports.deleteReportIssue = async (req,res)=>{
+exports.deleteReportIssue = async (req, res) => {
 
-try{
+    try {
 
-const {ids,status}=req.body;
+        const { ids, status } = req.body;
 
-let issues=[];
-
-
-// delete by ids
-
-if(ids && ids.length>0){
-
-issues=await ReportIssue.find({
-_id:{ $in:ids }
-});
-
-await ReportIssue.deleteMany({
-_id:{ $in:ids }
-});
-
-}
+        let issues = [];
 
 
-// delete by status
+        // delete by ids
 
-if(status){
+        if (ids && ids.length > 0) {
 
-issues=await ReportIssue.find({status});
+            issues = await ReportIssue.find({
+                _id: { $in: ids }
+            });
 
-await ReportIssue.deleteMany({status});
+            await ReportIssue.deleteMany({
+                _id: { $in: ids }
+            });
 
-}
-
-
-// delete attachments from cloudinary
-
-for(const issue of issues){
-
-for(const file of issue.attachments){
-
-if(file.public_id){
-
-await deleteFromCloudinary(file.public_id);
-
-}
-
-}
-
-}
+        }
 
 
-res.json({
-success:true,
-message:"Issues deleted successfully"
-});
+        // delete by status
 
-}catch(error){
+        if (status) {
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+            issues = await ReportIssue.find({ status });
 
-}
+            await ReportIssue.deleteMany({ status });
+
+        }
+
+
+        // delete attachments from cloudinary
+
+        for (const issue of issues) {
+
+            for (const file of issue.attachments) {
+
+                if (file.public_id) {
+
+                    await deleteFromCloudinary(file.public_id);
+
+                }
+
+            }
+
+        }
+
+
+        res.json({
+            success: true,
+            message: "Issues deleted successfully"
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+
+    }
 
 };
 
 // GET ISSUE BY TICKET ID
 
-exports.getIssueByTicketId = async (req,res)=>{
+exports.getIssueByTicketId = async (req, res) => {
 
-    try{
-    
-    const {ticketId} = req.params;
-    
-    const issue = await ReportIssue.findOne({ticketId});
-    
-    if(!issue){
-    
-    return res.status(404).json({
-    success:false,
-    message:"Issue not found"
-    });
-    
+    try {
+
+        const { ticketId } = req.params;
+
+        const issue = await ReportIssue.findOne({ ticketId });
+
+        if (!issue) {
+
+            return res.status(404).json({
+                success: false,
+                message: "Issue not found"
+            });
+
+        }
+
+        res.json({
+
+            success: true,
+            data: issue
+
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+
     }
-    
-    res.json({
-    
-    success:true,
-    data:issue
-    
-    });
-    
-    }catch(error){
-    
-    res.status(500).json({
-    success:false,
-    error:error.message
-    });
-    
-    }
-    
-    };
+
+};

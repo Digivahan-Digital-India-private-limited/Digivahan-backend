@@ -1,4 +1,5 @@
 const express = require("express");
+const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 const router = express.Router();
 
 const multer = require("multer");
@@ -15,6 +16,7 @@ const {
 // CREATE
 router.post(
   "/api/v1/tips-tricks",
+  authenticateTokenForAdmin,
   upload.fields([{ name: "banner", maxCount: 1 }, { name: "icons" }]),
   createTipsTricks,
 );
@@ -22,12 +24,13 @@ router.post(
 // UPDATE
 router.patch(
   "/api/v1/tips-tricks/:id",
+  authenticateTokenForAdmin,
   upload.fields([{ name: "banner", maxCount: 1 }, { name: "icons" }]),
   updateTipsTricks,
 );
 
 // DELETE
-router.delete("/api/v1/tips-tricks/:id", deleteTipsTricks);
+router.delete("/api/v1/tips-tricks/:id", authenticateTokenForAdmin, deleteTipsTricks);
 
 // GET ALL
 router.get("/api/v1/tips-tricks", getAllTipsTricks);

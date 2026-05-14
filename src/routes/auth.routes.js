@@ -5,7 +5,7 @@ const {
   commonValidations,
 } = require("../middleware/validation.js");
 
-const { authenticateToken } = require("../middleware/auth.js");
+const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 
 const {
   registerInit,
@@ -188,6 +188,7 @@ router.post(
 
 router.post(
   API_ROUTES.AUTH.PASSWORD_RESET.CHANGE_PASSWORD,
+  authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
   ChangeUserpassword
 );
@@ -195,6 +196,7 @@ router.post(
 // Validate New password with our old password
 router.post(
   API_ROUTES.AUTH.PASSWORD_RESET.VALIDATE_PASSWORD,
+  authenticateToken,
   [
     commonValidations.userId("user_id"),
     handleValidationErrors
@@ -212,6 +214,7 @@ router.post(
 // Suspend User - Suspend a user for a specific time period
 router.post(
   API_ROUTES.AUTH.USER_MANAGEMENT.SUSPEND,
+  authenticateTokenForAdmin,
   [
     commonValidations.userIdForSuspension("user_id"),
     commonValidations.suspendUntil("suspend_until"),
@@ -224,6 +227,7 @@ router.post(
 // Remove User Suspension - Remove suspension from a user
 router.post(
   API_ROUTES.AUTH.USER_MANAGEMENT.REMOVE_SUSPENSION,
+  authenticateTokenForAdmin,
   [
     commonValidations.userIdForRemoveSuspension("user_id"),
     handleValidationErrors,

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 
 const {
   handleValidationErrors,
@@ -12,6 +13,7 @@ const { addUserReview, FetchUserFeedBack, getReviewAnalytics, replyToReview } = 
 
 router.post(
   API_ROUTES.REVIEW.SUBMIT_REVIEW,
+  authenticateToken,
   [
     commonValidations.userId("user_id"),
     handleValidationErrors,
@@ -21,6 +23,7 @@ router.post(
 
 router.post(
   API_ROUTES.REVIEW.USER_FEEDBACK,
+  authenticateToken,
   [
     commonValidations.productType("product_type"),
     handleValidationErrors,
@@ -31,11 +34,13 @@ router.post(
 
 router.get(
   API_ROUTES.REVIEW.REVIEW_ANALYTICS,
+  authenticateTokenForAdmin,
   getReviewAnalytics
 );
 
 router.post(
   API_ROUTES.REVIEW.REPLY,
+  authenticateTokenForAdmin,
   replyToReview
 );
 

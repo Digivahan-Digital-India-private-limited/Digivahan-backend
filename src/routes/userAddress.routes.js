@@ -14,7 +14,7 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
 router.post(
     API_ROUTES.ADDRESSBOOK.ADD_ADDRESS, 
-    authenticateToken,
+   authenticateToken,
     [
         commonValidations.userId("user_id"),
         handleValidationErrors
@@ -24,7 +24,7 @@ router.post(
 
 router.put(
     API_ROUTES.ADDRESSBOOK.UPDATE_ADDRESSES,
-    authenticateToken,
+   authenticateToken,
     [
         commonValidations.userId("user_id"),
         commonValidations.addressId("address_id"),
@@ -35,7 +35,7 @@ router.put(
 
 router.post(
     API_ROUTES.ADDRESSBOOK.DELETE_ADDRESS,
-    authenticateToken,
+   authenticateToken,
     [
         commonValidations.userId("user_id"),
         commonValidations.addressId("address_id"),

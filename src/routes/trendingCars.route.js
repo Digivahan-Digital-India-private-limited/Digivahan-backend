@@ -1,4 +1,5 @@
 const express = require("express");
+const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 const router = express.Router();
 
 const {
@@ -17,6 +18,7 @@ const {
 
 router.post(
   API_ROUTES.TRENDING_CARS.ADD_TRENDING_CAR,
+  authenticateTokenForAdmin,
   [handleValidationErrors],
   addTrendingCar
 );
@@ -35,6 +37,7 @@ router.get(
 
 router.delete(
     API_ROUTES.TRENDING_CARS.DELETE_CAR_DETAILS,
+    authenticateTokenForAdmin,
     handleValidationErrors,
     DeleteCarDetails
 )

@@ -1,4 +1,5 @@
 const express = require("express");
+const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 const router = express.Router();
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
@@ -19,12 +20,14 @@ const {
 
 router.post(
   API_ROUTES.NOTIFICATION.SEND,
+  authenticateToken,
   [commonValidations.receiverId("receiver_id"), handleValidationErrors],
   sendNotification,
 );
 
 router.post(
   API_ROUTES.NOTIFICATION.SEND_NOTIFICATION_FOR_CALL,
+  authenticateToken,
   [
     commonValidations.senderId("sender_id"),
     commonValidations.receiverId("receiver_id"),
@@ -35,18 +38,21 @@ router.post(
 
 router.get(
   API_ROUTES.NOTIFICATION.GET_USER_NOTIFICATIONS,
+  authenticateToken,
   [handleValidationErrors],
   getAllNotification,
 );
 
 router.post(
   API_ROUTES.NOTIFICATION.DELETE_NOTIFICATIONS,
+  authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
   DeleteNotification,
 );
 
 router.post(
   API_ROUTES.NOTIFICATION.SEEN_NOTIFICATION,
+  authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
   seenNotificationByUser,
 );
@@ -54,6 +60,7 @@ router.post(
 
 router.post(
   API_ROUTES.NOTIFICATION.IS_ON_NOTIFICATION,
+  authenticateToken,
   [commonValidations.userId("user_id"), handleValidationErrors],
   isOnnotification,
 );

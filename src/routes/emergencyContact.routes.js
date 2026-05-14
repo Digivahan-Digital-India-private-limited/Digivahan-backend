@@ -19,7 +19,7 @@ const {
 
 router.post(
   API_ROUTES.EMERGENCY_CONTACT.ADD_CONTACT,
-  authenticateToken,
+ authenticateToken,
   profilePicParser,
   [commonValidations.userId("user_id"), handleValidationErrors],
   AddEmergencyContact
@@ -27,7 +27,7 @@ router.post(
 
 router.put(
   API_ROUTES.EMERGENCY_CONTACT.UPDATE_CONTACTS,
-  authenticateToken,
+ authenticateToken,
   profilePicParser,
   [
     commonValidations.userId("user_id"),
@@ -39,7 +39,7 @@ router.put(
 
 router.post(
   API_ROUTES.EMERGENCY_CONTACT.DELETE_CONTACT,
-  authenticateToken,
+ authenticateToken,
   [
     commonValidations.userId("user_id"),
     commonValidations.contactId("contact_id"),

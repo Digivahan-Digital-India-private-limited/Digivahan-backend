@@ -212,10 +212,11 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
-  console.log("➡️ Calling PREMIUM RTO API");
+  console.log("➡️ Calling PREMIUM RTO API for:", vehicleNumber);
 
+  let response;
   try {
-    const response = await axios.post(
+    response = await axios.post(
       process.env.RTO_PREMIMUM_API_URL,
       { rcNumber: vehicleNumber },
       {
@@ -226,38 +227,52 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
         timeout: 30000,
       },
     );
+  } catch (axiosError) {
+    // ✅ Axios-level error: network failure, timeout, HTTP error response
+    console.error("❌ PREMIUM RTO Axios error:", {
+      code: axiosError.code,
+      status: axiosError.response?.status,
+      data: axiosError.response?.data,
+      message: axiosError.message,
+    });
 
-    if (response.status === 200 && response.data.statusCode === 200) {
-      return response.data.result;
-    }
-
-    const err = new Error(response.data.message || "Premium RTO API failed");
-    err.statusCode = response.data.statusCode || 500;
-    throw err;
-  } catch (error) {
-    // ✅ If external API returned response
-    if (error.response) {
-      const err = new Error(
-        error.response.data?.message ||
-          error.response.statusText ||
-          "Premium RTO API error",
-      );
-      err.statusCode = error.response.status;
-      throw err;
-    }
-
-    // ✅ Network / timeout issue
-    if (error.code === "ECONNABORTED") {
+    if (axiosError.code === "ECONNABORTED") {
       const err = new Error("Premium RTO API timeout");
       err.statusCode = 504;
       throw err;
     }
 
-    // ✅ Any unknown error
-    const err = new Error(error.message || "Premium RTO unavailable");
+    if (axiosError.response) {
+      const err = new Error(
+        axiosError.response.data?.message ||
+          axiosError.response.statusText ||
+          "Premium RTO API error",
+      );
+      err.statusCode = axiosError.response.status;
+      throw err;
+    }
+
+    const err = new Error(axiosError.message || "Premium RTO unavailable");
     err.statusCode = 502;
     throw err;
   }
+
+  // ✅ API responded — log and check the payload
+  console.log("⬅️ PREMIUM RTO API response:", {
+    httpStatus: response.status,
+    statusCode: response.data?.statusCode,
+    message: response.data?.message,
+    hasResult: !!response.data?.result,
+  });
+
+  if (response.status === 200 && response.data.statusCode === 200) {
+    return response.data.result;
+  }
+
+  // API returned a non-200 business code
+  const err = new Error(response.data?.message || "Premium RTO API failed");
+  err.statusCode = response.data?.statusCode || 500;
+  throw err;
 };
 
 // Add vehicle in User Garage

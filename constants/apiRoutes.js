@@ -431,6 +431,8 @@ const API_ROUTES = {
     BASE: "/api",
     RAISE_QUERY: "/user/submit-query",
     GET_QUERY: "/admin/get-all-query",
+    DELETE_QUERY: "/admin/delete-query/:id",
+    DELETE_MULTIPLE_QUERIES: "/admin/delete-multiple-queries",
   },
 
   BBPS: {

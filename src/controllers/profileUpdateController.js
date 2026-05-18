@@ -34,7 +34,15 @@ const UpdateUserDetails = async (req, res) => {
     // ==============================
     // 🔥 Upload Profile Pic (if exists)
     // ==============================
-    if (req.files?.profile_pic?.[0]) {
+    let base64Avatar = body.avatar || body.profile_pic;
+    if (base64Avatar && base64Avatar.startsWith("data:image/")) {
+      newProfileImage = await cloudinary.uploader.upload(base64Avatar, {
+        folder: "user/profile",
+        resource_type: "image",
+      });
+      user.basic_details.profile_pic = newProfileImage.secure_url;
+      user.basic_details.public_id = newProfileImage.public_id;
+    } else if (req.files?.profile_pic?.[0]) {
       const buffer = req.files.profile_pic[0].buffer;
 
       newProfileImage = await new Promise((resolve, reject) => {
@@ -56,7 +64,15 @@ const UpdateUserDetails = async (req, res) => {
     // ==============================
     // 🔥 Upload Public Pic (if exists)
     // ==============================
-    if (req.files?.public_pic?.[0]) {
+    let base64Public = body.public_pic;
+    if (base64Public && base64Public.startsWith("data:image/")) {
+      newPublicImage = await cloudinary.uploader.upload(base64Public, {
+        folder: "user/public",
+        resource_type: "image",
+      });
+      user.public_details.public_pic = newPublicImage.secure_url;
+      user.public_details.public_id = newPublicImage.public_id;
+    } else if (req.files?.public_pic?.[0]) {
       const buffer = req.files.public_pic[0].buffer;
 
       newPublicImage = await new Promise((resolve, reject) => {
@@ -76,27 +92,75 @@ const UpdateUserDetails = async (req, res) => {
     }
 
     // ==============================
+    // 🔥 Update Email and Phone
+    // ==============================
+    if (body.email !== undefined) {
+      const email = body.email.trim().toLowerCase();
+      if (email) {
+        const existingEmailUser = await User.findOne({
+          "basic_details.email": email,
+          _id: { $ne: user._id }
+        });
+        if (existingEmailUser) {
+          return res.status(400).json({
+            status: false,
+            message: "Email address is already in use by another account",
+          });
+        }
+        user.basic_details.email = email;
+      } else {
+        user.basic_details.email = ""; // clear email
+      }
+    }
+
+    if (body.phone_number !== undefined) {
+      const phone = body.phone_number.trim();
+      if (phone) {
+        const existingPhoneUser = await User.findOne({
+          "basic_details.phone_number": phone,
+          _id: { $ne: user._id }
+        });
+        if (existingPhoneUser) {
+          return res.status(400).json({
+            status: false,
+            message: "Phone number is already in use by another account",
+          });
+        }
+        user.basic_details.phone_number = phone;
+      }
+    }
+
+    // ==============================
     // 🔥 Update other fields
     // ==============================
-    if (body.first_name)
+    if (body.first_name !== undefined) {
       user.basic_details.first_name = body.first_name.trim();
+      if (body.last_name !== undefined) {
+        user.basic_details.last_name = body.last_name.trim();
+      }
+    } else if (body.name !== undefined) {
+      const parts = body.name.trim().split(" ");
+      user.basic_details.first_name = parts[0] || "";
+      user.basic_details.last_name = parts.slice(1).join(" ") || "";
+    } else {
+      if (body.last_name !== undefined) {
+        user.basic_details.last_name = body.last_name.trim();
+      }
+    }
 
-    if (body.last_name)
-      user.basic_details.last_name = body.last_name.trim();
-
-    if (body.occupation)
+    if (body.occupation !== undefined)
       user.basic_details.occupation = body.occupation.trim();
 
-    if (body.nick_name)
+    if (body.nick_name !== undefined)
       user.public_details.nick_name = body.nick_name.trim();
 
-    if (body.address)
+    if (body.address !== undefined)
       user.public_details.address = body.address.trim();
 
     if (body.age !== undefined)
       user.public_details.age = body.age;
 
-    if (body.gender)
+    if (body.gender !== undefined)
       user.public_details.gender = body.gender;
 
     await user.save();

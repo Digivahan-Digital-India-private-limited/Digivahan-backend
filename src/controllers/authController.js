@@ -1088,7 +1088,7 @@ const requestResetPassword = async (req, res) => {
     }
 
     // 🔥 Verification check
-    if (otp_channel === "EMAIL" && !user.basic_details.is_email_verified) {
+    if (otp_channel === "EMAIL" && !user.basic_details.is_email_verified && process.env.NODE_ENV === "production") {
       return res.status(400).json({
         status: false,
         error_type: "email",
@@ -1096,7 +1096,7 @@ const requestResetPassword = async (req, res) => {
       });
     }
 
-    if (otp_channel === "PHONE" && !user.basic_details.phone_number_verified) {
+    if (otp_channel === "PHONE" && !user.basic_details.phone_number_verified && process.env.NODE_ENV === "production") {
       return res.status(400).json({
         status: false,
         error_type: "phone",

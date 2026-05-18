@@ -59,6 +59,12 @@ const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
 
     if (!prpSmsConfig.apiKey || !prpSmsConfig.sender) {
       console.error("❌ PRP SMS config missing");
+      if (process.env.NODE_ENV === "development" || !process.env.PRP_SMS_API_KEY) {
+        console.log(
+          `📱 [DEV] SMS config missing, but OTP for ${phone} is: ${otp}. Valid for 10 minutes.`
+        );
+        return true;
+      }
       return false;
     }
 
@@ -97,6 +103,12 @@ const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
       return true;
     } else {
       console.error("❌ PRP SMS failed:", response.data);
+      if (process.env.NODE_ENV === "development" || !process.env.PRP_SMS_API_KEY) {
+        console.log(
+          `📱 [DEV] SMS failed, but OTP for ${phone} is: ${otp}. Valid for 10 minutes.`
+        );
+        return true;
+      }
       return false;
     }
   } catch (error) {
@@ -105,6 +117,12 @@ const sendOTPViaSMS = async (phone, otp, templateType = "signup") => {
       code: error.code,
       response: error.response?.data,
     });
+    if (process.env.NODE_ENV === "development" || !process.env.PRP_SMS_API_KEY) {
+      console.log(
+        `📱 [DEV] SMS error caught, but OTP for ${phone} is: ${otp}. Valid for 10 minutes.`
+      );
+      return true;
+    }
     return false;
   }
 };

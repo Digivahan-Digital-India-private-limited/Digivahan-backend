@@ -53,7 +53,7 @@ const { transporter } = require("../utils/sendEmail.js");
 
 const replyToQuery = async (req, res) => {
   try {
-    const { email, replyText, customerName } = req.body;
+    const { email, replyText, customerName, queryId } = req.body;
 
     if (!email || !replyText) {
       return res.status(400).json({
@@ -91,6 +91,18 @@ const replyToQuery = async (req, res) => {
     }
 
     await transporter.sendMail(mailOptions);
+
+    // Mark the query as Completed
+    if (queryId) {
+      await UserQuery.findByIdAndUpdate(queryId, { status: "Completed" });
+    } else {
+      // Fallback: update the most recent Pending query for this email
+      const pendingQuery = await UserQuery.findOne({ email, status: "Pending" }).sort({ createdAt: -1 });
+      if (pendingQuery) {
+        pendingQuery.status = "Completed";
+        await pendingQuery.save();
+      }
+    }
 
     return res.status(200).json({
       success: true,

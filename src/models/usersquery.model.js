@@ -35,6 +35,11 @@ const userQuerySchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    status: {
+      type: String,
+      enum: ["Pending", "Completed"],
+      default: "Pending",
+    },
   },
   {
     timestamps: true,

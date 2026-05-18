@@ -2,9 +2,6 @@ const User = require("../models/User");
 const cloudinary = require("cloudinary").v2;
 const { deleteFromCloudinary } = require("../middleware/cloudinary");
 const mongoose = require("mongoose");
-const redis = require("../utils/redis.js");
-const { generateOTP, sendOTP } = require("../utils/otpUtils");
-
 
 const UpdateUserDetails = async (req, res) => {
   try {
@@ -123,13 +120,9 @@ const UpdateUserDetails = async (req, res) => {
       }
     }
 
-    let phoneUpdated = false;
     if (body.phone_number !== undefined) {
       const phone = body.phone_number.trim();
-      const currentPhone = user.basic_details?.phone_number || "";
-
-      if (phone && phone !== currentPhone) {
-        // Phone number is being changed!
+      if (phone) {
         const existingPhoneUser = await User.findOne({
           "basic_details.phone_number": phone,
           _id: { $ne: user._id }
@@ -140,73 +133,7 @@ const UpdateUserDetails = async (req, res) => {
             message: "Phone number is already in use by another account",
           });
         }
-
-        // Check if OTP was submitted
-        if (!body.phone_otp) {
-          // Send 4-digit OTP to current (old) number!
-          const otpCode = generateOTP(4);
-          await redis.set(
-            `phone-update-otp:${user._id}`,
-            JSON.stringify({ new_phone_number: phone, otp: otpCode }),
-            "EX",
-            600
-          );
-
-          const oldPhone = currentPhone;
-          if (oldPhone) {
-            const otpSent = await sendOTP(oldPhone, otpCode, "PHONE", "verify");
-            if (!otpSent) {
-              return res.status(500).json({
-                status: false,
-                message: "Failed to send verification code. Please try again.",
-              });
-            }
-          } else {
-            // If they don't have an old phone number, send to the new phone number
-            const otpSent = await sendOTP(phone, otpCode, "PHONE", "verify");
-            if (!otpSent) {
-              return res.status(500).json({
-                status: false,
-                message: "Failed to send verification code. Please try again.",
-              });
-            }
-          }
-
-          return res.status(200).json({
-            status: true,
-            otp_required: true,
-            message: "Verification code has been sent to your current phone number.",
-          });
-        } else {
-          // Verify OTP
-          const cachedData = await redis.get(`phone-update-otp:${user._id}`);
-          if (!cachedData) {
-            return res.status(400).json({
-              status: false,
-              message: "Verification code has expired or is invalid. Please try again.",
-            });
-          }
-
-          const { new_phone_number, otp: expectedOtp } = JSON.parse(cachedData);
-          if (String(body.phone_otp) !== String(expectedOtp)) {
-            return res.status(400).json({
-              status: false,
-              message: "Incorrect verification code. Please try again.",
-            });
-          }
-
-          if (phone !== new_phone_number) {
-            return res.status(400).json({
-              status: false,
-              message: "Invalid phone number update target.",
-            });
-          }
-
-          // OTP verified successfully!
-          user.basic_details.phone_number = phone;
-          phoneUpdated = true;
-          await redis.del(`phone-update-otp:${user._id}`);
-        }
+        user.basic_details.phone_number = phone;
       }
     }
 
@@ -267,11 +194,11 @@ const UpdateUserDetails = async (req, res) => {
 
     // 🔥 If upload happened but save failed → rollback new images
     if (newProfileImage?.public_id) {
-      await deleteFromCloudinary(newProfileImage.public_id).catch(() => {});
+      await deleteFromCloudinary(newProfileImage.public_id).catch(() => { });
     }
 
     if (newPublicImage?.public_id) {
-      await deleteFromCloudinary(newPublicImage.public_id).catch(() => {});
+      await deleteFromCloudinary(newPublicImage.public_id).catch(() => { });
     }
 
     return res.status(500).json({

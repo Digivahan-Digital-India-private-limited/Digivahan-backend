@@ -17,7 +17,7 @@ const upload = multer({ storage });
 
 // Cloudinary Storage (PDF Only)
 const pdfStorage = new CloudinaryStorage({
-  cloudinary,
+  cloudinary: require("cloudinary"),
   params: async () => ({
     folder: "vehicle_docs",
     resource_type: "image", // 🔥 change

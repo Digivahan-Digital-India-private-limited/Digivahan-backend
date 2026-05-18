@@ -35,7 +35,14 @@ const UpdateUserDetails = async (req, res) => {
     // 🔥 Upload Profile Pic (if exists)
     // ==============================
     let base64Avatar = body.avatar || body.profile_pic;
-    if (base64Avatar && base64Avatar.startsWith("data:image/")) {
+    if (body.remove_avatar === true || body.remove_avatar === "true" || base64Avatar === "remove") {
+      if (oldProfilePublicId) {
+        deleteFromCloudinary(oldProfilePublicId).catch(console.error);
+        oldProfilePublicId = null; // Prevent double delete
+      }
+      user.basic_details.profile_pic = "";
+      user.basic_details.public_id = "";
+    } else if (base64Avatar && base64Avatar.startsWith("data:image/")) {
       newProfileImage = await cloudinary.uploader.upload(base64Avatar, {
         folder: "user/profile",
         resource_type: "image",

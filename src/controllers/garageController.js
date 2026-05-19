@@ -303,15 +303,52 @@ const addVehicleInUsergarage = async (req, res) => {
     // 2️⃣ Find vehicle in master collection (INDEXED)
     const matchedVehicle = await VehicleInfoData.findOne({
       vehicle_id: vehicle_number,
-      "api_data.custom_vehicle_info.owner_name": {
-        $regex: new RegExp(`^${owner_name}$`, "i"),
-      },
     }).lean();
 
     if (!matchedVehicle) {
       return res.status(404).json({
         status: false,
-        message: "Vehicle not found or owner name mismatch",
+        message: "Vehicle not found in RTO registry",
+      });
+    }
+
+    const dbOwnerName = matchedVehicle.api_data?.custom_vehicle_info?.owner_name || "";
+    
+    // Flexible Name Matching Logic supporting legacy masked data
+    const cleanInput = owner_name.trim().toUpperCase().replace(/\s+/g, " ");
+    const cleanDb = dbOwnerName.trim().toUpperCase().replace(/\s+/g, " ");
+
+    const maskedInput = maskName(cleanInput);
+    const maskedDb = maskName(cleanDb);
+
+    let isMatch = false;
+
+    if (cleanInput === cleanDb) {
+      isMatch = true;
+    } else if (maskedInput === cleanDb) {
+      isMatch = true;
+    } else if (cleanInput === maskedDb) {
+      isMatch = true;
+    } else if (maskedInput === maskedDb) {
+      isMatch = true;
+    } else {
+      // Character-by-character wildcard match (where * can match any character)
+      if (cleanInput.length === cleanDb.length) {
+        let charMatch = true;
+        for (let i = 0; i < cleanInput.length; i++) {
+          if (cleanInput[i] !== "*" && cleanDb[i] !== "*" && cleanInput[i] !== cleanDb[i]) {
+            charMatch = false;
+            break;
+          }
+        }
+        if (charMatch) isMatch = true;
+      }
+    }
+
+    if (!isMatch) {
+      return res.status(404).json({
+        status: false,
+        message: "Vehicle owner name verification failed",
       });
     }
 

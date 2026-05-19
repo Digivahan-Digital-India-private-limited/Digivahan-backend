@@ -627,7 +627,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
        (uses indexed field → very fast)
     =============================== */
 
-    const qrData = await QRAssignment.findOne(
+    let qrData = await QRAssignment.findOne(
       { qr_id },
       {
         assigned_to: 1,
@@ -637,11 +637,24 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
     ).lean();
 
     if (!qrData) {
-      return res.status(404).json({
-        success: false,
-        error_type: "INVALID_QR",
-        message: "Invalid QR code",
-      });
+      // Fallback: If not found in QRAssignment, check if qr_id is a vehicle plate/number
+      const userWithVehicle = await User.findOne({
+        "garage.vehicles.vehicle_id": { $regex: new RegExp(`^${qr_id}$`, "i") },
+      }).lean();
+
+      if (userWithVehicle) {
+        qrData = {
+          assigned_to: userWithVehicle._id,
+          product_type: "vehicle",
+          vehicle_id: qr_id.toUpperCase(),
+        };
+      } else {
+        return res.status(404).json({
+          success: false,
+          error_type: "INVALID_QR",
+          message: "Invalid QR code",
+        });
+      }
     }
 
     /* ===============================

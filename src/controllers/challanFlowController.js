@@ -487,10 +487,146 @@ const refreshChallans = async (req, res) => {
   }
 };
 
+const directSearchChallans = async (req, res) => {
+  try {
+    const { rcNumber } = req.body;
+    if (!rcNumber) {
+      return res.status(400).json({ status: false, message: "RC Number is required" });
+    }
+
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ status: false, message: "Unauthorized" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const cleanRc = rcNumber.toUpperCase().trim();
+
+    // 1. Fetch from Cache or API
+    let realChallans = [];
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const cachedRecord = await RTOChallanCache.findOne({
+      rcNumber: cleanRc,
+      updatedAt: { $gte: oneDayAgo }
+    });
+
+    if (cachedRecord) {
+      console.log(`[ChallanFlow] Using cached challans from RTOChallanCache for ${cleanRc}`);
+      realChallans = cachedRecord.challans;
+    } else {
+      console.log(`[ChallanFlow] Fetching real challans for ${cleanRc} from API`);
+      const fetchedChallans = await fetchRealChallans(cleanRc);
+      if (fetchedChallans && fetchedChallans.length > 0) {
+        realChallans = fetchedChallans.map(challan => ({
+          challanNumber: challan.challanNumber || challan.challan_number,
+          offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
+          amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
+          transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
+          location: challan.challanPlace || challan.location || "Unknown",
+          createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
+          receiptLink: challan.receipt_url || challan.receiptLink || ""
+        }));
+
+        await RTOChallanCache.findOneAndUpdate(
+          { rcNumber: cleanRc },
+          { $set: { challans: realChallans } },
+          { upsert: true, new: true }
+        );
+      } else {
+        await RTOChallanCache.findOneAndUpdate(
+          { rcNumber: cleanRc },
+          { $set: { challans: [] } },
+          { upsert: true, new: true }
+        );
+      }
+    }
+
+    // Overwrite realChallans status with real-time webhook status
+    const webhookRecords = await ChallanWebhook.find({
+      rcNumber: cleanRc,
+      transactionStatus: { $ne: "SEARCHED" }
+    }).sort({ createdAt: -1 });
+
+    if (realChallans.length > 0 && webhookRecords.length > 0) {
+       realChallans = realChallans.map(challan => {
+          const wh = webhookRecords.find(r => r.challanNumber === challan.challanNumber);
+          if (wh) {
+             let overrideStatus = challan.transactionStatus;
+             const txStatus = wh.transactionStatus?.toLowerCase();
+             const ioStatus = wh.ioStatus?.toLowerCase();
+
+             if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
+                 overrideStatus = "PAID";
+             } else if (txStatus === 'captured') {
+                 overrideStatus = "UNDER_PROCESS";
+             } else if (txStatus === 'failed' && ioStatus === 'refund') {
+                 overrideStatus = "UNPAID";
+             } else if (txStatus === 'initiated') {
+                 overrideStatus = "UNPAID";
+             }
+             
+             return {
+                 ...challan,
+                 transactionStatus: overrideStatus,
+                 _webhookRecord: wh
+             };
+          }
+          return challan;
+       });
+    }
+
+    // Add SEARCHED record in webhook schema
+    const userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
+    if (!userHasSearchRecord) {
+      await ChallanWebhook.create({
+        userId: user._id,
+        rcNumber: cleanRc,
+        transactionStatus: "SEARCHED",
+      });
+    }
+
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    const userResponse = {
+      basic_details: {
+        profile_pic: user.basic_details.profile_pic,
+        first_name: user.basic_details.first_name,
+        last_name: user.basic_details.last_name,
+        phone_number: user.basic_details.phone_number,
+        phone_number_verified: user.basic_details.phone_number_verified,
+        is_phone_number_primary: user.basic_details.is_phone_number_primary,
+        email: user.basic_details.email,
+        is_email_verified: user.basic_details.is_email_verified,
+        is_email_primary: user.basic_details.is_email_primary,
+        profile_completion_percent: user.basic_details.profile_completion_percent,
+      },
+      public_details: user.public_details,
+      is_tracking_on: user.is_tracking_on,
+      token: token,
+      challans: realChallans,
+    };
+
+    return res.status(200).json({
+      status: true,
+      message: "Challans fetched successfully",
+      user: userResponse
+    });
+  } catch (error) {
+    console.error("Direct search error:", error);
+    return res.status(500).json({ status: false, message: "Failed to fetch challans" });
+  }
+};
+
 module.exports = {
   initChallanFlow,
   verifyChallanOtp,
   getChallanHistory,
   getChallanPaymentUrl,
   refreshChallans,
+  directSearchChallans,
 };

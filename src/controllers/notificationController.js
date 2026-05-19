@@ -134,7 +134,7 @@ const sendNotification = async (req, res) => {
     await sendOneSignalNotification({
       externalUserId: receiver_id.toString(),
       title: notification_title,
-      message,
+      message: vehicle_id ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})` : message,
       data: {
         sender_id,
         notification_type,

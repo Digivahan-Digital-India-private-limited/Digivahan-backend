@@ -1172,9 +1172,7 @@ const verifyResetOtp = async (req, res) => {
         ? { "basic_details.email": identifier }
         : { "basic_details.phone_number": identifier };
 
-    const user = await User.findOne(query).select(
-      "basic_details old_passwords is_active is_tracking_on is_notification_sound_on public_details",
-    );
+    const user = await User.findOne(query).select("+basic_details.password");
 
     if (!user) {
       return res.status(404).json({
@@ -1219,6 +1217,14 @@ const verifyResetOtp = async (req, res) => {
         error_type: "password",
         message: ERROR_MESSAGES.SAME_PASSWORD,
       });
+    }
+
+    if (!user.old_passwords) {
+      user.old_passwords = {
+        previous_password1: "",
+        previous_password2: "",
+        previous_password3: "",
+      };
     }
 
     // 🔥 Check against previous passwords (parallel)

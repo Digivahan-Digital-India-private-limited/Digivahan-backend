@@ -675,6 +675,8 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
 
     const user = await User.findById(qrData.assigned_to, {
       "basic_details.phone_number": 1,
+      "basic_details.first_name": 1,
+      "basic_details.last_name": 1,
       "public_details.nick_name": 1,
       "public_details.public_pic": 1,
       "public_details.age": 1,
@@ -704,7 +706,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
 
         phone_number: user.basic_details?.phone_number || "",
 
-        full_name: user.public_details?.nick_name || user.basic_details?.first_name || "",                                                                                    
+        full_name: `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || user.public_details?.nick_name || "",
 
         profile_pic: user.public_details?.public_pic || "",
 

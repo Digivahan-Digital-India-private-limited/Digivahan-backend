@@ -53,7 +53,7 @@ const { transporter } = require("../utils/sendEmail.js");
 
 const replyToQuery = async (req, res) => {
   try {
-    const { email, replyText, customerName, queryId } = req.body;
+    const { email, replyText, customerName, queryId, customerQuestion } = req.body;
 
     if (!email || !replyText) {
       return res.status(400).json({
@@ -62,16 +62,34 @@ const replyToQuery = async (req, res) => {
       });
     }
 
+    let originalQueryText = customerQuestion || "";
+
+    // If customerQuestion is not provided in body, try to fetch it from DB
+    if (!originalQueryText && queryId) {
+      const userQuery = await UserQuery.findById(queryId);
+      if (userQuery) {
+        originalQueryText = userQuery.query;
+      }
+    }
+
     const mailOptions = {
       from: `"Hasan" <${process.env.FROM_EMAIL}>`,
       to: email,
       subject: "Re: Your Query at Digivahan",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-          <h2 style="color: #2196F3;">DigiVahan Support</h2>
+          <h2 style="color: #2196F3; margin-bottom: 20px;">DigiVahan Support</h2>
+          
+          ${originalQueryText ? `
+          <div style="background-color: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
+            <strong style="color: #555; display: block; margin-bottom: 5px; font-size: 13px;">YOUR QUERY:</strong>
+            <p style="margin: 0; color: #666; font-style: italic; white-space: pre-wrap; font-size: 14px;">"${originalQueryText}"</p>
+          </div>
+          ` : ''}
+
           <p>Hi ${customerName || "Customer"},</p>
           <p>Thank you for reaching out to us. Here is the response to your query:</p>
-          <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0; white-space: pre-wrap;">
+          <div style="background-color: #e3f2fd; padding: 15px; border-left: 4px solid #2196F3; margin: 20px 0; white-space: pre-wrap; border-radius: 4px;">
             ${replyText}
           </div>
           <p>If you have any further questions, feel free to reply to this email or contact our support team.</p>

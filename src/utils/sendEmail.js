@@ -1,15 +1,13 @@
 const nodemailer = require("nodemailer");
 
 // Configure email transport
-// Configure AWS SES SMTP transport
 const transporter = nodemailer.createTransport({
-  // host: process.env.SES_SMTP_HOST || "email-smtp.ap-south-1.amazonaws.com", // Region-specific
-  // port: process.env.SES_SMTP_PORT || 587,
-  // secure: false, // use STARTTLS
-  service: "gmail",
+  host: process.env.SES_SMTP_HOST || "smtp.office365.com",
+  port: parseInt(process.env.SES_SMTP_PORT || "587", 10),
+  secure: false,
   auth: {
-    user: process.env.SES_SMTP_USER, // From SES SMTP credentials
-    pass: process.env.SES_SMTP_PASS, // From SES SMTP credentials
+    user: process.env.SES_SMTP_USER,
+    pass: process.env.SES_SMTP_PASS,
   },
 });
 

@@ -15,7 +15,7 @@ const getMailOptions = (templateType, email, otp) => {
   switch (templateType) {
     case "signup":
       return {
-        from: process.env.FROM_EMAIL,
+        from: `"Hasan" <${process.env.FROM_EMAIL}>`,
         to: email,
         subject: "Registration - Verify Your Account",
         html: `
@@ -49,7 +49,7 @@ const getMailOptions = (templateType, email, otp) => {
       };
     case "login":
       return {
-        from: process.env.FROM_EMAIL,
+        from: `"Hasan" <${process.env.FROM_EMAIL}>`,
         to: email,
         subject: "Signin - Verify Your Account",
         html: `
@@ -83,7 +83,7 @@ const getMailOptions = (templateType, email, otp) => {
       };
     case "reset":
       return {
-        from: process.env.FROM_EMAIL,
+        from: `"Hasan" <${process.env.FROM_EMAIL}>`,
         to: email,
         subject: "Reset Your Password",
         html: `
@@ -117,7 +117,7 @@ const getMailOptions = (templateType, email, otp) => {
       };
     case "verify":
       return {
-        from: process.env.FROM_EMAIL,
+        from: `"Hasan" <${process.env.FROM_EMAIL}>`,
         to: email,
         subject: "Verify Your Contact Information",
         html: `
@@ -151,7 +151,7 @@ const getMailOptions = (templateType, email, otp) => {
       };
     case "primary":
       return {
-        from: process.env.FROM_EMAIL,
+        from: `"Hasan" <${process.env.FROM_EMAIL}>`,
         to: email,
         subject: "Set Primary Contact - Verify Your OTP",
         html: `

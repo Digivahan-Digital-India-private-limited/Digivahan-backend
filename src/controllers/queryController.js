@@ -63,7 +63,7 @@ const replyToQuery = async (req, res) => {
     }
 
     const mailOptions = {
-      from: process.env.FROM_EMAIL,
+      from: `"Hasan" <${process.env.FROM_EMAIL}>`,
       to: email,
       subject: "Re: Your Query at Digivahan",
       html: `

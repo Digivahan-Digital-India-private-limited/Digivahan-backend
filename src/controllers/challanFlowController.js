@@ -5,12 +5,14 @@ const { ERROR_MESSAGES } = require("../../constants");
 const { generateAuthToken } = require("../middleware/auth.js");
 const ChallanWebhook = require("../models/ChallanWebhook");
 const RTOChallanCache = require("../models/RTOChallanCache");
+const RTOApiLog = require("../models/RTOApiLog");
 const axios = require("axios");
+
 
 /**
  * Fetch real challans from RTO API (Kashidigital Challan Plus)
  */
-const fetchRealChallans = async (rcNumber) => {
+const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_search") => {
   try {
     const url = process.env.RTO_CHALLAN_PLUS_URL || "https://core.kashidigitalapis.com/v1/challan-plus";
     console.log(`[ChallanFlow] Fetching challans for ${rcNumber} via ${url}`);
@@ -31,6 +33,8 @@ const fetchRealChallans = async (rcNumber) => {
 
     // The API returns { statusCode: 200, data: [...] }
     if (response.data && (response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.code === 200)) {
+      // ✅ Log successful Challan Plus API call
+      RTOApiLog.create({ userId, vehicleNumber: rcNumber, apiType: "challan_plus_api", trigger, success: true }).catch(() => {});
       return response.data.data || [];
     }
 
@@ -214,7 +218,7 @@ const verifyChallanOtp = async (req, res) => {
           realChallans = cachedRecord.challans;
         } else {
           console.log(`[ChallanFlow] Fetching real challans for ${flowData.rcNumber} from API`);
-          const fetchedChallans = await fetchRealChallans(flowData.rcNumber);
+          const fetchedChallans = await fetchRealChallans(flowData.rcNumber, user._id, "challan_search");
 
           if (fetchedChallans && fetchedChallans.length > 0) {
             const mappedChallans = fetchedChallans.map(challan => ({
@@ -408,12 +412,14 @@ const getChallanPaymentUrl = async (req, res) => {
 const refreshChallans = async (req, res) => {
   try {
     const { rcNumber } = req.body;
+    const userId = req.user?.userId || null;
+
     if (!rcNumber) {
       return res.status(400).json({ status: false, message: "RC Number is required" });
     }
 
     console.log(`[ChallanFlow] Refreshing real challans for ${rcNumber} from API`);
-    const fetchedChallans = await fetchRealChallans(rcNumber);
+    const fetchedChallans = await fetchRealChallans(rcNumber, userId, "challan_refresh");
     
     let realChallans = [];
     if (fetchedChallans && fetchedChallans.length > 0) {
@@ -519,7 +525,7 @@ const directSearchChallans = async (req, res) => {
       realChallans = cachedRecord.challans;
     } else {
       console.log(`[ChallanFlow] Fetching real challans for ${cleanRc} from API`);
-      const fetchedChallans = await fetchRealChallans(cleanRc);
+      const fetchedChallans = await fetchRealChallans(cleanRc, user._id, "challan_search");
       if (fetchedChallans && fetchedChallans.length > 0) {
         realChallans = fetchedChallans.map(challan => ({
           challanNumber: challan.challanNumber || challan.challan_number,

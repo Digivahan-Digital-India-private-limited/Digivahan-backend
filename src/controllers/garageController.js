@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const QRAssignment = require("../models/QRAssignment");
 const VehicleInfoData = require("../models/vehicleInfoSchema");
+const RTOApiLog = require("../models/RTOApiLog");
 const axios = require("axios");
 const redis = require("../utils/redis");
 const { SUCCESS_MESSAGES, ERROR_MESSAGES } = require("../../constants");
@@ -18,6 +19,9 @@ const {
 const addVehicle = async (req, res) => {
   try {
     const { vehicle_number } = req.body;
+    // userId from auth middleware (may be undefined for public calls)
+    const userId = req.user?.userId || null;
+
     if (!vehicle_number) {
       return res.status(400).json({
         status: false,
@@ -41,15 +45,15 @@ const addVehicle = async (req, res) => {
       });
     }
 
-    // ⛔ External API only if not cached
+    // ⛔ External API only if not cached — LOG every real call
     let rtoData;
     let dataSource = "rto_api";
 
     try {
-      rtoData = await fetchVehicleDataFromRTO(vehicle_number);
+      rtoData = await fetchVehicleDataFromRTO(vehicle_number, userId, "add_vehicle");
     } catch (error) {
       if (error.statusCode === 500) {
-        rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicle_number);
+        rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicle_number, userId, "add_vehicle");
         dataSource = "rto_premium_api";
       } else {
         throw error;
@@ -180,7 +184,7 @@ const maskVehicleResponse = (data) => {
  * Fetch vehicle data from RTO API
  * Makes actual API call to RTO service
  */
-const fetchVehicleDataFromRTO = async (vehicleNumber) => {
+const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
   console.log("➡️ Calling NORMAL RTO API");
 
   try {
@@ -197,6 +201,8 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
     );
 
     if (response.status === 200 && response.data.code === 200) {
+      // ✅ Log successful API call
+      RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_api", trigger, success: true }).catch(() => {});
       return response.data.result;
     }
 
@@ -211,7 +217,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber) => {
   }
 };
 
-const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
+const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
   console.log("➡️ Calling PREMIUM RTO API for:", vehicleNumber);
 
   let response;
@@ -228,7 +234,6 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
       },
     );
   } catch (axiosError) {
-    // ✅ Axios-level error: network failure, timeout, HTTP error response
     console.error("❌ PREMIUM RTO Axios error:", {
       code: axiosError.code,
       status: axiosError.response?.status,
@@ -257,7 +262,6 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
     throw err;
   }
 
-  // ✅ API responded — log and check the payload
   console.log("⬅️ PREMIUM RTO API response:", {
     httpStatus: response.status,
     statusCode: response.data?.statusCode,
@@ -266,10 +270,11 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber) => {
   });
 
   if (response.status === 200 && response.data.statusCode === 200) {
+    // ✅ Log successful premium API call
+    RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_premium_api", trigger, success: true }).catch(() => {});
     return response.data.result;
   }
 
-  // API returned a non-200 business code
   const err = new Error(response.data?.message || "Premium RTO API failed");
   err.statusCode = response.data?.statusCode || 500;
   throw err;
@@ -659,6 +664,7 @@ const removeVehicle = async (req, res) => {
 const RefreshVehicleData = async (req, res) => {
   try {
     const { vehicle_id } = req.body;
+    const userId = req.user?.userId || null;
 
     if (!vehicle_id) {
       return res.status(400).json({
@@ -677,21 +683,9 @@ const RefreshVehicleData = async (req, res) => {
       });
     }
 
-    const lastUpdated = new Date(vehicleDoc.api_data?.last_updated);
-    const now = new Date();
-    const diffInHours = (now - lastUpdated) / (1000 * 60 * 60);
+    // 2️⃣ Fetch fresh data from RTO — LOG this refresh call
+    const rtoData = await fetchVehicleDataFromRTO(vehicle_id, userId, "refresh");
 
-    // 2️⃣ If data is already fresh (<24h)
-    if (diffInHours < 24) {
-      return res.status(200).json({
-        status: true,
-        message: "Vehicle data already up to date",
-        data: vehicleDoc.api_data,
-      });
-    }
-
-    // 3️⃣ Fetch fresh data from RTO
-    const rtoData = await fetchVehicleDataFromRTO(vehicle_id);
 
     const transformedData = transformRTODataToVehicleSchema(
       rtoData,

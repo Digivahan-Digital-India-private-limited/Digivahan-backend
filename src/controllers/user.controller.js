@@ -1,4 +1,97 @@
 const User = require("../models/User");
+const QRAssignment = require("../models/QRAssignment");
+const ChallanWebhook = require("../models/ChallanWebhook");
+const RTOApiLog = require("../models/RTOApiLog");
+
+exports.getAllUsers = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || "";
+    const skip = (page - 1) * limit;
+
+    let matchStage = {};
+
+    if (search.trim()) {
+      matchStage = {
+        $or: [
+          { "basic_details.first_name": { $regex: search, $options: "i" } },
+          { "basic_details.last_name": { $regex: search, $options: "i" } },
+          { "basic_details.phone_number": { $regex: search, $options: "i" } },
+          { "basic_details.email": { $regex: search, $options: "i" } },
+          { "public_details.nick_name": { $regex: search, $options: "i" } },
+        ],
+      };
+    }
+
+    const [result] = await User.aggregate([
+      { $match: matchStage },
+      { $sort: { createdAt: -1 } },
+      {
+        $facet: {
+          users: [
+            { $skip: skip },
+            { $limit: limit },
+            // Remove password fields
+            {
+              $project: {
+                "basic_details.password": 0,
+                old_passwords: 0,
+              },
+            },
+            // Lookup active QR count from QRAssignment
+            {
+              $lookup: {
+                from: "qrassignments",
+                let: { userId: "$_id" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$assigned_to", "$$userId"] },
+                      qr_status: "assigned",
+                      status: "active",
+                    },
+                  },
+                  { $count: "count" },
+                ],
+                as: "_activeQrLookup",
+              },
+            },
+            // Flatten count into a single field
+            {
+              $addFields: {
+                active_qr_count: {
+                  $ifNull: [{ $arrayElemAt: ["$_activeQrLookup.count", 0] }, 0],
+                },
+              },
+            },
+            { $project: { _activeQrLookup: 0 } },
+          ],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ]);
+
+    const users = result?.users || [];
+    const totalCount = result?.totalCount?.[0]?.count || 0;
+
+    return res.status(200).json({
+      success: true,
+      users,
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
 
 exports.checkUserByPhone = async (req, res) => {
     try {
@@ -52,3 +145,278 @@ exports.checkUserByPhone = async (req, res) => {
   
     }
   };
+
+/* ─────────────────────────────────────────────────────────
+   GET /api/user/analytics/users
+   Returns all users who have ever hit the RTO (Kashi) API,
+   grouped with hit count, sorted by most hits first.
+───────────────────────────────────────────────────────── */
+exports.getAnalyticsUsers = async (req, res) => {
+  try {
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = (req.query.search || "").trim();
+    const skip  = (page - 1) * limit;
+
+    // Aggregate: group ChallanWebhook SEARCHED records by userId
+    const pipeline = [
+      {
+        $match: {
+          userId: { $exists: true, $ne: null },
+          transactionStatus: "SEARCHED",
+        },
+      },
+      {
+        $group: {
+          _id: "$userId",
+          hitCount:   { $sum: 1 },
+          lastHitAt:  { $max: "$createdAt" },
+          firstHitAt: { $min: "$createdAt" },
+          vehicleNumbers: { $addToSet: "$rcNumber" },
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          hitCount:       1,
+          lastHitAt:      1,
+          firstHitAt:     1,
+          vehicleNumbers: 1,
+          "user._id":                              1,
+          "user.basic_details.first_name":         1,
+          "user.basic_details.last_name":          1,
+          "user.basic_details.phone_number":       1,
+          "user.basic_details.email":              1,
+          "user.basic_details.profile_pic":        1,
+          "user.public_details.nick_name":         1,
+          "user.public_details.public_pic":        1,
+        },
+      },
+      { $sort: { hitCount: -1, lastHitAt: -1 } },
+    ];
+
+    // Apply search filter after lookup (on user fields)
+    if (search) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { "user.basic_details.first_name":   { $regex: search, $options: "i" } },
+            { "user.basic_details.last_name":    { $regex: search, $options: "i" } },
+            { "user.basic_details.phone_number": { $regex: search, $options: "i" } },
+            { "user.basic_details.email":        { $regex: search, $options: "i" } },
+            { "user.public_details.nick_name":   { $regex: search, $options: "i" } },
+            { vehicleNumbers:                    { $regex: search, $options: "i" } },
+          ],
+        },
+      });
+    }
+
+    // Count total then paginate
+    const countPipeline = [...pipeline, { $count: "total" }];
+    pipeline.push({ $skip: skip }, { $limit: limit });
+
+    const [rows, countResult] = await Promise.all([
+      ChallanWebhook.aggregate(pipeline),
+      ChallanWebhook.aggregate(countPipeline),
+    ]);
+
+    const total = countResult[0]?.total || 0;
+
+    return res.status(200).json({
+      success: true,
+      users: rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────
+   GET /api/user/analytics/user/:userId
+   Returns full RTO API call history for one user.
+───────────────────────────────────────────────────────── */
+exports.getAnalyticsUserDetail = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [user, challanHits, rtoApiHits] = await Promise.all([
+      User.findById(userId)
+        .select("basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email basic_details.profile_pic public_details.nick_name public_details.public_pic")
+        .lean(),
+      // Challan (Kashi) API hits
+      ChallanWebhook.find({ userId, transactionStatus: "SEARCHED" })
+        .sort({ createdAt: -1 })
+        .select("rcNumber createdAt")
+        .lean(),
+      // RTO Vehicle/Premium API hits
+      RTOApiLog.find({ userId })
+        .sort({ createdAt: -1 })
+        .select("vehicleNumber apiType trigger createdAt")
+        .lean(),
+    ]);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+      hits: challanHits,       // challan API hits (rcNumber + createdAt)
+      totalHits: challanHits.length,
+      rtoApiHits,              // vehicle detail API hits (vehicleNumber + apiType + trigger + createdAt)
+      totalRtoApiHits: rtoApiHits.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────
+   GET /api/user/analytics/rto-users
+   Returns users who have triggered RTO Vehicle / Premium API,
+   grouped by user with per-vehicle hit counts.
+───────────────────────────────────────────────────────── */
+exports.getAnalyticsRtoUsers = async (req, res) => {
+  try {
+    const page   = parseInt(req.query.page)  || 1;
+    const limit  = parseInt(req.query.limit) || 20;
+    const search = (req.query.search || "").trim();
+    const skip   = (page - 1) * limit;
+
+    const pipeline = [
+      {
+        $match: {
+          userId: { $exists: true, $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: "$userId",
+          hitCount:       { $sum: 1 },
+          lastHitAt:      { $max: "$createdAt" },
+          firstHitAt:     { $min: "$createdAt" },
+          vehicleNumbers: { $addToSet: "$vehicleNumber" },
+          normalHits:     { $sum: { $cond: [{ $eq: ["$apiType", "rto_api"] }, 1, 0] } },
+          premiumHits:    { $sum: { $cond: [{ $eq: ["$apiType", "rto_premium_api"] }, 1, 0] } },
+          challanHits:    { $sum: { $cond: [{ $eq: ["$apiType", "challan_plus_api"] }, 1, 0] } },
+          addHits:        { $sum: { $cond: [{ $eq: ["$trigger", "add_vehicle"] }, 1, 0] } },
+          refreshHits:    { $sum: { $cond: [{ $eq: ["$trigger", "refresh"] }, 1, 0] } },
+          cSearchHits:    { $sum: { $cond: [{ $eq: ["$trigger", "challan_search"] }, 1, 0] } },
+          cRefreshHits:   { $sum: { $cond: [{ $eq: ["$trigger", "challan_refresh"] }, 1, 0] } },
+
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $project: {
+          hitCount: 1, lastHitAt: 1, firstHitAt: 1, vehicleNumbers: 1,
+          normalHits: 1, premiumHits: 1, challanHits: 1, addHits: 1, refreshHits: 1, cSearchHits: 1, cRefreshHits: 1,
+          "user._id": 1,
+
+          "user.basic_details.first_name": 1,
+          "user.basic_details.last_name": 1,
+          "user.basic_details.phone_number": 1,
+          "user.basic_details.email": 1,
+          "user.basic_details.profile_pic": 1,
+          "user.public_details.nick_name": 1,
+          "user.public_details.public_pic": 1,
+        },
+      },
+      { $sort: { hitCount: -1, lastHitAt: -1 } },
+    ];
+
+    if (search) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { "user.basic_details.first_name":   { $regex: search, $options: "i" } },
+            { "user.basic_details.last_name":    { $regex: search, $options: "i" } },
+            { "user.basic_details.phone_number": { $regex: search, $options: "i" } },
+            { "user.basic_details.email":        { $regex: search, $options: "i" } },
+            { vehicleNumbers:                    { $regex: search, $options: "i" } },
+          ],
+        },
+      });
+    }
+
+    const countPipeline = [...pipeline, { $count: "total" }];
+    pipeline.push({ $skip: skip }, { $limit: limit });
+
+    const [rows, countResult] = await Promise.all([
+      RTOApiLog.aggregate(pipeline),
+      RTOApiLog.aggregate(countPipeline),
+    ]);
+
+    const total = countResult[0]?.total || 0;
+
+    return res.status(200).json({
+      success: true,
+      users: rows,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────
+   GET /api/user/analytics/rto-user/:userId
+   Full per-vehicle RTO API call history for one user.
+───────────────────────────────────────────────────────── */
+exports.getAnalyticsRtoUserDetail = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [user, hits] = await Promise.all([
+      User.findById(userId)
+        .select("basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email basic_details.profile_pic public_details.nick_name public_details.public_pic")
+        .lean(),
+      RTOApiLog.find({ userId })
+        .sort({ createdAt: -1 })
+        .select("vehicleNumber apiType trigger createdAt")
+        .lean(),
+    ]);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user,
+      hits,
+      totalHits: hits.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+

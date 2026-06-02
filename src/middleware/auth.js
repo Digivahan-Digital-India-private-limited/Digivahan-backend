@@ -181,8 +181,43 @@ const authenticateTokenForAdmin = async (req, res, next) => {
   }
 };
 
+/**
+ * Optional auth middleware — agar token ho toh userId set karo,
+ * nahi ho toh silently pass karo. Public routes ke liye.
+ * Analytics tracking ke liye use hota hai.
+ */
+const optionalAuthToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+      return next(); // No token — that's OK, continue as guest
+    }
+
+    // Check if token is revoked
+    const revoked = await RevokedToken.findOne({ token });
+    if (revoked) {
+      return next(); // Revoked token — treat as guest
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    const user = await User.findById(decoded.userId).select("_id is_active").lean();
+
+    if (user && user.is_active) {
+      req.user = decoded; // ✅ userId available for analytics logging
+    }
+
+    next();
+  } catch (error) {
+    // Invalid or expired token — silently continue as guest
+    next();
+  }
+};
+
 module.exports = {
   generateAuthToken,
   authenticateToken,
-  authenticateTokenForAdmin
+  authenticateTokenForAdmin,
+  optionalAuthToken,
 };

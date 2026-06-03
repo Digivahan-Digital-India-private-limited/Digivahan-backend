@@ -1,15 +1,73 @@
-const nodemailer = require("nodemailer");
+require("isomorphic-fetch");
+const { Client } = require("@microsoft/microsoft-graph-client");
+const { ClientSecretCredential } = require("@azure/identity");
 
-// Configure email transport
-const transporter = nodemailer.createTransport({
-  host: process.env.SES_SMTP_HOST || "smtp.office365.com",
-  port: parseInt(process.env.SES_SMTP_PORT || "587", 10),
-  secure: false,
-  auth: {
-    user: process.env.SES_SMTP_USER,
-    pass: process.env.SES_SMTP_PASS,
-  },
-});
+// Initialize Microsoft Graph client
+let client;
+try {
+  const credential = new ClientSecretCredential(
+    process.env.TENANT_ID,
+    process.env.MS_GRAPH_CLIENT_ID,
+    process.env.MS_GRAPH_CLIENT_SECRET
+  );
+
+  client = Client.initWithMiddleware({
+    authProvider: {
+      getAccessToken: async () => {
+        const token = await credential.getToken("https://graph.microsoft.com/.default");
+        return token.token;
+      },
+    },
+  });
+} catch (error) {
+  console.error("Error initializing Microsoft Graph Client:", error);
+}
+
+/**
+ * Sends an email using Microsoft Graph API
+ * @param {Object} mailOptions 
+ * @param {string} mailOptions.to
+ * @param {string} mailOptions.subject
+ * @param {string} mailOptions.html
+ * @param {Array} [mailOptions.attachments] - Array of { filename, content (buffer) }
+ */
+const sendGraphEmail = async (mailOptions) => {
+  if (!client) {
+    throw new Error("Microsoft Graph client is not initialized.");
+  }
+
+  const message = {
+    subject: mailOptions.subject,
+    body: {
+      contentType: "HTML",
+      content: mailOptions.html,
+    },
+    toRecipients: [
+      {
+        emailAddress: {
+          address: mailOptions.to,
+        },
+      },
+    ],
+  };
+
+  if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+    message.attachments = mailOptions.attachments.map(att => ({
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      name: att.filename,
+      contentBytes: att.content.toString("base64"),
+    }));
+  }
+
+  const mailbox = process.env.MAILBOX || "noreply@digivahan.in";
+  
+  await client.api(`/users/${mailbox}/sendMail`).post({
+    message: message,
+    saveToSentItems: "true"
+  });
+
+  return { messageId: "graph-api-sent" };
+};
 
 const getMailOptions = (templateType, email, otp) => {
   switch (templateType) {
@@ -194,6 +252,6 @@ const getMailOptions = (templateType, email, otp) => {
 };
 
 module.exports = {
-  transporter,
+  sendGraphEmail,
   getMailOptions,
 };

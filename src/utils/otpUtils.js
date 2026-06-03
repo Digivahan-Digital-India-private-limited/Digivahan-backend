@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const axios = require("axios");
 const { OTP_CONFIG, OTP_CHANNEL } = require("../../constants");
-const { getMailOptions, transporter } = require("./sendEmail");
+const { getMailOptions, sendGraphEmail } = require("./sendEmail");
 
 /**
  * Generate a random OTP code
@@ -152,7 +152,7 @@ const sendOTPViaEmail = async (email, otp, templateType = "signup") => {
       return false;
     }
 
-    const result = await transporter.sendMail(mailOptions);
+    const result = await sendGraphEmail(mailOptions);
 
     console.log(`📧 Email sent successfully to ${email}`);
     console.log(`Message ID: ${result.messageId}`);

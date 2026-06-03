@@ -49,7 +49,7 @@ const getAllQuery = async (req, res) => {
   }
 };
 
-const { transporter } = require("../utils/sendEmail.js");
+const { sendGraphEmail } = require("../utils/sendEmail.js");
 
 const replyToQuery = async (req, res) => {
   try {
@@ -108,7 +108,7 @@ const replyToQuery = async (req, res) => {
       ];
     }
 
-    await transporter.sendMail(mailOptions);
+    await sendGraphEmail(mailOptions);
 
     // Mark the query as Completed
     if (queryId) {

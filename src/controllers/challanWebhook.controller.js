@@ -1,4 +1,5 @@
 const ChallanWebhook = require("../models/ChallanWebhook");
+const User = require("../models/User");
 
 /**
  * POST /api/challan-webhook
@@ -62,20 +63,47 @@ const challanWebHook = async (req, res) => {
 
 /**
  * GET /api/challan-webhook/all
- * Returns all challan webhook records from DB, sorted by latest first.
+ * Returns all challan webhook records, enriched with user phone numbers.
+ * - Records with userId → populate phone from User model
+ * - External webhook records (no userId) → match by rcNumber from SEARCHED records
  */
 const getAllChallanWebhooks = async (req, res) => {
   try {
-    const records = await ChallanWebhook.find({}).sort({ createdAt: -1 });
+    // Fetch all records with userId populated (phone number)
+    const records = await ChallanWebhook.find({})
+      .sort({ createdAt: -1 })
+      .populate("userId", "basic_details.phone_number basic_details.first_name");
+
+    // Build a map of rcNumber → phone from records that DO have a userId (SEARCHED records)
+    const rcToPhone = {};
+    for (const rec of records) {
+      if (rec.userId && rec.rcNumber) {
+        const phone = rec.userId?.basic_details?.phone_number;
+        if (phone) rcToPhone[rec.rcNumber] = phone;
+      }
+    }
+
+    // Enrich records that are external webhooks (no userId) using the rcToPhone map
+    const enriched = records.map((rec) => {
+      const obj = rec.toObject();
+      // If userId is populated, extract phone directly
+      if (obj.userId && obj.userId.basic_details) {
+        obj.userPhone = obj.userId.basic_details.phone_number || null;
+        obj.userId = obj.userId._id; // collapse back to ID for clean response
+      } else {
+        // Try to find phone by rcNumber from SEARCHED records map
+        obj.userPhone = obj.rcNumber ? (rcToPhone[obj.rcNumber] || null) : null;
+      }
+      return obj;
+    });
 
     return res.status(200).json({
       success: true,
-      count: records.length,
-      data: records,
+      count: enriched.length,
+      data: enriched,
     });
   } catch (error) {
     console.error("[ChallanWebhook] GET Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Failed to fetch challan webhook data",

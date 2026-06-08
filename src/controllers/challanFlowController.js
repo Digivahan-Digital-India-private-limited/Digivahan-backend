@@ -65,12 +65,29 @@ const initChallanFlow = async (req, res) => {
     // Check if user exists
     const existingUser = await User.findOne({
       "basic_details.phone_number": normalizedPhone,
-    });
+    }).select("is_active account_status blocked_reason");
 
-    const otpCode = generateOTP(6); // 6-digit OTP for consistency with frontend
+    // 🔥 BLOCKED check — no OTP sent to blocked users
+    if (existingUser && existingUser.account_status === "BLOCKED") {
+      return res.status(403).json({
+        status: false,
+        error_type: "blocked",
+        message: "Your account has been blocked. You cannot use this service.",
+        reason: existingUser.blocked_reason || "Blocked by admin",
+      });
+    }
+
+    // 🔥 is_active check
+    if (existingUser && !existingUser.is_active) {
+      return res.status(401).json({
+        status: false,
+        message: "Your account is deactivated.",
+      });
+    }
+
+    const otpCode = generateOTP(6);
     const flowId = generateTempUserId();
 
-    // Save flow data in Redis (10 min)
     const flowData = {
       phone: normalizedPhone,
       rcNumber: rcNumber ? rcNumber.toUpperCase() : "",
@@ -80,9 +97,6 @@ const initChallanFlow = async (req, res) => {
 
     await redis.set(`challanFlow:${flowId}`, JSON.stringify(flowData), "EX", 600);
 
-    // Send OTP
-    // Using 'login' template for existing user and 'signup' for new, 
-    // but here we can just use 'login' or 'signup' consistently.
     const otpSent = await sendOTP(normalizedPhone, otpCode, "PHONE", existingUser ? "login" : "signup");
 
     if (!otpSent) {
@@ -184,6 +198,25 @@ const verifyChallanOtp = async (req, res) => {
         return res.status(404).json({
           status: false,
           message: "User account not found.",
+        });
+      }
+
+      // 🔥 BLOCKED check at verify stage (double-safety)
+      if (user.account_status === "BLOCKED") {
+        await redis.del(`challanFlow:${flow_id}`);
+        return res.status(403).json({
+          status: false,
+          error_type: "blocked",
+          message: "Your account has been blocked. You cannot use this service.",
+          reason: user.blocked_reason || "Blocked by admin",
+        });
+      }
+
+      if (!user.is_active) {
+        await redis.del(`challanFlow:${flow_id}`);
+        return res.status(401).json({
+          status: false,
+          message: "Your account is deactivated.",
         });
       }
 
@@ -418,6 +451,19 @@ const refreshChallans = async (req, res) => {
       return res.status(400).json({ status: false, message: "RC Number is required" });
     }
 
+    // 🔥 BLOCKED check
+    if (userId) {
+      const user = await User.findById(userId).select("account_status blocked_reason");
+      if (user && user.account_status === "BLOCKED") {
+        return res.status(403).json({
+          status: false,
+          error_type: "blocked",
+          message: "Your account has been blocked. You cannot use this service.",
+          reason: user.blocked_reason || "Blocked by admin",
+        });
+      }
+    }
+
     console.log(`[ChallanFlow] Refreshing real challans for ${rcNumber} from API`);
     const fetchedChallans = await fetchRealChallans(rcNumber, userId, "challan_refresh");
     
@@ -505,9 +551,21 @@ const directSearchChallans = async (req, res) => {
       return res.status(401).json({ status: false, message: "Unauthorized" });
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select(
+      "basic_details public_details is_tracking_on account_status blocked_reason is_active"
+    );
     if (!user) {
       return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    // 🔥 BLOCKED check — deny API access
+    if (user.account_status === "BLOCKED") {
+      return res.status(403).json({
+        status: false,
+        error_type: "blocked",
+        message: "Your account has been blocked. You cannot use this service.",
+        reason: user.blocked_reason || "Blocked by admin",
+      });
     }
 
     const cleanRc = rcNumber.toUpperCase().trim();

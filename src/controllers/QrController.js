@@ -24,7 +24,7 @@ const generateRandomId = (length = 10) => {
 
 const createQrScanner = async (req, res) => {
   try {
-    const { unit } = req.body;
+    const { unit, vehicle_type = "car" } = req.body;
 
     if (!unit || unit < 1 || unit > 100) {
       return res.status(400).json({
@@ -32,6 +32,9 @@ const createQrScanner = async (req, res) => {
         message: "Unit must be between 1 and 100",
       });
     }
+
+    const validTypes = ["car", "bike", "other"];
+    const vType = validTypes.includes(vehicle_type) ? vehicle_type : "car";
 
     // 🔥 get sequence numbers safely
     const qrNumbers = await QRAssignment.getNextQrSequence(unit);
@@ -55,6 +58,8 @@ const createQrScanner = async (req, res) => {
         qr_status: "unassigned",
 
         product_type: "vehicle",
+
+        vehicle_type: vType,
 
         status: "active",
 
@@ -861,12 +866,18 @@ const CreateSingleQRTemplate = async (req, res) => {
 const filterQrlist = async (req, res) => {
   try {
     const { qr_types } = req.params;
+    const { vehicle_type } = req.query;
 
     let filter = {};
 
     // agar admin specific status bhejta hai
     if (qr_types && qr_types !== "all") {
       filter.qr_status = qr_types;
+    }
+
+    // filter by vehicle_type if provided
+    if (vehicle_type && vehicle_type !== "all") {
+      filter.vehicle_type = vehicle_type;
     }
 
     // only active QR (recommended)
@@ -929,6 +940,63 @@ const QrBlockedByAdmin = async (req, res) => {
   }
 };
 
+const getQrStats = async (req, res) => {
+  try {
+    const stats = await QRAssignment.aggregate([
+      {
+        $group: {
+          _id: "$qr_status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Car vs Bike breakdown for unassigned
+    const vehicleBreakdown = await QRAssignment.aggregate([
+      { $match: { qr_status: "unassigned", status: "active" } },
+      {
+        $group: {
+          _id: "$vehicle_type",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const result = {
+      assigned: 0,
+      unassigned: 0,
+      blocked: 0,
+      total: 0,
+      unassigned_cars: 0,
+      unassigned_bikes: 0,
+    };
+
+    stats.forEach((s) => {
+      if (s._id === "assigned") result.assigned = s.count;
+      else if (s._id === "unassigned") result.unassigned = s.count;
+      else if (s._id === "blocked") result.blocked = s.count;
+    });
+
+    vehicleBreakdown.forEach((s) => {
+      if (s._id === "car") result.unassigned_cars = s.count;
+      else if (s._id === "bike") result.unassigned_bikes = s.count;
+    });
+
+    result.total = result.assigned + result.unassigned + result.blocked;
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("QR Stats Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch QR stats",
+    });
+  }
+};
+
 module.exports = {
   createQrScanner,
   createQrWithQrId,
@@ -941,4 +1009,5 @@ module.exports = {
   GetUserdetailsThrowTheQRId,
   filterQrlist,
   QrBlockedByAdmin,
+  getQrStats,
 };

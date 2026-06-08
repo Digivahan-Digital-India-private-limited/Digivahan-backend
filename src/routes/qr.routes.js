@@ -20,6 +20,7 @@ const {
   GetUserdetailsThrowTheQRId,
   filterQrlist,
   QrBlockedByAdmin,
+  getQrStats,
 } = require("../controllers/QrController.js");
 
 router.post(
@@ -83,5 +84,8 @@ router.post(
   [handleValidationErrors],
   QrBlockedByAdmin,
 );
+
+router.get("/admin/qr-stats", [handleValidationErrors], getQrStats);
+
 
 module.exports = router;

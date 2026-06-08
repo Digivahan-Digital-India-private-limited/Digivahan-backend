@@ -61,6 +61,8 @@ const sendGraphEmail = async (mailOptions) => {
 
   const mailbox = process.env.MAILBOX || "noreply@digivahan.in";
   
+  console.log(`[Email Service] Sending email via Graph API using mailbox: ${mailbox} to: ${mailOptions.to}`);
+  
   await client.api(`/users/${mailbox}/sendMail`).post({
     message: message,
     saveToSentItems: "true"

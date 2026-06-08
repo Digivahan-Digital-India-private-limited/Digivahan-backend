@@ -359,6 +359,16 @@ const signIn = async (req, res) => {
       });
     }
 
+    // 🔥 BLOCKED check — cannot login at all
+    if (user.account_status === "BLOCKED") {
+      return res.status(403).json({
+        status: false,
+        error_type: "blocked",
+        message: "Your account has been blocked by admin. You cannot login or use any service.",
+        reason: user.suspension_reason || "Blocked by admin",
+      });
+    }
+
     // 🔥 Suspension check
     if (user.suspended_until && new Date() < user.suspended_until) {
       return res.status(403).json({
@@ -814,7 +824,7 @@ const otpBasedLogin = async (req, res) => {
 
     // 🔥 Select only required fields (important for speed)
     const user = await User.findOne(query).select(
-      "is_active suspended_until suspension_reason",
+      "is_active account_status suspended_until suspension_reason blocked_reason",
     );
 
     if (!user) {
@@ -834,6 +844,16 @@ const otpBasedLogin = async (req, res) => {
         status: false,
         error_type: "other",
         message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
+      });
+    }
+
+    // 🔥 BLOCKED check — cannot login at all
+    if (user.account_status === "BLOCKED") {
+      return res.status(403).json({
+        status: false,
+        error_type: "blocked",
+        message: "Your account has been blocked by admin. You cannot login or use any service.",
+        reason: user.blocked_reason || "Blocked by admin",
       });
     }
 

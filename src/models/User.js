@@ -280,9 +280,11 @@ const userSchema = new mongoose.Schema(
     suspension_reason: { type: String, default: "" },
     account_status: {
       type: String,
-      enum: ["ACTIVE", "PENDING_DELETION", "DELETED", "SUSPENDED"],
+      enum: ["ACTIVE", "PENDING_DELETION", "DELETED", "SUSPENDED", "BLOCKED"],
       default: "ACTIVE",
     },
+    blocked_reason: { type: String, default: "" },
+    blocked_at: { type: Date, default: null },
     deletion_date: { type: Date, default: null },
   },
   {

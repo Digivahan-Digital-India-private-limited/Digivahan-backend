@@ -198,6 +198,8 @@ exports.getAnalyticsUsers = async (req, res) => {
           "user.basic_details.profile_pic":        1,
           "user.public_details.nick_name":         1,
           "user.public_details.public_pic":        1,
+          "user.account_status":                   1,
+          "user.blocked_reason":                   1,
         },
       },
       { $sort: { hitCount: -1, lastHitAt: -1 } },
@@ -335,7 +337,6 @@ exports.getAnalyticsRtoUsers = async (req, res) => {
           hitCount: 1, lastHitAt: 1, firstHitAt: 1, vehicleNumbers: 1,
           normalHits: 1, premiumHits: 1, challanHits: 1, addHits: 1, refreshHits: 1, cSearchHits: 1, cRefreshHits: 1,
           "user._id": 1,
-
           "user.basic_details.first_name": 1,
           "user.basic_details.last_name": 1,
           "user.basic_details.phone_number": 1,
@@ -343,6 +344,8 @@ exports.getAnalyticsRtoUsers = async (req, res) => {
           "user.basic_details.profile_pic": 1,
           "user.public_details.nick_name": 1,
           "user.public_details.public_pic": 1,
+          "user.account_status": 1,
+          "user.blocked_reason": 1,
         },
       },
       { $sort: { hitCount: -1, lastHitAt: -1 } },
@@ -397,7 +400,7 @@ exports.getAnalyticsRtoUserDetail = async (req, res) => {
 
     const [user, hits] = await Promise.all([
       User.findById(userId)
-        .select("basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email basic_details.profile_pic public_details.nick_name public_details.public_pic")
+        .select("basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email basic_details.profile_pic public_details.nick_name public_details.public_pic account_status blocked_reason blocked_at")
         .lean(),
       RTOApiLog.find({ userId })
         .sort({ createdAt: -1 })
@@ -414,6 +417,91 @@ exports.getAnalyticsRtoUserDetail = async (req, res) => {
       user,
       hits,
       totalHits: hits.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────
+   POST /api/user/admin/block-user
+   Permanently blocks a user — no OTP, no login, no API access.
+───────────────────────────────────────────────────────── */
+exports.blockUserByAdmin = async (req, res) => {
+  try {
+    const { userId, reason } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "userId is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.account_status === "BLOCKED") {
+      return res.status(400).json({ success: false, message: "User is already blocked" });
+    }
+
+    await User.updateOne(
+      { _id: userId },
+      {
+        $set: {
+          is_active: false,
+          account_status: "BLOCKED",
+          blocked_reason: reason || "Blocked by admin",
+          blocked_at: new Date(),
+          is_logged_in: false,
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "User has been permanently blocked",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────
+   POST /api/user/admin/unblock-user
+   Unblocks a previously blocked user.
+───────────────────────────────────────────────────────── */
+exports.unblockUserByAdmin = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "userId is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.account_status !== "BLOCKED") {
+      return res.status(400).json({ success: false, message: "User is not blocked" });
+    }
+
+    await User.updateOne(
+      { _id: userId },
+      {
+        $set: {
+          is_active: true,
+          account_status: "ACTIVE",
+          blocked_reason: "",
+          blocked_at: null,
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "User has been unblocked successfully",
     });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });

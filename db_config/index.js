@@ -1,7 +1,12 @@
 const mongoose = require("mongoose");
 const { initializeModels } = require("./models.js");
 
-const connectDB = async () => {
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 5000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const connectDB = async (attempt = 1) => {
   try {
     // Check if already connected
     if (mongoose.connection.readyState === 1) {
@@ -9,20 +14,21 @@ const connectDB = async () => {
       return mongoose.connection;
     }
 
-    const mongoURI =process.env.DB_URL;
+    const mongoURI = process.env.DB_URL;
 
     if (!mongoURI) {
       throw new Error("DB_URL is not defined in environment variables");
     }
 
-    console.log("Attempting to connect to MongoDB...");
+    console.log(`Attempting to connect to MongoDB... (attempt ${attempt}/${MAX_RETRIES})`);
 
     const conn = await mongoose.connect(mongoURI, {
-      // Optimize for serverless
-      maxPoolSize: 1, // Reduced for serverless
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 30000, // 30s — handles Atlas cold starts
+      socketTimeoutMS: 60000,
+      connectTimeoutMS: 30000,
       bufferCommands: false,
+      retryWrites: true,
     });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
@@ -33,30 +39,27 @@ const connectDB = async () => {
 
     return conn.connection;
   } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
-    console.error("Error details:", {
-      message: error.message,
-      name: error.name,
-      code: error.code,
-    });
+    console.error(`Error connecting to MongoDB (attempt ${attempt}):`, error.message);
 
-    // Don't exit process in serverless environment
-    if (process.env.VERCEL !== "1") {
-      process.exit(1);
+    if (attempt < MAX_RETRIES) {
+      console.log(`Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+      await sleep(RETRY_DELAY_MS);
+      return connectDB(attempt + 1);
     }
 
-    // Return null in serverless environment to allow graceful degradation
+    console.error("All MongoDB connection attempts failed. Server will continue without DB.");
+    // Do NOT call process.exit — let nodemon keep running & watching
     return null;
   }
 };
 
 // Handle connection events
 mongoose.connection.on("connected", () => {
-  console.log("Mongoose connected to MongoDB Atlas");
+  console.log("Mongoose connected to MongoDB Atlas ✅");
 });
 
 mongoose.connection.on("error", (err) => {
-  console.error("Mongoose connection error:", err);
+  console.error("Mongoose connection error:", err.message);
 });
 
 mongoose.connection.on("disconnected", () => {

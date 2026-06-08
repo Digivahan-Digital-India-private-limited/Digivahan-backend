@@ -8,6 +8,8 @@ const {
   getAnalyticsUserDetail,
   getAnalyticsRtoUsers,
   getAnalyticsRtoUserDetail,
+  blockUserByAdmin,
+  unblockUserByAdmin,
 } = require("../controllers/user.controller");
 const { authenticateTokenForAdmin } = require("../middleware/auth.js");
 
@@ -17,6 +19,8 @@ router.get("/analytics/users", authenticateTokenForAdmin, getAnalyticsUsers);
 router.get("/analytics/user/:userId", authenticateTokenForAdmin, getAnalyticsUserDetail);
 router.get("/analytics/rto-users", authenticateTokenForAdmin, getAnalyticsRtoUsers);
 router.get("/analytics/rto-user/:userId", authenticateTokenForAdmin, getAnalyticsRtoUserDetail);
+router.post("/admin/block-user", authenticateTokenForAdmin, blockUserByAdmin);
+router.post("/admin/unblock-user", authenticateTokenForAdmin, unblockUserByAdmin);
 
 module.exports = router;
 

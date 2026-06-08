@@ -55,6 +55,16 @@ const authenticateToken = async (req, res, next) => {
       });
     }
 
+    // 🔥 BLOCKED check — deny ALL API access for blocked users
+    if (!isAdmin && user.account_status === "BLOCKED") {
+      return res.status(403).json({
+        status: false,
+        error_type: "blocked",
+        message: "Your account has been blocked by admin. You cannot use any service.",
+        reason: user.blocked_reason || "Blocked by admin",
+      });
+    }
+
     // 🔥 Direct suspension check (faster, no schema method required)
     if (user.suspended_until && new Date() < user.suspended_until) {
       return res.status(403).json({

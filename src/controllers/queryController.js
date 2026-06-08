@@ -108,6 +108,7 @@ const replyToQuery = async (req, res) => {
       ];
     }
 
+    console.log(`[Query Controller] Answering query from: ${process.env.MAILBOX || "noreply@digivahan.in"} to ${email}`);
     await sendGraphEmail(mailOptions);
 
     // Mark the query as Completed

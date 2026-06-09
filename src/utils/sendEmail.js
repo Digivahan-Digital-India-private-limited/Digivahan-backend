@@ -248,6 +248,43 @@ const getMailOptions = (templateType, email, otp) => {
     </div>
   `,
       };
+    case "account_blocked":
+      const blockData = typeof otp === "object" ? otp : { reason: otp, name: "User", phone: "N/A" };
+      return {
+        from: `"DigiVahan" <${process.env.FROM_EMAIL}>`,
+        to: email,
+        subject: "Account Blocked - Important Notice",
+        html: `
+              <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 30px auto; padding: 30px; border-radius: 12px; background: linear-gradient(145deg, #ffffff, #f0f0f0); box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid #e0e0e0;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <h2 style="color: #F44336; margin-bottom: 5px;">🚫 Account Blocked</h2>
+                  <p style="color: #666; font-size: 15px;">Important notice regarding your account</p>
+                </div>
+  
+                <p style="font-size: 16px; color: #333;">Hi <strong>${blockData.name}</strong>,</p>
+                <p style="font-size: 15px; color: #555; line-height: 1.6; margin: 5px 0;">
+                  <strong>Mobile Number:</strong> ${blockData.phone}
+                </p>
+                <p style="font-size: 15px; color: #555; line-height: 1.6; margin: 5px 0;">
+                  <strong>Email:</strong> ${email}
+                </p>
+                <p style="font-size: 15px; color: #555; line-height: 1.6; margin-top: 20px;">
+                  Your account has been blocked by the admin.
+                </p>
+                <p style="font-size: 15px; color: #555; line-height: 1.6;">
+                  <strong>Reason:</strong> ${blockData.reason || "Violation of terms"}
+                </p>
+  
+                <p style="font-size: 14px; color: #888; margin-top: 30px;">If you believe this was a mistake, please contact support.</p>
+  
+                <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;" />
+  
+                <div style="text-align: center; font-size: 12px; color: #aaa;">
+                  &copy; ${new Date().getFullYear()} DigiVahan. All rights reserved.
+                </div>
+              </div>
+          `,
+      };
     default:
       throw new Error("Invalid email type");
   }

@@ -25,6 +25,9 @@ const UpdateUserDetails = async (req, res) => {
       });
     }
 
+    if (!user.basic_details) user.basic_details = {};
+    if (!user.public_details) user.public_details = {};
+
     let oldProfilePublicId = user.basic_details.public_id || null;
     let oldPublicPublicId = user.public_details.public_id || null;
 
@@ -101,7 +104,7 @@ const UpdateUserDetails = async (req, res) => {
     // ==============================
     // 🔥 Update Email and Phone
     // ==============================
-    if (body.email !== undefined) {
+    if (body.email !== undefined && body.email !== null) {
       const email = body.email.trim().toLowerCase();
       if (email) {
         const existingEmailUser = await User.findOne({
@@ -116,11 +119,11 @@ const UpdateUserDetails = async (req, res) => {
         }
         user.basic_details.email = email;
       } else {
-        user.basic_details.email = ""; // clear email
+        user.basic_details.email = undefined; // unset email to avoid unique index duplicate
       }
     }
 
-    if (body.phone_number !== undefined) {
+    if (body.phone_number !== undefined && body.phone_number !== null) {
       const phone = body.phone_number.trim();
       if (phone) {
         const existingPhoneUser = await User.findOne({
@@ -140,28 +143,28 @@ const UpdateUserDetails = async (req, res) => {
     // ==============================
     // 🔥 Update other fields
     // ==============================
-    if (body.first_name !== undefined) {
+    if (body.first_name !== undefined && body.first_name !== null) {
       user.basic_details.first_name = body.first_name.trim();
-      if (body.last_name !== undefined) {
+      if (body.last_name !== undefined && body.last_name !== null) {
         user.basic_details.last_name = body.last_name.trim();
       }
-    } else if (body.name !== undefined) {
+    } else if (body.name !== undefined && body.name !== null) {
       const parts = body.name.trim().split(" ");
       user.basic_details.first_name = parts[0] || "";
       user.basic_details.last_name = parts.slice(1).join(" ") || "";
     } else {
-      if (body.last_name !== undefined) {
+      if (body.last_name !== undefined && body.last_name !== null) {
         user.basic_details.last_name = body.last_name.trim();
       }
     }
 
-    if (body.occupation !== undefined)
+    if (body.occupation !== undefined && body.occupation !== null)
       user.basic_details.occupation = body.occupation.trim();
 
-    if (body.nick_name !== undefined)
+    if (body.nick_name !== undefined && body.nick_name !== null)
       user.public_details.nick_name = body.nick_name.trim();
 
-    if (body.address !== undefined)
+    if (body.address !== undefined && body.address !== null)
       user.public_details.address = body.address.trim();
 
     if (body.age !== undefined)

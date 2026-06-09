@@ -2,6 +2,7 @@ const User = require("../models/User");
 const QRAssignment = require("../models/QRAssignment");
 const ChallanWebhook = require("../models/ChallanWebhook");
 const RTOApiLog = require("../models/RTOApiLog");
+const { sendGraphEmail, getMailOptions } = require("../utils/sendEmail");
 
 exports.getAllUsers = async (req, res) => {
   try {
@@ -456,6 +457,22 @@ exports.blockUserByAdmin = async (req, res) => {
         },
       }
     );
+
+    // Send email notification to user if they have an email address
+    if (user.basic_details && user.basic_details.email) {
+      const email = user.basic_details.email;
+      const blockReason = reason || "Blocked by admin";
+      const name = `${user.basic_details.first_name || ""} ${user.basic_details.last_name || ""}`.trim() || "User";
+      const phone = user.basic_details.phone_number || "N/A";
+
+      try {
+        const mailOptions = getMailOptions("account_blocked", email, { reason: blockReason, name, phone });
+        await sendGraphEmail(mailOptions);
+        console.log(`[Admin Block] Email sent to ${email}`);
+      } catch (emailError) {
+        console.error(`[Admin Block] Failed to send email to ${email}:`, emailError);
+      }
+    }
 
     return res.status(200).json({
       success: true,

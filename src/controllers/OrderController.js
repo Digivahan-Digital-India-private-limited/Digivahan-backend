@@ -1574,13 +1574,27 @@ const findOrderByAdminThrowUserId = async (req, res) => {
 // --
 const GetAllNewOrderListToAdmin = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.body;
+    const { page = 1, limit = 20, order_status = "NEW", active_partner } = { ...req.body, ...req.query };
 
     // pagination calculation
     const skip = (page - 1) * limit;
 
-    // fetch NEW orders
-    const orders = await Order.find({ order_status: "NEW" }, null, {
+    // build filter query
+    const filter = {};
+    if (order_status) {
+      filter.order_status = order_status;
+    }
+    
+    if (active_partner) {
+      if (active_partner === "delivery") {
+        filter.active_partner = { $in: ["delhivery", "delivery"] };
+      } else {
+        filter.active_partner = active_partner;
+      }
+    }
+
+    // fetch orders
+    const orders = await Order.find(filter, null, {
       sort: { createdAt: -1 }, // latest first
       skip: skip,
       limit: Number(limit),
@@ -1591,13 +1605,11 @@ const GetAllNewOrderListToAdmin = async (req, res) => {
     });
 
     // total count
-    const total = await Order.countDocuments({
-      order_status: "NEW",
-    });
+    const total = await Order.countDocuments(filter);
 
     return res.status(200).json({
       status: true,
-      message: "New orders fetched successfully",
+      message: "Orders fetched successfully",
 
       pagination: {
         total,
@@ -1719,7 +1731,7 @@ const OrderCancelByUser = async (req, res) => {
 // ------------------------------
 const OrderCancelByAdmin = async (req, res) => {
   try {
-    const { order_id } = req.body;
+    const { order_id, cancellation_reason, cancellation_notes } = req.body;
 
     /* -----------------------------
        1️⃣ VALIDATION
@@ -1819,6 +1831,8 @@ const OrderCancelByAdmin = async (req, res) => {
 
     order.order_status = "CANCELED";
     order.canceled_at = new Date();
+    if (cancellation_reason) order.cancellation_reason = cancellation_reason;
+    if (cancellation_notes) order.cancellation_notes = cancellation_notes;
     await order.save();
 
     /* -----------------------------
@@ -2556,6 +2570,46 @@ const AddNewActivePatner = async (req, res) => {
   }
 };
 
+const GetOrderStatsByAdmin = async (req, res) => {
+  try {
+    const [
+      shiprocketCount,
+      delhiveryCount,
+      confirmedCount,
+      pendingCount,
+      cancelledCount,
+      config,
+    ] = await Promise.all([
+      Order.countDocuments({ active_partner: "shiprocket", order_status: "NEW" }),
+      Order.countDocuments({ active_partner: { $in: ["delhivery", "delivery"] }, order_status: "NEW" }),
+      Order.countDocuments({ order_status: "CONFIRMED" }),
+      Order.countDocuments({ order_status: "NEW" }),
+      Order.countDocuments({ order_status: "CANCELED" }),
+      AdminConfig.findOne(),
+    ]);
+
+    return res.status(200).json({
+      status: true,
+      message: "Order stats fetched successfully",
+      data: {
+        shiprocket: shiprocketCount,
+        delhivery: delhiveryCount,
+        confirmed: confirmedCount,
+        pending: pendingCount,
+        cancelled: cancelledCount,
+        active_partner: config?.active_partner || "delhivery",
+      },
+    });
+  } catch (error) {
+    console.error("GetOrderStatsByAdmin Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   GenerateOrderByUser,
   ConfirmOrderByAdmin,
@@ -2573,4 +2627,5 @@ module.exports = {
   TrackOrderwithOrderId,
   AddNewActivePatner,
   CheckCourierService,
+  GetOrderStatsByAdmin,
 };

@@ -369,6 +369,7 @@ const API_ROUTES = {
     ADD_ACTIVE_PARTNER: "/admin/add-active-partner",
     USER_CREATE_ORDER: "/user/create-order",
     GET_ALL_NEW_ORDER_BYADMIN: "/admin/all-new-order",
+    ORDER_STATS: "/admin/order-stats",
     ADMIN_CONFIRM_ORDER: "/admin/order-confirm",
     ADMIN_PRINT_MANIFEST_INBULK: "/admin/prints-manifest",
     ADMIN_GENERATE_MANIFEST: "/admin/generate-manifests/:order_id",

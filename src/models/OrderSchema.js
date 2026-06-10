@@ -75,6 +75,8 @@ const orderSchema = new Schema(
     },
 
     canceled_at: Date,
+    cancellation_reason: String,
+    cancellation_notes: String,
 
     active_partner: {
       type: String,

@@ -24,6 +24,7 @@ const {
   OrderCancelByUser,
   CheckCourierService,
   AddNewActivePatner,
+  GetOrderStatsByAdmin,
 } = require("../controllers/OrderController.js");
 
 router.post(
@@ -91,6 +92,12 @@ router.get(
   API_ROUTES.ORDER.GET_ALL_NEW_ORDER_BYADMIN,
   handleValidationErrors,
   GetAllNewOrderListToAdmin,
+);
+
+router.get(
+  API_ROUTES.ORDER.ORDER_STATS,
+  handleValidationErrors,
+  GetOrderStatsByAdmin,
 );
 
 router.post(

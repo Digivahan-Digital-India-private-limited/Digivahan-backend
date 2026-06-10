@@ -39,26 +39,36 @@ const registerInit = async (req, res) => {
     const normalizedPhone = phone.trim();
 
     // 🚀 Fast existence check
-    const emailExists = await User.exists({
+    let existingEmailUser = await User.findOne({
       "basic_details.email": normalizedEmail,
     });
-    if (emailExists) {
-      return res.status(400).json({
-        status: false,
-        error_type: "email",
-        message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
-      });
+    if (existingEmailUser) {
+      if (existingEmailUser.account_status === "DELETED") {
+        await User.findByIdAndDelete(existingEmailUser._id);
+        existingEmailUser = null;
+      } else {
+        return res.status(400).json({
+          status: false,
+          error_type: "email",
+          message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
+        });
+      }
     }
 
-    const phoneExists = await User.exists({
+    let existingPhoneUser = await User.findOne({
       "basic_details.phone_number": normalizedPhone,
     });
-    if (phoneExists) {
-      return res.status(400).json({
-        status: false,
-        error_type: "phone",
-        message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
-      });
+    if (existingPhoneUser) {
+      if (existingPhoneUser.account_status === "DELETED") {
+        await User.findByIdAndDelete(existingPhoneUser._id);
+        existingPhoneUser = null;
+      } else {
+        return res.status(400).json({
+          status: false,
+          error_type: "phone",
+          message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
+        });
+      }
     }
 
     const contact = otp_channel === "PHONE" ? normalizedPhone : normalizedEmail;
@@ -143,19 +153,23 @@ const checkRegisteredUser = async (req, res) => {
 
     if (hit_type === "check") {
       if (existingUser) {
-        // Check which field already exists
-        if (existingUser.basic_details.email === email) {
-          return res.status(400).json({
-            status: false,
-            error_type: "email",
-            message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
-          });
-        } else if (existingUser.basic_details.phone_number === phone) {
-          return res.status(400).json({
-            status: false,
-            error_type: "phone",
-            message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
-          });
+        if (existingUser.account_status === "DELETED") {
+          await User.findByIdAndDelete(existingUser._id);
+        } else {
+          // Check which field already exists
+          if (existingUser.basic_details.email === email) {
+            return res.status(400).json({
+              status: false,
+              error_type: "email",
+              message: ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED,
+            });
+          } else if (existingUser.basic_details.phone_number === phone) {
+            return res.status(400).json({
+              status: false,
+              error_type: "phone",
+              message: ERROR_MESSAGES.PHONE_ALREADY_REGISTERED,
+            });
+          }
         }
       }
     } else {
@@ -218,23 +232,27 @@ const verifyOtp = async (req, res) => {
     const data = JSON.parse(tempUser);
 
     // 🔥 Safety check (prevent duplicate if verify API called twice)
-    const userExists = await User.exists({
+    const existingUserDoc = await User.findOne({
       $or: [
         { "basic_details.email": data.email },
         { "basic_details.phone_number": data.phone },
       ],
     });
 
-    if (userExists) {
-      await Promise.all([
-        redis.del(`otp:${user_register_id}`),
-        redis.del(`tempUser:${user_register_id}`),
-      ]);
+    if (existingUserDoc) {
+      if (existingUserDoc.account_status === "DELETED") {
+        await User.findByIdAndDelete(existingUserDoc._id);
+      } else {
+        await Promise.all([
+          redis.del(`otp:${user_register_id}`),
+          redis.del(`tempUser:${user_register_id}`),
+        ]);
 
-      return res.status(400).json({
-        status: false,
-        message: "User already exists",
-      });
+        return res.status(400).json({
+          status: false,
+          message: "User already exists",
+        });
+      }
     }
 
     // 🚀 Create user (minimal payload)
@@ -352,7 +370,7 @@ const signIn = async (req, res) => {
     }
 
     // 🔥 Account active check
-    if (!user.is_active) {
+    if (!user.is_active && user.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
@@ -839,7 +857,7 @@ const otpBasedLogin = async (req, res) => {
     }
 
     // 🔥 Account active check
-    if (!user.is_active) {
+    if (!user.is_active && user.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         error_type: "other",
@@ -947,7 +965,7 @@ const verifyLoginOtp = async (req, res) => {
     }
 
     // 🔥 Active check
-    if (!user.is_active) {
+    if (!user.is_active && user.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
@@ -1099,7 +1117,7 @@ const requestResetPassword = async (req, res) => {
     }
 
     // 🔥 Active check
-    if (!user.is_active) {
+    if (!user.is_active && user.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         error_type: "other",
@@ -1202,7 +1220,7 @@ const verifyResetOtp = async (req, res) => {
       });
     }
 
-    if (!user.is_active) {
+    if (!user.is_active && user.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         error_type: "other",
@@ -1371,7 +1389,7 @@ const verifyRequest = async (req, res) => {
       });
     }
 
-    if (!user.is_active) {
+    if (!user.is_active && user.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         error_type: "other",

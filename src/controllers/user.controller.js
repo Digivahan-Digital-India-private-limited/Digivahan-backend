@@ -9,20 +9,22 @@ exports.getAllUsers = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || "";
+    const status = req.query.status || "ACTIVE";
     const skip = (page - 1) * limit;
 
     let matchStage = {};
+    if (status !== "ALL") {
+      matchStage.account_status = status;
+    }
 
     if (search.trim()) {
-      matchStage = {
-        $or: [
-          { "basic_details.first_name": { $regex: search, $options: "i" } },
-          { "basic_details.last_name": { $regex: search, $options: "i" } },
-          { "basic_details.phone_number": { $regex: search, $options: "i" } },
-          { "basic_details.email": { $regex: search, $options: "i" } },
-          { "public_details.nick_name": { $regex: search, $options: "i" } },
-        ],
-      };
+      matchStage.$or = [
+        { "basic_details.first_name": { $regex: search, $options: "i" } },
+        { "basic_details.last_name": { $regex: search, $options: "i" } },
+        { "basic_details.phone_number": { $regex: search, $options: "i" } },
+        { "basic_details.email": { $regex: search, $options: "i" } },
+        { "public_details.nick_name": { $regex: search, $options: "i" } },
+      ];
     }
 
     const [result] = await User.aggregate([
@@ -95,57 +97,57 @@ exports.getAllUsers = async (req, res) => {
 };
 
 exports.checkUserByPhone = async (req, res) => {
-    try {
-  
-      const { phoneNumber } = req.body;
-  
-      const user = await User.findOne({
-        "basic_details.phone_number": phoneNumber,
-      });
-  
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not registered",
-        });
-      }
-  
-      // NAME LOGIC
-      let name = "";
-  
-      if (user.public_details?.nick_name && user.public_details.nick_name.trim() !== "") {
-        name = user.public_details.nick_name;
-      } else {
-        const firstName = user.basic_details?.first_name || "";
-        const lastName = user.basic_details?.last_name || "";
-        name = `${firstName} ${lastName}`.trim();
-      }
-  
-      // PROFILE PIC LOGIC
-      let profileUrl = "";
-  
-      if (user.public_details?.public_pic && user.public_details.public_pic.trim() !== "") {
-        profileUrl = user.public_details.public_pic;
-      } else {
-        profileUrl = user.basic_details?.profile_pic || "";
-      }
-  
-      return res.json({
-        success: true,
-        userId: user._id,
-        name: name,
-        profileUrl: profileUrl,
-      });
-  
-    } catch (error) {
-  
-      return res.status(500).json({
+  try {
+
+    const { phoneNumber } = req.body;
+
+    const user = await User.findOne({
+      "basic_details.phone_number": phoneNumber,
+    });
+
+    if (!user) {
+      return res.status(404).json({
         success: false,
-        error: error.message,
+        message: "User not registered",
       });
-  
     }
-  };
+
+    // NAME LOGIC
+    let name = "";
+
+    if (user.public_details?.nick_name && user.public_details.nick_name.trim() !== "") {
+      name = user.public_details.nick_name;
+    } else {
+      const firstName = user.basic_details?.first_name || "";
+      const lastName = user.basic_details?.last_name || "";
+      name = `${firstName} ${lastName}`.trim();
+    }
+
+    // PROFILE PIC LOGIC
+    let profileUrl = "";
+
+    if (user.public_details?.public_pic && user.public_details.public_pic.trim() !== "") {
+      profileUrl = user.public_details.public_pic;
+    } else {
+      profileUrl = user.basic_details?.profile_pic || "";
+    }
+
+    return res.json({
+      success: true,
+      userId: user._id,
+      name: name,
+      profileUrl: profileUrl,
+    });
+
+  } catch (error) {
+
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+
+  }
+};
 
 /* ─────────────────────────────────────────────────────────
    GET /api/user/analytics/users
@@ -154,10 +156,10 @@ exports.checkUserByPhone = async (req, res) => {
 ───────────────────────────────────────────────────────── */
 exports.getAnalyticsUsers = async (req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
+    const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const search = (req.query.search || "").trim();
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     // Aggregate: group ChallanWebhook SEARCHED records by userId
     const pipeline = [
@@ -170,8 +172,8 @@ exports.getAnalyticsUsers = async (req, res) => {
       {
         $group: {
           _id: "$userId",
-          hitCount:   { $sum: 1 },
-          lastHitAt:  { $max: "$createdAt" },
+          hitCount: { $sum: 1 },
+          lastHitAt: { $max: "$createdAt" },
           firstHitAt: { $min: "$createdAt" },
           vehicleNumbers: { $addToSet: "$rcNumber" },
         },
@@ -187,20 +189,20 @@ exports.getAnalyticsUsers = async (req, res) => {
       { $unwind: "$user" },
       {
         $project: {
-          hitCount:       1,
-          lastHitAt:      1,
-          firstHitAt:     1,
+          hitCount: 1,
+          lastHitAt: 1,
+          firstHitAt: 1,
           vehicleNumbers: 1,
-          "user._id":                              1,
-          "user.basic_details.first_name":         1,
-          "user.basic_details.last_name":          1,
-          "user.basic_details.phone_number":       1,
-          "user.basic_details.email":              1,
-          "user.basic_details.profile_pic":        1,
-          "user.public_details.nick_name":         1,
-          "user.public_details.public_pic":        1,
-          "user.account_status":                   1,
-          "user.blocked_reason":                   1,
+          "user._id": 1,
+          "user.basic_details.first_name": 1,
+          "user.basic_details.last_name": 1,
+          "user.basic_details.phone_number": 1,
+          "user.basic_details.email": 1,
+          "user.basic_details.profile_pic": 1,
+          "user.public_details.nick_name": 1,
+          "user.public_details.public_pic": 1,
+          "user.account_status": 1,
+          "user.blocked_reason": 1,
         },
       },
       { $sort: { hitCount: -1, lastHitAt: -1 } },
@@ -211,12 +213,12 @@ exports.getAnalyticsUsers = async (req, res) => {
       pipeline.push({
         $match: {
           $or: [
-            { "user.basic_details.first_name":   { $regex: search, $options: "i" } },
-            { "user.basic_details.last_name":    { $regex: search, $options: "i" } },
+            { "user.basic_details.first_name": { $regex: search, $options: "i" } },
+            { "user.basic_details.last_name": { $regex: search, $options: "i" } },
             { "user.basic_details.phone_number": { $regex: search, $options: "i" } },
-            { "user.basic_details.email":        { $regex: search, $options: "i" } },
-            { "user.public_details.nick_name":   { $regex: search, $options: "i" } },
-            { vehicleNumbers:                    { $regex: search, $options: "i" } },
+            { "user.basic_details.email": { $regex: search, $options: "i" } },
+            { "user.public_details.nick_name": { $regex: search, $options: "i" } },
+            { vehicleNumbers: { $regex: search, $options: "i" } },
           ],
         },
       });
@@ -296,31 +298,49 @@ exports.getAnalyticsUserDetail = async (req, res) => {
 ───────────────────────────────────────────────────────── */
 exports.getAnalyticsRtoUsers = async (req, res) => {
   try {
-    const page   = parseInt(req.query.page)  || 1;
-    const limit  = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
     const search = (req.query.search || "").trim();
-    const skip   = (page - 1) * limit;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+    const skip = (page - 1) * limit;
+
+    let matchQuery = {
+      userId: { $exists: true, $ne: null },
+    };
+
+    if (startDate || endDate) {
+      matchQuery.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        matchQuery.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        matchQuery.createdAt.$lte = end;
+      }
+    }
 
     const pipeline = [
       {
-        $match: {
-          userId: { $exists: true, $ne: null },
-        },
+        $match: matchQuery,
       },
       {
         $group: {
           _id: "$userId",
-          hitCount:       { $sum: 1 },
-          lastHitAt:      { $max: "$createdAt" },
-          firstHitAt:     { $min: "$createdAt" },
+          hitCount: { $sum: 1 },
+          lastHitAt: { $max: "$createdAt" },
+          firstHitAt: { $min: "$createdAt" },
           vehicleNumbers: { $addToSet: "$vehicleNumber" },
-          normalHits:     { $sum: { $cond: [{ $eq: ["$apiType", "rto_api"] }, 1, 0] } },
-          premiumHits:    { $sum: { $cond: [{ $eq: ["$apiType", "rto_premium_api"] }, 1, 0] } },
-          challanHits:    { $sum: { $cond: [{ $eq: ["$apiType", "challan_plus_api"] }, 1, 0] } },
-          addHits:        { $sum: { $cond: [{ $eq: ["$trigger", "add_vehicle"] }, 1, 0] } },
-          refreshHits:    { $sum: { $cond: [{ $eq: ["$trigger", "refresh"] }, 1, 0] } },
-          cSearchHits:    { $sum: { $cond: [{ $eq: ["$trigger", "challan_search"] }, 1, 0] } },
-          cRefreshHits:   { $sum: { $cond: [{ $eq: ["$trigger", "challan_refresh"] }, 1, 0] } },
+          normalHits: { $sum: { $cond: [{ $eq: ["$apiType", "rto_api"] }, 1, 0] } },
+          premiumHits: { $sum: { $cond: [{ $eq: ["$apiType", "rto_premium_api"] }, 1, 0] } },
+          challanHits: { $sum: { $cond: [{ $eq: ["$apiType", "challan_plus_api"] }, 1, 0] } },
+          addHits: { $sum: { $cond: [{ $eq: ["$trigger", "add_vehicle"] }, 1, 0] } },
+          refreshHits: { $sum: { $cond: [{ $eq: ["$trigger", "refresh"] }, 1, 0] } },
+          cSearchHits: { $sum: { $cond: [{ $eq: ["$trigger", "challan_search"] }, 1, 0] } },
+          cRefreshHits: { $sum: { $cond: [{ $eq: ["$trigger", "challan_refresh"] }, 1, 0] } },
 
         },
       },
@@ -356,11 +376,11 @@ exports.getAnalyticsRtoUsers = async (req, res) => {
       pipeline.push({
         $match: {
           $or: [
-            { "user.basic_details.first_name":   { $regex: search, $options: "i" } },
-            { "user.basic_details.last_name":    { $regex: search, $options: "i" } },
+            { "user.basic_details.first_name": { $regex: search, $options: "i" } },
+            { "user.basic_details.last_name": { $regex: search, $options: "i" } },
             { "user.basic_details.phone_number": { $regex: search, $options: "i" } },
-            { "user.basic_details.email":        { $regex: search, $options: "i" } },
-            { vehicleNumbers:                    { $regex: search, $options: "i" } },
+            { "user.basic_details.email": { $regex: search, $options: "i" } },
+            { vehicleNumbers: { $regex: search, $options: "i" } },
           ],
         },
       });
@@ -398,12 +418,29 @@ exports.getAnalyticsRtoUsers = async (req, res) => {
 exports.getAnalyticsRtoUserDetail = async (req, res) => {
   try {
     const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    let matchQuery = { userId };
+
+    if (startDate || endDate) {
+      matchQuery.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        matchQuery.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        matchQuery.createdAt.$lte = end;
+      }
+    }
 
     const [user, hits] = await Promise.all([
       User.findById(userId)
         .select("basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email basic_details.profile_pic public_details.nick_name public_details.public_pic account_status blocked_reason blocked_at")
         .lean(),
-      RTOApiLog.find({ userId })
+      RTOApiLog.find(matchQuery)
         .sort({ createdAt: -1 })
         .select("vehicleNumber apiType trigger createdAt")
         .lean(),
@@ -524,4 +561,65 @@ exports.unblockUserByAdmin = async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 };
-
+
+/* ─────────────────────────────────────────────────────────
+   DELETE /api/user/admin/delete-user/:userId
+   Deletes a user permanently (Soft Delete).
+───────────────────────────────────────────────────────── */
+exports.deleteUserByAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "userId is required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.account_status === "DELETED") {
+      return res.status(400).json({ success: false, message: "User is already deleted" });
+    }
+
+    await User.updateOne(
+      { _id: userId },
+      {
+        $set: {
+          is_active: false,
+          account_status: "DELETED",
+          deleted_reason: reason || "Deleted by admin",
+          deleted_at: new Date(),
+          is_logged_in: false,
+        },
+      }
+    );
+
+    // Send email notification to user if they have an email address
+    if (user.basic_details && user.basic_details.email) {
+      const email = user.basic_details.email;
+      const deleteReason = reason || "Account deleted by admin";
+      const name = `${user.basic_details.first_name || ""} ${user.basic_details.last_name || ""}`.trim() || "User";
+      const phone = user.basic_details.phone_number || "N/A";
+
+      try {
+        const mailOptions = getMailOptions("account_deleted", email, { reason: deleteReason, name, phone });
+        await sendGraphEmail(mailOptions);
+        console.log(`[Admin Delete] Email sent to ${email}`);
+      } catch (emailError) {
+        console.error(`[Admin Delete] Failed to send email to ${email}:`, emailError);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "User has been deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+

@@ -8,73 +8,73 @@ const mongoose = require("mongoose");
 
 // API 1 : RAISE DELETE ACCOUNT REQUEST
 
-exports.raiseDeleteRequest = async (req,res)=>{
+exports.raiseDeleteRequest = async (req, res) => {
 
-try{
+  try {
 
-const {
-name,
-phoneNumber,
-email,
-reason,
-otherReason
-} = req.body;
-
-
-// check registered user
-const user = await User.findOne({
-"basic_details.phone_number":phoneNumber
-});
-
-if(!user){
-  return res.status(400).json({
-    success:false,
-    message:"You are not registered user"
-  });
-}
-
-// check if already requested
-const existingRequest = await DeleteAccountRequest.findOne({
-  user_id: user._id
-});
-
-if(existingRequest){
-  return res.status(400).json({
-    success:false,
-    message:"You already submitted a request for deletion."
-  });
-}
+    const {
+      name,
+      phoneNumber,
+      email,
+      reason,
+      otherReason
+    } = req.body;
 
 
-const request = new DeleteAccountRequest({
+    // check registered user
+    const user = await User.findOne({
+      "basic_details.phone_number": phoneNumber
+    });
 
-user_id:user._id,
-name,
-phoneNumber,
-email,
-reason,
-otherReason
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "You are not registered user"
+      });
+    }
 
-});
+    // check if already requested
+    const existingRequest = await DeleteAccountRequest.findOne({
+      user_id: user._id
+    });
 
-await request.save();
+    if (existingRequest) {
+      return res.status(400).json({
+        success: false,
+        message: "You already submitted a request for deletion."
+      });
+    }
 
-res.status(201).json({
 
-success:true,
-message:"Delete account request submitted successfully",
-data:request
+    const request = new DeleteAccountRequest({
 
-});
+      user_id: user._id,
+      name,
+      phoneNumber,
+      email,
+      reason,
+      otherReason
 
-}catch(error){
+    });
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+    await request.save();
 
-}
+    res.status(201).json({
+
+      success: true,
+      message: "Delete account request submitted successfully",
+      data: request
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+
+  }
 
 };
 
@@ -83,38 +83,38 @@ error:error.message
 
 // API 2 : GET REQUEST LIST
 
-exports.getDeleteRequests = async (req,res)=>{
+exports.getDeleteRequests = async (req, res) => {
 
-try{
+  try {
 
-const {status} = req.query;
+    const { status } = req.query;
 
-let filter={};
+    let filter = {};
 
-if(status){
-filter.status=status;
-}
+    if (status) {
+      filter.status = status;
+    }
 
-const requests = await DeleteAccountRequest
-.find(filter)
-.sort({createdAt:-1});
+    const requests = await DeleteAccountRequest
+      .find(filter)
+      .sort({ createdAt: -1 });
 
-res.json({
+    res.json({
 
-success:true,
-total:requests.length,
-data:requests
+      success: true,
+      total: requests.length,
+      data: requests
 
-});
+    });
 
-}catch(error){
+  } catch (error) {
 
-res.status(500).json({
-success:false,
-error:error.message
-});
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
 
-}
+  }
 
 };
 
@@ -225,7 +225,7 @@ exports.getDeleteRequestStatus = async (req, res) => {
   try {
     const userId = req.user.userId;
     console.log("Checking deletion status for userId:", userId);
-    
+
     // Check if user has an active deletion scheduled
     const user = await User.findById(new mongoose.Types.ObjectId(userId));
     if (user && user.account_status === "PENDING_DELETION" && user.deletion_date) {
@@ -233,7 +233,7 @@ exports.getDeleteRequestStatus = async (req, res) => {
       const deletionDate = new Date(user.deletion_date);
       const timeDiff = deletionDate.getTime() - now.getTime();
       const daysLeft = Math.ceil(timeDiff / (1000 * 3600 * 24));
-      
+
       console.log("Found SCHEDULED deletion for user");
       return res.json({
         success: true,
@@ -248,7 +248,7 @@ exports.getDeleteRequestStatus = async (req, res) => {
     // Check if user has any existing request
     const pendingRequest = await DeleteAccountRequest.findOne({
       user_id: new mongoose.Types.ObjectId(userId)
-    }).sort({createdAt: -1});
+    }).sort({ createdAt: -1 });
 
     if (pendingRequest) {
       console.log("Found IN_PROGRESS request:", pendingRequest._id);

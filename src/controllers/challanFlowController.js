@@ -63,9 +63,14 @@ const initChallanFlow = async (req, res) => {
     const normalizedPhone = phone.trim();
 
     // Check if user exists
-    const existingUser = await User.findOne({
+    let existingUser = await User.findOne({
       "basic_details.phone_number": normalizedPhone,
     }).select("is_active account_status blocked_reason");
+
+    if (existingUser && existingUser.account_status === "DELETED") {
+      await User.findByIdAndDelete(existingUser._id);
+      existingUser = null;
+    }
 
     // 🔥 BLOCKED check — no OTP sent to blocked users
     if (existingUser && existingUser.account_status === "BLOCKED") {
@@ -78,7 +83,7 @@ const initChallanFlow = async (req, res) => {
     }
 
     // 🔥 is_active check
-    if (existingUser && !existingUser.is_active) {
+    if (existingUser && !existingUser.is_active && existingUser.account_status !== "PENDING_DELETION") {
       return res.status(401).json({
         status: false,
         message: "Your account is deactivated.",
@@ -212,7 +217,7 @@ const verifyChallanOtp = async (req, res) => {
         });
       }
 
-      if (!user.is_active) {
+      if (!user.is_active && user.account_status !== "PENDING_DELETION") {
         await redis.del(`challanFlow:${flow_id}`);
         return res.status(401).json({
           status: false,

@@ -521,12 +521,19 @@ const CheckQrInUser = async (req, res) => {
 
 const CreateQrTemplateInBulk = async (req, res) => {
   try {
-    const { template_type } = req.body;
+    const { template_type, qr_ids } = req.body;
 
-    const qrList = await QRAssignment.find({
-      is_printed: false,
+    let filter = {
       qr_status: "unassigned",
-    }).sort({ createdAt: 1 });
+    };
+
+    if (qr_ids && Array.isArray(qr_ids) && qr_ids.length > 0) {
+      filter.qr_id = { $in: qr_ids };
+    } else {
+      filter.is_printed = false;
+    }
+
+    const qrList = await QRAssignment.find(filter).sort({ createdAt: 1 });
 
     if (!qrList.length) {
       return res.status(404).json({
@@ -872,7 +879,11 @@ const filterQrlist = async (req, res) => {
 
     // agar admin specific status bhejta hai
     if (qr_types && qr_types !== "all") {
-      filter.qr_status = qr_types;
+      if (qr_types.toLowerCase() === "blocked") {
+        filter.qr_status = { $in: ["blocked", "BLOCKED"] };
+      } else {
+        filter.qr_status = qr_types;
+      }
     }
 
     // filter by vehicle_type if provided
@@ -880,8 +891,10 @@ const filterQrlist = async (req, res) => {
       filter.vehicle_type = vehicle_type;
     }
 
-    // only active QR (recommended)
-    filter.status = "active";
+    // only active QR by default, unless searching for blocked
+    if (qr_types.toLowerCase() !== "blocked") {
+      filter.status = "active";
+    }
 
     const qrList = await QRAssignment.find(filter).sort({ qr_no: 1 }).lean();
 

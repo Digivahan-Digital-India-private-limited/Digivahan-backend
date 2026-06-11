@@ -93,7 +93,7 @@ const createQrScanner = async (req, res) => {
 
 const createQrWithQrId = async (req, res) => {
   try {
-    const { qr_id } = req.body;
+    const { qr_id, vehicle_type = "car" } = req.body;
 
     if (!qr_id) {
       return res.status(400).json({
@@ -101,6 +101,9 @@ const createQrWithQrId = async (req, res) => {
         message: "QR ID is required",
       });
     }
+
+    const validTypes = ["car", "bike", "other"];
+    const vType = validTypes.includes(vehicle_type) ? vehicle_type : "car";
 
     // 🔴 check duplicate qr_id
     const existing = await QRAssignment.findOne({ qr_id });
@@ -131,6 +134,7 @@ const createQrWithQrId = async (req, res) => {
 
       qr_status: "unassigned",
       product_type: "vehicle",
+      vehicle_type: vType,
       status: "active",
       is_printed: false,
     });
@@ -896,7 +900,7 @@ const filterQrlist = async (req, res) => {
       filter.status = "active";
     }
 
-    const qrList = await QRAssignment.find(filter).sort({ qr_no: 1 }).lean();
+    const qrList = await QRAssignment.find(filter).sort({ updatedAt: -1 }).lean();
 
     return res.status(200).json({
       success: true,
@@ -949,6 +953,139 @@ const QrBlockedByAdmin = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error blocking QR",
+    });
+  }
+};
+
+const unassignQrByAdmin = async (req, res) => {
+  try {
+    const { qr_id } = req.body;
+
+    if (!qr_id) {
+      return res.status(400).json({
+        success: false,
+        message: "QR ID is required",
+      });
+    }
+
+    const qr = await QRAssignment.findOne({ qr_id });
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    if (qr.qr_status !== "assigned") {
+      return res.status(400).json({
+        success: false,
+        message: `QR is currently ${qr.qr_status}, cannot unassign.`,
+      });
+    }
+
+    // Attempt to remove from User
+    const userId = qr.assigned_to;
+    const vehicleId = qr.vehicle_id;
+
+    if (userId) {
+      const user = await User.findById(userId);
+      if (user) {
+        if (vehicleId) {
+          const vehicle = user.garage?.vehicles?.find((v) => v.vehicle_id === vehicleId);
+          if (vehicle) {
+            vehicle.qr_list = vehicle.qr_list.filter((id) => id !== qr_id);
+          }
+        }
+        // Also remove from user.qr_list if it's there
+        user.qr_list = user.qr_list.filter((id) => id !== qr_id);
+        
+        await user.save();
+      }
+    }
+
+    // Reset QR status
+    qr.qr_status = "unassigned";
+    qr.assigned_to = null;
+    qr.assigned_by = null;
+    qr.vehicle_id = null;
+    qr.sales_id = null;
+    qr.assigned_at = null;
+
+    await qr.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "QR unassigned successfully",
+      data: qr,
+    });
+  } catch (error) {
+    console.error("QR Unassign Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error unassigning QR",
+    });
+  }
+};
+
+const deleteQrByAdmin = async (req, res) => {
+  try {
+    const { qr_id } = req.body;
+
+    if (!qr_id) {
+      return res.status(400).json({
+        success: false,
+        message: "QR ID is required",
+      });
+    }
+
+    const qr = await QRAssignment.findOne({ qr_id });
+
+    if (!qr) {
+      return res.status(404).json({
+        success: false,
+        message: "QR not found",
+      });
+    }
+
+    // Remove from User if assigned
+    const userId = qr.assigned_to;
+    const vehicleId = qr.vehicle_id;
+
+    if (userId) {
+      const user = await User.findById(userId);
+      if (user) {
+        if (vehicleId) {
+          const vehicle = user.garage?.vehicles?.find((v) => v.vehicle_id === vehicleId);
+          if (vehicle) {
+            vehicle.qr_list = vehicle.qr_list.filter((id) => id !== qr_id);
+          }
+        }
+        // Also remove from user.qr_list if it's there
+        user.qr_list = user.qr_list.filter((id) => id !== qr_id);
+        
+        await user.save();
+      }
+    }
+
+    // Delete from Cloudinary if image exists
+    if (qr.qr_image_public_id) {
+      await deleteFromCloudinary(qr.qr_image_public_id);
+    }
+
+    await QRAssignment.deleteOne({ qr_id });
+
+    return res.status(200).json({
+      success: true,
+      message: "QR permanently deleted successfully",
+    });
+  } catch (error) {
+    console.error("QR Delete Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error deleting QR",
     });
   }
 };
@@ -1022,5 +1159,7 @@ module.exports = {
   GetUserdetailsThrowTheQRId,
   filterQrlist,
   QrBlockedByAdmin,
+  unassignQrByAdmin,
+  deleteQrByAdmin,
   getQrStats,
 };

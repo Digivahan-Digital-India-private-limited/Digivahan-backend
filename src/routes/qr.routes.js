@@ -20,6 +20,8 @@ const {
   GetUserdetailsThrowTheQRId,
   filterQrlist,
   QrBlockedByAdmin,
+  unassignQrByAdmin,
+  deleteQrByAdmin,
   getQrStats,
 } = require("../controllers/QrController.js");
 
@@ -87,5 +89,16 @@ router.post(
 
 router.get("/admin/qr-stats", [handleValidationErrors], getQrStats);
 
+router.post(
+  "/admin/unassign-qr",
+  [handleValidationErrors],
+  unassignQrByAdmin
+);
+
+router.post(
+  "/admin/delete-qr",
+  [handleValidationErrors],
+  deleteQrByAdmin
+);
 
 module.exports = router;

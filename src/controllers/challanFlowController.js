@@ -420,7 +420,16 @@ const getChallanPaymentUrl = async (req, res) => {
       }
     );
 
-    const paymentUrl = response.data?.url || response.data?.paymentUrl;
+    let paymentUrl = response.data?.url || response.data?.paymentUrl;
+
+    if (paymentUrl && typeof paymentUrl === "string") {
+      try {
+        const decoded = JSON.parse(paymentUrl);
+        if (typeof decoded === "string") {
+          paymentUrl = decoded;
+        }
+      } catch (e) {}
+    }
 
     if (!paymentUrl) {
       console.error("[ChallanFlow] Payment URL not found in API response:", response.data);
@@ -428,6 +437,20 @@ const getChallanPaymentUrl = async (req, res) => {
         status: false,
         message: "Failed to generate payment URL. Please try again later.",
         details: response.data
+      });
+    }
+
+    if (paymentUrl.toLowerCase().includes("<!doctype html>") || paymentUrl.toLowerCase().includes("<html")) {
+      const checkoutId = `checkout_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      await redis.set(checkoutId, paymentUrl, "EX", 1800); // 30 minutes
+      
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const finalUrl = `${baseUrl}/api/challan-flow/render-checkout/${checkoutId}`;
+      
+      return res.status(200).json({
+        status: true,
+        message: "Payment URL generated successfully",
+        paymentUrl: finalUrl,
       });
     }
 
@@ -691,6 +714,23 @@ const directSearchChallans = async (req, res) => {
   }
 };
 
+const renderCheckoutHtml = async (req, res) => {
+  try {
+    const { checkoutId } = req.params;
+    const html = await redis.get(checkoutId);
+
+    if (!html) {
+      return res.status(404).send("<h2>Checkout session expired or not found. Please try again.</h2>");
+    }
+
+    res.setHeader("Content-Type", "text/html");
+    return res.status(200).send(html);
+  } catch (error) {
+    console.error("[ChallanFlow] Error rendering checkout:", error);
+    return res.status(500).send("<h2>Internal server error.</h2>");
+  }
+};
+
 module.exports = {
   initChallanFlow,
   verifyChallanOtp,
@@ -698,4 +738,5 @@ module.exports = {
   getChallanPaymentUrl,
   refreshChallans,
   directSearchChallans,
+  renderCheckoutHtml,
 };

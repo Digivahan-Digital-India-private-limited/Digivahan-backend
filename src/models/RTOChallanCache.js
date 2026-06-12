@@ -12,11 +12,15 @@ const rtoChallanCacheSchema = new mongoose.Schema(
       {
         challanNumber: String,
         offence: String,
+        motorVehicleAct: String,
         amountSettledAt: Number,
         transactionStatus: String,
         location: String,
         createdAt: String,
         receiptLink: String,
+        ownerName: String,
+        ownerFatherName: String,
+        rcNumber: String,
       }
     ],
   },

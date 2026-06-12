@@ -426,27 +426,6 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
       const packageData = response.packages[0];
 
-      const { date, time } = getISTDateTime(2); // add 2 hours
-
-      const pickupPayload = {
-        pickup_date: date,
-
-        pickup_time: time,
-
-        pickup_location: "DIGIVAHAN",
-
-        expected_package_count: 1,
-      };
-
-      let deliveryPickupresponse = null;
-
-      try {
-        deliveryPickupresponse = await GenerateDeliveryPickup(pickupPayload);
-      } catch (pickupError) {
-        console.error("Delhivery Pickup scheduling failed:", pickupError.message);
-        // We continue even if pickup fails, so waybill is saved.
-      }
-
       /* ----------------------------------------
        SAVE INTO DeliveryOrder COLLECTION
     ---------------------------------------- */
@@ -488,7 +467,7 @@ const ConfirmOrderByAdmin = async (req, res) => {
 
         pickups_count: response.pickups_count,
 
-        pickup_data: deliveryPickupresponse,
+        pickup_data: null,
       });
 
       /* ----------------------------------------
@@ -701,14 +680,18 @@ const GenerateDeliveryPickup = async (pickupPayload) => {
 
     return response.data;
   } catch (error) {
-    console.error(
-      "Delhivery Pickup Error:",
-      error?.response?.data || error.message,
-    );
+    const delhiveryError = error?.response?.data;
+    let errMsg = "Failed to create Delhivery pickup";
+    
+    if (delhiveryError) {
+      if (typeof delhiveryError === "object") {
+        errMsg = delhiveryError.message || JSON.stringify(delhiveryError);
+      } else {
+        errMsg = String(delhiveryError);
+      }
+    }
 
-    throw new Error(
-      error?.response?.data?.message || "Failed to create Delhivery pickup",
-    );
+    throw new Error(errMsg);
   }
 };
 
@@ -1604,6 +1587,33 @@ const GetAllNewOrderListToAdmin = async (req, res) => {
       select: "name email phone", // optional user info
     });
 
+    const orderIds = orders.map(o => o._id);
+    const shiprocketDocs = await ShiprocketOrder.find({ order_id: { $in: orderIds } }).lean();
+    const deliveryDocs = await DeliveryOrder.find({ order_id: { $in: orderIds } }).lean();
+    
+    const shiprocketMap = {};
+    shiprocketDocs.forEach((doc) => {
+      shiprocketMap[doc.order_id.toString()] = doc;
+    });
+
+    const deliveryMap = {};
+    deliveryDocs.forEach((doc) => {
+      deliveryMap[doc.order_id.toString()] = doc;
+    });
+
+    const enrichedOrders = orders.map((order) => {
+      let partnerDetails = null;
+      if (order.active_partner === "shiprocket") {
+        partnerDetails = shiprocketMap[order._id.toString()] || null;
+      } else if (order.active_partner === "delhivery" || order.active_partner === "delivery") {
+        partnerDetails = deliveryMap[order._id.toString()] || null;
+      }
+      return {
+        ...order,
+        partner_details: partnerDetails
+      };
+    });
+
     // total count
     const total = await Order.countDocuments(filter);
 
@@ -1618,7 +1628,7 @@ const GetAllNewOrderListToAdmin = async (req, res) => {
         total_pages: Math.ceil(total / limit),
       },
 
-      data: orders,
+      data: enrichedOrders,
     });
   } catch (error) {
     console.error("GetAllNewOrderListToAdmin Error:", error);
@@ -2575,18 +2585,39 @@ const GetOrderStatsByAdmin = async (req, res) => {
     const [
       shiprocketCount,
       delhiveryCount,
-      confirmedCount,
       pendingCount,
       cancelledCount,
       config,
+      confirmedOrders,
     ] = await Promise.all([
       Order.countDocuments({ active_partner: "shiprocket", order_status: "NEW" }),
       Order.countDocuments({ active_partner: { $in: ["delhivery", "delivery"] }, order_status: "NEW" }),
-      Order.countDocuments({ order_status: "CONFIRMED" }),
       Order.countDocuments({ order_status: "NEW" }),
       Order.countDocuments({ order_status: "CANCELED" }),
       AdminConfig.findOne(),
+      Order.find({ order_status: "CONFIRMED" }).lean(),
     ]);
+
+    const orderIds = confirmedOrders.map(o => o._id);
+    const deliveryDocs = await DeliveryOrder.find({ order_id: { $in: orderIds } }).lean();
+    const deliveryMap = {};
+    deliveryDocs.forEach((doc) => { deliveryMap[doc.order_id.toString()] = doc; });
+
+    let scheduledConfirmed = 0;
+    let unscheduledConfirmed = 0;
+
+    confirmedOrders.forEach(o => {
+       if (o.active_partner === "shiprocket") {
+           scheduledConfirmed++; // Shiprocket orders don't have bulk pickup via this flow, so we consider them scheduled/ready
+       } else if (o.active_partner === "delhivery" || o.active_partner === "delivery") {
+           const doc = deliveryMap[o._id.toString()];
+           if (doc && doc.pickup_data) {
+               scheduledConfirmed++;
+           } else {
+               unscheduledConfirmed++;
+           }
+       }
+    });
 
     return res.status(200).json({
       status: true,
@@ -2594,7 +2625,8 @@ const GetOrderStatsByAdmin = async (req, res) => {
       data: {
         shiprocket: shiprocketCount,
         delhivery: delhiveryCount,
-        confirmed: confirmedCount,
+        manifest_count: unscheduledConfirmed,
+        confirmed: scheduledConfirmed,
         pending: pendingCount,
         cancelled: cancelledCount,
         active_partner: config?.active_partner || "delhivery",
@@ -2602,6 +2634,60 @@ const GetOrderStatsByAdmin = async (req, res) => {
     });
   } catch (error) {
     console.error("GetOrderStatsByAdmin Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+const ScheduleBulkDeliveryPickup = async (req, res) => {
+  try {
+    const { order_ids, package_count } = req.body;
+
+    if (!order_ids || !Array.isArray(order_ids) || order_ids.length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "order_ids array is required",
+      });
+    }
+
+    const { date, time } = getISTDateTime(1); // add 1 hour as requested
+
+    const expected_package_count = package_count ? Number(package_count) : order_ids.length;
+
+    const pickupPayload = {
+      pickup_date: date,
+      pickup_time: time,
+      pickup_location: "DIGIVAHAN",
+      expected_package_count: expected_package_count,
+    };
+
+    let deliveryPickupresponse = null;
+    try {
+      deliveryPickupresponse = await GenerateDeliveryPickup(pickupPayload);
+    } catch (pickupError) {
+      console.error("Delhivery Pickup scheduling failed:", pickupError.message);
+      return res.status(400).json({
+        status: false,
+        message: pickupError.message,
+      });
+    }
+
+    // Update the DeliveryOrder for these orders
+    await DeliveryOrder.updateMany(
+      { order_id: { $in: order_ids } },
+      { $set: { pickup_data: { payload: pickupPayload, response: deliveryPickupresponse } } }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Delhivery Pickup scheduled successfully",
+      data: deliveryPickupresponse,
+    });
+  } catch (error) {
+    console.error("ScheduleDeliveryPickup Error:", error);
     return res.status(500).json({
       status: false,
       message: "Internal server error",
@@ -2628,4 +2714,5 @@ module.exports = {
   AddNewActivePatner,
   CheckCourierService,
   GetOrderStatsByAdmin,
+  ScheduleBulkDeliveryPickup,
 };

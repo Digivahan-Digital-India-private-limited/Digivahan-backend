@@ -25,6 +25,7 @@ const {
   CheckCourierService,
   AddNewActivePatner,
   GetOrderStatsByAdmin,
+  ScheduleBulkDeliveryPickup,
 } = require("../controllers/OrderController.js");
 
 router.post(
@@ -138,6 +139,11 @@ router.post(
   API_ROUTES.ORDER.ADD_ACTIVE_PARTNER,
   [handleValidationErrors],
   AddNewActivePatner,
+);
+
+router.post(
+  "/admin/schedule-delhivery-pickup",
+  ScheduleBulkDeliveryPickup
 );
 
 module.exports = router;

@@ -34,7 +34,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
     // The API returns { statusCode: 200, data: [...] }
     if (response.data && (response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.code === 200)) {
       // ✅ Log successful Challan Plus API call
-      RTOApiLog.create({ userId, vehicleNumber: rcNumber, apiType: "challan_plus_api", trigger, success: true }).catch(() => {});
+      RTOApiLog.create({ userId, vehicleNumber: rcNumber, apiType: "challan_plus_api", trigger, success: true }).catch(() => { });
       return response.data.data || [];
     }
 
@@ -262,11 +262,15 @@ const verifyChallanOtp = async (req, res) => {
             const mappedChallans = fetchedChallans.map(challan => ({
               challanNumber: challan.challanNumber || challan.challan_number,
               offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
+              motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
               amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
               transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
               location: challan.challanPlace || challan.location || "Unknown",
               createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
-              receiptLink: challan.receipt_url || challan.receiptLink || ""
+              receiptLink: challan.receipt_url || challan.receiptLink || "",
+              ownerName: challan.accusedName || challan.ownerName || challan.owner_name || "",
+              ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || "",
+              rcNumber: challan.rcNumber || flowData.rcNumber
             }));
 
             // Save to new Cache schema
@@ -428,7 +432,7 @@ const getChallanPaymentUrl = async (req, res) => {
         if (typeof decoded === "string") {
           paymentUrl = decoded;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!paymentUrl) {
@@ -443,10 +447,10 @@ const getChallanPaymentUrl = async (req, res) => {
     if (paymentUrl.toLowerCase().includes("<!doctype html>") || paymentUrl.toLowerCase().includes("<html")) {
       const checkoutId = `checkout_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       await redis.set(checkoutId, paymentUrl, "EX", 1800); // 30 minutes
-      
+
       const baseUrl = `${req.protocol}://${req.get("host")}`;
       const finalUrl = `${baseUrl}/api/challan-flow/render-checkout/${checkoutId}`;
-      
+
       return res.status(200).json({
         status: true,
         message: "Payment URL generated successfully",
@@ -494,17 +498,21 @@ const refreshChallans = async (req, res) => {
 
     console.log(`[ChallanFlow] Refreshing real challans for ${rcNumber} from API`);
     const fetchedChallans = await fetchRealChallans(rcNumber, userId, "challan_refresh");
-    
+
     let realChallans = [];
     if (fetchedChallans && fetchedChallans.length > 0) {
       realChallans = fetchedChallans.map(challan => ({
         challanNumber: challan.challanNumber || challan.challan_number,
         offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
+        motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
         amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
         transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
         location: challan.challanPlace || challan.location || "Unknown",
         createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
-        receiptLink: challan.receipt_url || challan.receiptLink || ""
+        receiptLink: challan.receipt_url || challan.receiptLink || "",
+        ownerName: challan.accusedName || challan.ownerName || challan.owner_name || "",
+        ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || "",
+        rcNumber: challan.rcNumber || rcNumber
       }));
     }
 
@@ -515,31 +523,31 @@ const refreshChallans = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (realChallans.length > 0 && webhookRecords.length > 0) {
-       realChallans = realChallans.map(challan => {
-          const wh = webhookRecords.find(r => r.challanNumber === challan.challanNumber);
-          if (wh) {
-             let overrideStatus = challan.transactionStatus;
-             const txStatus = wh.transactionStatus?.toLowerCase();
-             const ioStatus = wh.ioStatus?.toLowerCase();
+      realChallans = realChallans.map(challan => {
+        const wh = webhookRecords.find(r => r.challanNumber === challan.challanNumber);
+        if (wh) {
+          let overrideStatus = challan.transactionStatus;
+          const txStatus = wh.transactionStatus?.toLowerCase();
+          const ioStatus = wh.ioStatus?.toLowerCase();
 
-             if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
-                 overrideStatus = "PAID";
-             } else if (txStatus === 'captured') {
-                 overrideStatus = "UNDER_PROCESS";
-             } else if (txStatus === 'failed' && ioStatus === 'refund') {
-                 overrideStatus = "UNPAID";
-             } else if (txStatus === 'initiated') {
-                 overrideStatus = "UNPAID";
-             }
-             
-             return {
-                 ...challan,
-                 transactionStatus: overrideStatus,
-                 _webhookRecord: wh
-             };
+          if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
+            overrideStatus = "PAID";
+          } else if (txStatus === 'captured') {
+            overrideStatus = "UNDER_PROCESS";
+          } else if (txStatus === 'failed' && ioStatus === 'refund') {
+            overrideStatus = "UNPAID";
+          } else if (txStatus === 'initiated') {
+            overrideStatus = "UNPAID";
           }
-          return challan;
-       });
+
+          return {
+            ...challan,
+            transactionStatus: overrideStatus,
+            _webhookRecord: wh
+          };
+        }
+        return challan;
+      });
     }
 
     if (realChallans.length > 0) {
@@ -549,11 +557,11 @@ const refreshChallans = async (req, res) => {
         { upsert: true, new: true }
       );
     } else {
-       await RTOChallanCache.findOneAndUpdate(
-         { rcNumber },
-         { $set: { challans: [] } },
-         { upsert: true, new: true }
-       );
+      await RTOChallanCache.findOneAndUpdate(
+        { rcNumber },
+        { $set: { challans: [] } },
+        { upsert: true, new: true }
+      );
     }
 
     return res.status(200).json({
@@ -616,11 +624,15 @@ const directSearchChallans = async (req, res) => {
         realChallans = fetchedChallans.map(challan => ({
           challanNumber: challan.challanNumber || challan.challan_number,
           offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
+          motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
           amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
           transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
           location: challan.challanPlace || challan.location || "Unknown",
           createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
-          receiptLink: challan.receipt_url || challan.receiptLink || ""
+          receiptLink: challan.receipt_url || challan.receiptLink || "",
+          ownerName: challan.accusedName || challan.ownerName || challan.owner_name || "",
+          ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || "",
+          rcNumber: challan.rcNumber || cleanRc
         }));
 
         await RTOChallanCache.findOneAndUpdate(
@@ -644,31 +656,31 @@ const directSearchChallans = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (realChallans.length > 0 && webhookRecords.length > 0) {
-       realChallans = realChallans.map(challan => {
-          const wh = webhookRecords.find(r => r.challanNumber === challan.challanNumber);
-          if (wh) {
-             let overrideStatus = challan.transactionStatus;
-             const txStatus = wh.transactionStatus?.toLowerCase();
-             const ioStatus = wh.ioStatus?.toLowerCase();
+      realChallans = realChallans.map(challan => {
+        const wh = webhookRecords.find(r => r.challanNumber === challan.challanNumber);
+        if (wh) {
+          let overrideStatus = challan.transactionStatus;
+          const txStatus = wh.transactionStatus?.toLowerCase();
+          const ioStatus = wh.ioStatus?.toLowerCase();
 
-             if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
-                 overrideStatus = "PAID";
-             } else if (txStatus === 'captured') {
-                 overrideStatus = "UNDER_PROCESS";
-             } else if (txStatus === 'failed' && ioStatus === 'refund') {
-                 overrideStatus = "UNPAID";
-             } else if (txStatus === 'initiated') {
-                 overrideStatus = "UNPAID";
-             }
-             
-             return {
-                 ...challan,
-                 transactionStatus: overrideStatus,
-                 _webhookRecord: wh
-             };
+          if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
+            overrideStatus = "PAID";
+          } else if (txStatus === 'captured') {
+            overrideStatus = "UNDER_PROCESS";
+          } else if (txStatus === 'failed' && ioStatus === 'refund') {
+            overrideStatus = "UNPAID";
+          } else if (txStatus === 'initiated') {
+            overrideStatus = "UNPAID";
           }
-          return challan;
-       });
+
+          return {
+            ...challan,
+            transactionStatus: overrideStatus,
+            _webhookRecord: wh
+          };
+        }
+        return challan;
+      });
     }
 
     // Add SEARCHED record in webhook schema

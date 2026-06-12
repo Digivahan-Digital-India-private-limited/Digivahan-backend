@@ -722,7 +722,7 @@ const GetUserdetailsThrowTheQRId = async (req, res) => {
 
         phone_number: user.basic_details?.phone_number || "",
 
-        full_name: `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || user.public_details?.nick_name || "",
+        full_name: user.public_details?.nick_name || `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "",
 
         profile_pic: user.public_details?.public_pic || "",
 

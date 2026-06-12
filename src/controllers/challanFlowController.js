@@ -249,7 +249,7 @@ const verifyChallanOtp = async (req, res) => {
         const cachedRecord = await RTOChallanCache.findOne({
           rcNumber: flowData.rcNumber,
           updatedAt: { $gte: oneDayAgo }
-        });
+        }).lean();
 
         if (cachedRecord) {
           console.log(`[ChallanFlow] Using cached challans from RTOChallanCache for ${flowData.rcNumber}`);
@@ -520,7 +520,7 @@ const refreshChallans = async (req, res) => {
     const webhookRecords = await ChallanWebhook.find({
       rcNumber: rcNumber,
       transactionStatus: { $ne: "SEARCHED" }
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 }).lean();
 
     if (realChallans.length > 0 && webhookRecords.length > 0) {
       realChallans = realChallans.map(challan => {
@@ -612,7 +612,7 @@ const directSearchChallans = async (req, res) => {
     const cachedRecord = await RTOChallanCache.findOne({
       rcNumber: cleanRc,
       updatedAt: { $gte: oneDayAgo }
-    });
+    }).lean();
 
     if (cachedRecord) {
       console.log(`[ChallanFlow] Using cached challans from RTOChallanCache for ${cleanRc}`);
@@ -653,7 +653,7 @@ const directSearchChallans = async (req, res) => {
     const webhookRecords = await ChallanWebhook.find({
       rcNumber: cleanRc,
       transactionStatus: { $ne: "SEARCHED" }
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 }).lean();
 
     if (realChallans.length > 0 && webhookRecords.length > 0) {
       realChallans = realChallans.map(challan => {
@@ -693,32 +693,10 @@ const directSearchChallans = async (req, res) => {
       });
     }
 
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
-
-    const userResponse = {
-      basic_details: {
-        profile_pic: user.basic_details.profile_pic,
-        first_name: user.basic_details.first_name,
-        last_name: user.basic_details.last_name,
-        phone_number: user.basic_details.phone_number,
-        phone_number_verified: user.basic_details.phone_number_verified,
-        is_phone_number_primary: user.basic_details.is_phone_number_primary,
-        email: user.basic_details.email,
-        is_email_verified: user.basic_details.is_email_verified,
-        is_email_primary: user.basic_details.is_email_primary,
-        profile_completion_percent: user.basic_details.profile_completion_percent,
-      },
-      public_details: user.public_details,
-      is_tracking_on: user.is_tracking_on,
-      token: token,
-      challans: realChallans,
-    };
-
     return res.status(200).json({
       status: true,
       message: "Challans fetched successfully",
-      user: userResponse
+      challans: realChallans
     });
   } catch (error) {
     console.error("Direct search error:", error);

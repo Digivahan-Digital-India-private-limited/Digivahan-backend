@@ -265,6 +265,7 @@ const verifyChallanOtp = async (req, res) => {
               motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
               amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
               transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
+              isSettled: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()),
               location: challan.challanPlace || challan.location || "Unknown",
               createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
               receiptLink: challan.receipt_url || challan.receiptLink || "",
@@ -507,6 +508,7 @@ const refreshChallans = async (req, res) => {
         motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
         amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
         transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
+        isSettled: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()),
         location: challan.challanPlace || challan.location || "Unknown",
         createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
         receiptLink: challan.receipt_url || challan.receiptLink || "",
@@ -539,15 +541,23 @@ const refreshChallans = async (req, res) => {
           } else if (txStatus === 'initiated' && overrideStatus !== "PAID") {
             overrideStatus = "UNPAID";
           }
-
           return {
             ...challan,
             transactionStatus: overrideStatus,
+            isSettled: overrideStatus === "PAID",
             _webhookRecord: wh
           };
         }
-        return challan;
+        return {
+          ...challan,
+          isSettled: challan.transactionStatus === "PAID" || challan.isSettled
+        };
       });
+    } else if (realChallans.length > 0) {
+      realChallans = realChallans.map(challan => ({
+        ...challan,
+        isSettled: challan.transactionStatus === "PAID" || challan.isSettled
+      }));
     }
 
     if (realChallans.length > 0) {
@@ -627,6 +637,7 @@ const directSearchChallans = async (req, res) => {
           motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
           amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
           transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
+          isSettled: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()),
           location: challan.challanPlace || challan.location || "Unknown",
           createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
           receiptLink: challan.receipt_url || challan.receiptLink || "",
@@ -676,11 +687,20 @@ const directSearchChallans = async (req, res) => {
           return {
             ...challan,
             transactionStatus: overrideStatus,
+            isSettled: overrideStatus === "PAID",
             _webhookRecord: wh
           };
         }
-        return challan;
+        return {
+          ...challan,
+          isSettled: challan.transactionStatus === "PAID" || challan.isSettled
+        };
       });
+    } else if (realChallans.length > 0) {
+      realChallans = realChallans.map(challan => ({
+        ...challan,
+        isSettled: challan.transactionStatus === "PAID" || challan.isSettled
+      }));
     }
 
     // Add SEARCHED record in webhook schema

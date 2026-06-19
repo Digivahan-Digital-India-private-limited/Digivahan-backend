@@ -94,6 +94,12 @@ const getAllChallanWebhooks = async (req, res) => {
         // Try to find phone by rcNumber from SEARCHED records map
         obj.userPhone = obj.rcNumber ? (rcToPhone[obj.rcNumber] || null) : null;
       }
+      
+      // Specifically remove userPhone for these two challans as per request
+      if (obj.challanNumber === 'TN14040240424105603' || obj.challanNumber === 'TN14184260224191310') {
+        obj.userPhone = null;
+      }
+      
       return obj;
     });
 

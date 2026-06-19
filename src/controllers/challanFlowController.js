@@ -264,7 +264,7 @@ const verifyChallanOtp = async (req, res) => {
               offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
               motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
               amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
-              transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
+              transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
               location: challan.challanPlace || challan.location || "Unknown",
               createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
               receiptLink: challan.receipt_url || challan.receiptLink || "",
@@ -506,7 +506,7 @@ const refreshChallans = async (req, res) => {
         offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
         motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
         amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
-        transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
+        transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
         location: challan.challanPlace || challan.location || "Unknown",
         createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
         receiptLink: challan.receipt_url || challan.receiptLink || "",
@@ -532,11 +532,11 @@ const refreshChallans = async (req, res) => {
 
           if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
             overrideStatus = "PAID";
-          } else if (txStatus === 'captured') {
+          } else if (txStatus === 'captured' && overrideStatus !== "PAID") {
             overrideStatus = "UNDER_PROCESS";
-          } else if (txStatus === 'failed' && ioStatus === 'refund') {
+          } else if (txStatus === 'failed' && ioStatus === 'refund' && overrideStatus !== "PAID") {
             overrideStatus = "UNPAID";
-          } else if (txStatus === 'initiated') {
+          } else if (txStatus === 'initiated' && overrideStatus !== "PAID") {
             overrideStatus = "UNPAID";
           }
 
@@ -626,7 +626,7 @@ const directSearchChallans = async (req, res) => {
           offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
           motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
           amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
-          transactionStatus: challan.challanStatus === "Cash" ? "PAID" : "UNPAID",
+          transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
           location: challan.challanPlace || challan.location || "Unknown",
           createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
           receiptLink: challan.receipt_url || challan.receiptLink || "",
@@ -665,11 +665,11 @@ const directSearchChallans = async (req, res) => {
 
           if (txStatus === 'success' || txStatus === 'paid' || (txStatus === 'captured' && wh.isSettled)) {
             overrideStatus = "PAID";
-          } else if (txStatus === 'captured') {
+          } else if (txStatus === 'captured' && overrideStatus !== "PAID") {
             overrideStatus = "UNDER_PROCESS";
-          } else if (txStatus === 'failed' && ioStatus === 'refund') {
+          } else if (txStatus === 'failed' && ioStatus === 'refund' && overrideStatus !== "PAID") {
             overrideStatus = "UNPAID";
-          } else if (txStatus === 'initiated') {
+          } else if (txStatus === 'initiated' && overrideStatus !== "PAID") {
             overrideStatus = "UNPAID";
           }
 

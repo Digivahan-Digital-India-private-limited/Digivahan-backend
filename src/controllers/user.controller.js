@@ -18,12 +18,15 @@ exports.getAllUsers = async (req, res) => {
     }
 
     if (search.trim()) {
+      const cleanSearch = search.replace(/\s+/g, "");
       matchStage.$or = [
         { "basic_details.first_name": { $regex: search, $options: "i" } },
         { "basic_details.last_name": { $regex: search, $options: "i" } },
         { "basic_details.phone_number": { $regex: search, $options: "i" } },
         { "basic_details.email": { $regex: search, $options: "i" } },
         { "public_details.nick_name": { $regex: search, $options: "i" } },
+        { "garage.vehicles.vehicle_id": { $regex: search, $options: "i" } },
+        { "garage.vehicles.vehicle_id": { $regex: cleanSearch, $options: "i" } },
       ];
     }
 

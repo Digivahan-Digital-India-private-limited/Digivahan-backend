@@ -185,6 +185,7 @@ const verifyChallanOtp = async (req, res) => {
           is_active: true,
           is_tracking_on: true,
           account_status: "ACTIVE",
+          challan_credits: 10, // New users start with 10 credits
           qr_list: [],
           garage: { vehicles: [] }
         });
@@ -231,13 +232,57 @@ const verifyChallanOtp = async (req, res) => {
       }
     }
 
+    // 🪙 CREDIT CHECK — Only deduct if searching a NEW RC number
+    const currentCredits = user.challan_credits ?? 10;
+    let remainingCredits = currentCredits;
+    let shouldDeduct = false;
+    let userHasSearchRecord = false;
+
+    if (flowData.rcNumber) {
+      const cleanRc = flowData.rcNumber.toUpperCase().trim();
+      
+      // 1. Check if user already searched recently
+      userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
+      
+      // 2. Check if RC is in their garage
+      if (!userHasSearchRecord && user.garage?.vehicles?.some(v => v.vehicle_id === cleanRc)) {
+        userHasSearchRecord = true;
+      }
+
+      // 3. Check legacy API logs
+      if (!userHasSearchRecord) {
+        userHasSearchRecord = await RTOApiLog.exists({ userId: user._id, vehicleNumber: cleanRc });
+      }
+
+      if (!userHasSearchRecord) {
+        shouldDeduct = true;
+      }
+    }
+
+    if (shouldDeduct && currentCredits <= 0) {
+      await redis.del(`challanFlow:${flow_id}`);
+      return res.status(403).json({
+        status: false,
+        error_type: "no_credits",
+        message: "You have used all your credits. You cannot search any more new challans.",
+        challan_credits: 0,
+      });
+    }
+
+    if (shouldDeduct) {
+      remainingCredits = Math.max(0, currentCredits - 1);
+    }
+
     const token = generateAuthToken({
       user_id: user._id,
       email: user.basic_details.email || "",
       phone_number: user.basic_details.phone_number,
     });
 
-    await User.updateOne({ _id: user._id }, { $set: { is_logged_in: true } });
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { is_logged_in: true, challan_credits: remainingCredits } }
+    );
     await redis.del(`challanFlow:${flow_id}`);
 
     // Fetch Real Challans using new RTOChallanCache schema
@@ -293,7 +338,6 @@ const verifyChallanOtp = async (req, res) => {
         }
 
         // Add a single SEARCHED record into Webhook schema so user history tracks this search
-        const userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: flowData.rcNumber });
         if (!userHasSearchRecord) {
           await ChallanWebhook.create({
             userId: user._id,
@@ -323,6 +367,7 @@ const verifyChallanOtp = async (req, res) => {
       is_tracking_on: user.is_tracking_on,
       token: token,
       challans: realChallans, // Return real challans to frontend
+      challan_credits: remainingCredits, // 🪙 Include remaining credits
     };
 
     return res.status(200).json({
@@ -484,15 +529,34 @@ const refreshChallans = async (req, res) => {
       return res.status(400).json({ status: false, message: "RC Number is required" });
     }
 
-    // 🔥 BLOCKED check
+    // 🔥 BLOCKED or DELETED check + 🪙 CREDIT CHECK
+    let refreshUser = null;
     if (userId) {
-      const user = await User.findById(userId).select("account_status blocked_reason");
-      if (user && user.account_status === "BLOCKED") {
+      refreshUser = await User.findById(userId).select("account_status blocked_reason challan_credits");
+      if (refreshUser && refreshUser.account_status === "BLOCKED") {
         return res.status(403).json({
           status: false,
           error_type: "blocked",
           message: "Your account has been blocked. You cannot use this service.",
-          reason: user.blocked_reason || "Blocked by admin",
+          reason: refreshUser.blocked_reason || "Blocked by admin",
+        });
+      }
+
+      if (refreshUser && refreshUser.account_status === "DELETED") {
+        return res.status(401).json({
+          status: false,
+          error_type: "user_deleted",
+          message: "User account is deleted.",
+        });
+      }
+
+      const refreshCredits = refreshUser?.challan_credits ?? 10;
+      if (refreshCredits <= 0) {
+        return res.status(403).json({
+          status: false,
+          error_type: "no_credits",
+          message: "You have used all your credits. You cannot refresh any more challans.",
+          challan_credits: 0,
         });
       }
     }
@@ -574,10 +638,21 @@ const refreshChallans = async (req, res) => {
       );
     }
 
+    // 🪙 Deduct 1 credit after successful refresh
+    // Use $set with computed value (not $inc) to avoid MongoDB creating
+    // the field as -1 when it doesn't exist on legacy users
+    let refreshRemainingCredits = null;
+    if (userId && refreshUser) {
+      const currentRefreshCredits = refreshUser.challan_credits ?? 10;
+      refreshRemainingCredits = Math.max(0, currentRefreshCredits - 1);
+      await User.updateOne({ _id: userId }, { $set: { challan_credits: refreshRemainingCredits } });
+    }
+
     return res.status(200).json({
       status: true,
       message: "Challans refreshed successfully",
-      challans: realChallans
+      challans: realChallans,
+      challan_credits: refreshRemainingCredits, // 🪙 Include remaining credits
     });
   } catch (error) {
     console.error("[ChallanFlow] Refresh error:", error);
@@ -598,13 +673,13 @@ const directSearchChallans = async (req, res) => {
     }
 
     const user = await User.findById(userId).select(
-      "basic_details public_details is_tracking_on account_status blocked_reason is_active"
+      "basic_details public_details is_tracking_on account_status blocked_reason is_active challan_credits"
     );
     if (!user) {
       return res.status(404).json({ status: false, message: "User not found" });
     }
 
-    // 🔥 BLOCKED check — deny API access
+    // 🔥 BLOCKED or DELETED check — deny API access
     if (user.account_status === "BLOCKED") {
       return res.status(403).json({
         status: false,
@@ -614,7 +689,40 @@ const directSearchChallans = async (req, res) => {
       });
     }
 
+    if (user.account_status === "DELETED") {
+      return res.status(401).json({
+        status: false,
+        error_type: "user_deleted",
+        message: "User account is deleted.",
+      });
+    }
+
     const cleanRc = rcNumber.toUpperCase().trim();
+
+    // 🪙 CREDIT CHECK — deny if no credits left and it's a NEW RC search
+    const directCredits = user.challan_credits ?? 10;
+    
+    // 1. Check if user already searched recently
+    let userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
+    
+    // 2. Check if RC is in their garage
+    if (!userHasSearchRecord && user.garage?.vehicles?.some(v => v.vehicle_id === cleanRc)) {
+      userHasSearchRecord = true;
+    }
+
+    // 3. Check legacy API logs
+    if (!userHasSearchRecord) {
+      userHasSearchRecord = await RTOApiLog.exists({ userId: user._id, vehicleNumber: cleanRc });
+    }
+
+    if (!userHasSearchRecord && directCredits <= 0) {
+      return res.status(403).json({
+        status: false,
+        error_type: "no_credits",
+        message: "You have used all your credits. You cannot search any more new challans.",
+        challan_credits: 0,
+      });
+    }
 
     // 1. Fetch from Cache or API
     let realChallans = [];
@@ -704,19 +812,31 @@ const directSearchChallans = async (req, res) => {
     }
 
     // Add SEARCHED record in webhook schema
-    const userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
+    let directRemainingCredits = directCredits;
     if (!userHasSearchRecord) {
       await ChallanWebhook.create({
         userId: user._id,
         rcNumber: cleanRc,
         transactionStatus: "SEARCHED",
       });
+
+      // 🪙 Deduct 1 credit after successful search for a NEW RC
+      directRemainingCredits = Math.max(0, directCredits - 1);
+      await User.updateOne({ _id: userId }, { $set: { challan_credits: directRemainingCredits } });
     }
 
     return res.status(200).json({
       status: true,
       message: "Challans fetched successfully",
-      challans: realChallans
+      challans: realChallans,
+      challan_credits: directRemainingCredits, // 🪙 Include remaining credits
+      user: {
+        basic_details: {
+          phone_number: user.basic_details.phone_number,
+          first_name: user.basic_details.first_name,
+          last_name: user.basic_details.last_name,
+        }
+      }
     });
   } catch (error) {
     console.error("Direct search error:", error);
@@ -741,6 +861,43 @@ const renderCheckoutHtml = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/challan-flow/credits
+ * Returns the current challan_credits for the logged-in user.
+ * Returns 401 if user not found or deleted → frontend uses this to clear stale localStorage.
+ */
+const getChallanCredits = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ status: false, message: "Unauthorized" });
+    }
+
+    const user = await User.findById(userId).select("challan_credits account_status");
+    if (!user || user.account_status === "DELETED") {
+      // Return 401 so frontend knows to clear stale data
+      return res.status(401).json({ status: false, error_type: "user_deleted", message: "User not found or deleted" });
+    }
+
+    // Always return a non-negative value (guards against legacy $inc -1 bug)
+    const safeCredits = Math.max(0, user.challan_credits ?? 10);
+
+    // If DB has a negative value (legacy bug), fix it silently
+    if ((user.challan_credits ?? 10) < 0) {
+      await User.updateOne({ _id: userId }, { $set: { challan_credits: safeCredits } });
+    }
+
+    return res.status(200).json({
+      status: true,
+      challan_credits: safeCredits,
+      user_id: userId,
+    });
+  } catch (error) {
+    console.error("[ChallanFlow] getChallanCredits error:", error);
+    return res.status(500).json({ status: false, message: "Failed to fetch credits" });
+  }
+};
+
 module.exports = {
   initChallanFlow,
   verifyChallanOtp,
@@ -749,4 +906,5 @@ module.exports = {
   refreshChallans,
   directSearchChallans,
   renderCheckoutHtml,
+  getChallanCredits,
 };

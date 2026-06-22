@@ -3,7 +3,7 @@ const User = require("../models/User");
 const UserDeletion = require("../models/UserDeletion");
 const QRAssignment = require("../models/QRAssignment"); 
 
-function startDeletionCron() {
+function startCronJobs() {
 
   // Runs every day at 12:00 AM (midnight)
   cron.schedule("0 0 * * *", async () => {
@@ -45,7 +45,23 @@ function startDeletionCron() {
     }
   });
 
+  // Runs every 3 days at 12:00 AM (midnight)
+  cron.schedule("0 0 */3 * *", async () => {
+    try {
+      console.log("[CRON] Running 3-day challan credits reset...");
+      // Apply to all users
+      const result = await User.updateMany(
+        {}, 
+        { $set: { challan_credits: 10 } }
+      );
+      console.log(`[CRON] Challan credits reset to 10 for ${result.modifiedCount} users.`);
+    } catch (error) {
+      console.error("[CRON] Challan credits reset ERROR:", error);
+    }
+  });
+
   console.log("User deletion CRON (12 AM daily) started...");
+  console.log("Challan Credits Reset CRON (Every 3 days) started...");
 }
 
-module.exports = startDeletionCron;
+module.exports = startCronJobs;

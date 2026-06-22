@@ -274,6 +274,11 @@ const userSchema = new mongoose.Schema(
     ],
     emergency_contacts: [emergencyContactSchema],
     garage: garageSchema,
+    challan_credits: {
+      type: Number,
+      default: 10,
+      min: 0,
+    },
     is_active: { type: Boolean, default: true },
     is_logged_in: { type: Boolean, default: false },
     suspended_until: { type: Date, default: null },

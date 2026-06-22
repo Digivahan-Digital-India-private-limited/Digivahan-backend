@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { initChallanFlow, verifyChallanOtp, getChallanHistory, getChallanPaymentUrl, refreshChallans, directSearchChallans, renderCheckoutHtml } = require("../controllers/challanFlowController");
+const { initChallanFlow, verifyChallanOtp, getChallanHistory, getChallanPaymentUrl, refreshChallans, directSearchChallans, renderCheckoutHtml, getChallanCredits } = require("../controllers/challanFlowController");
 const { API_ROUTES } = require("../../constants/apiRoutes");
 const { authenticateToken } = require("../middleware/auth");
 
@@ -10,6 +10,9 @@ router.get(API_ROUTES.CHALLAN_FLOW.HISTORY, authenticateToken, getChallanHistory
 router.post(API_ROUTES.CHALLAN_FLOW.PAYMENT_URL, getChallanPaymentUrl);
 router.post("/refresh", authenticateToken, refreshChallans);
 router.post("/direct-search", authenticateToken, directSearchChallans);
+
+// GET /credits — returns remaining challan credits for the logged-in user
+router.get("/credits", authenticateToken, getChallanCredits);
 
 router.get("/render-checkout/:checkoutId", renderCheckoutHtml);
 

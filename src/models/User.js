@@ -276,7 +276,7 @@ const userSchema = new mongoose.Schema(
     garage: garageSchema,
     challan_credits: {
       type: Number,
-      default: 10,
+      default: 3,
       min: 0,
     },
     is_active: { type: Boolean, default: true },

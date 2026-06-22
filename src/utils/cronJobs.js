@@ -52,7 +52,7 @@ function startCronJobs() {
       // Apply to all users
       const result = await User.updateMany(
         {}, 
-        { $set: { challan_credits: 10 } }
+        { $set: { challan_credits: 3 } }
       );
       console.log(`[CRON] Challan credits reset to 10 for ${result.modifiedCount} users.`);
     } catch (error) {

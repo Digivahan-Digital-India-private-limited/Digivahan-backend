@@ -185,7 +185,7 @@ const verifyChallanOtp = async (req, res) => {
           is_active: true,
           is_tracking_on: true,
           account_status: "ACTIVE",
-          challan_credits: 10, // New users start with 10 credits
+          challan_credits: 3, // New users start with 3 credits
           qr_list: [],
           garage: { vehicles: [] }
         });
@@ -233,7 +233,7 @@ const verifyChallanOtp = async (req, res) => {
     }
 
     // 🪙 CREDIT CHECK — Only deduct if searching a NEW RC number
-    const currentCredits = user.challan_credits ?? 10;
+    const currentCredits = user.challan_credits ?? 3;
     let remainingCredits = currentCredits;
     let shouldDeduct = false;
     let userHasSearchRecord = false;
@@ -550,7 +550,7 @@ const refreshChallans = async (req, res) => {
         });
       }
 
-      const refreshCredits = refreshUser?.challan_credits ?? 10;
+      const refreshCredits = refreshUser?.challan_credits ?? 3;
       if (refreshCredits <= 0) {
         return res.status(403).json({
           status: false,
@@ -643,7 +643,7 @@ const refreshChallans = async (req, res) => {
     // the field as -1 when it doesn't exist on legacy users
     let refreshRemainingCredits = null;
     if (userId && refreshUser) {
-      const currentRefreshCredits = refreshUser.challan_credits ?? 10;
+      const currentRefreshCredits = refreshUser.challan_credits ?? 3;
       refreshRemainingCredits = Math.max(0, currentRefreshCredits - 1);
       await User.updateOne({ _id: userId }, { $set: { challan_credits: refreshRemainingCredits } });
     }
@@ -700,7 +700,7 @@ const directSearchChallans = async (req, res) => {
     const cleanRc = rcNumber.toUpperCase().trim();
 
     // 🪙 CREDIT CHECK — deny if no credits left and it's a NEW RC search
-    const directCredits = user.challan_credits ?? 10;
+    const directCredits = user.challan_credits ?? 3;
     
     // 1. Check if user already searched recently
     let userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
@@ -880,10 +880,10 @@ const getChallanCredits = async (req, res) => {
     }
 
     // Always return a non-negative value (guards against legacy $inc -1 bug)
-    const safeCredits = Math.max(0, user.challan_credits ?? 10);
+    const safeCredits = Math.max(0, user.challan_credits ?? 3);
 
     // If DB has a negative value (legacy bug), fix it silently
-    if ((user.challan_credits ?? 10) < 0) {
+    if ((user.challan_credits ?? 3) < 0) {
       await User.updateOne({ _id: userId }, { $set: { challan_credits: safeCredits } });
     }
 

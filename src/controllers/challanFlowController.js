@@ -7,6 +7,7 @@ const ChallanWebhook = require("../models/ChallanWebhook");
 const RTOChallanCache = require("../models/RTOChallanCache");
 const RTOApiLog = require("../models/RTOApiLog");
 const axios = require("axios");
+const { getNoCreditsMessage } = require("../utils/creditUtils");
 
 
 /**
@@ -264,7 +265,7 @@ const verifyChallanOtp = async (req, res) => {
       return res.status(403).json({
         status: false,
         error_type: "no_credits",
-        message: "You have used all your credits. You cannot search any more new challans.",
+        message: getNoCreditsMessage(),
         challan_credits: 0,
       });
     }
@@ -555,7 +556,7 @@ const refreshChallans = async (req, res) => {
         return res.status(403).json({
           status: false,
           error_type: "no_credits",
-          message: "You have used all your credits. You cannot refresh any more challans.",
+          message: getNoCreditsMessage(),
           challan_credits: 0,
         });
       }
@@ -719,7 +720,7 @@ const directSearchChallans = async (req, res) => {
       return res.status(403).json({
         status: false,
         error_type: "no_credits",
-        message: "You have used all your credits. You cannot search any more new challans.",
+        message: getNoCreditsMessage(),
         challan_credits: 0,
       });
     }

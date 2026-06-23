@@ -11,6 +11,8 @@ const {
   maskVehicleNumber,
   maskAlphaNumeric,
 } = require("../utils/maskData");
+const ChallanWebhook = require("../models/ChallanWebhook");
+const { getNoCreditsMessage } = require("../utils/creditUtils");
 
 /**
  * Add Vehicle to Garage - Fetch vehicle data from RTO and save to user's garage
@@ -29,12 +31,68 @@ const addVehicle = async (req, res) => {
       });
     }
 
+    let user = null;
+    let deductCredit = false;
+    let remainingCredits = null;
+
+    if (userId) {
+      user = await User.findById(userId).select("account_status blocked_reason challan_credits garage");
+      
+      if (user && user.account_status === "BLOCKED") {
+        return res.status(403).json({
+          status: false,
+          error_type: "blocked",
+          message: "Your account has been blocked. You cannot use this service.",
+          reason: user.blocked_reason || "Blocked by admin",
+        });
+      }
+
+      if (user && user.account_status === "DELETED") {
+        return res.status(401).json({
+          status: false,
+          error_type: "user_deleted",
+          message: "User account is deleted.",
+        });
+      }
+
+      const cleanRc = vehicle_number.toUpperCase().trim();
+      const directCredits = user?.challan_credits ?? 3;
+      
+      let userHasSearchRecord = false;
+      userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
+      
+      if (!userHasSearchRecord && user.garage?.vehicles?.some(v => v.vehicle_id === cleanRc)) {
+        userHasSearchRecord = true;
+      }
+      if (!userHasSearchRecord) {
+        userHasSearchRecord = await RTOApiLog.exists({ userId: user._id, vehicleNumber: cleanRc });
+      }
+
+      if (!userHasSearchRecord) {
+        if (directCredits <= 0) {
+          return res.status(403).json({
+            status: false,
+            error_type: "no_credits",
+            message: getNoCreditsMessage(),
+            challan_credits: 0,
+          });
+        }
+        deductCredit = true;
+        remainingCredits = directCredits - 1;
+      } else {
+        remainingCredits = directCredits;
+      }
+    }
+
     // 🔥 FAST indexed lookup
     const cachedVehicle = await VehicleInfoData.findOne({
       vehicle_id: vehicle_number,
     }).lean();
 
     if (cachedVehicle) {
+      if (deductCredit && userId) {
+        await User.updateOne({ _id: userId }, { $set: { challan_credits: remainingCredits } });
+      }
       return res.status(200).json({
         status: true,
         message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
@@ -42,6 +100,7 @@ const addVehicle = async (req, res) => {
           result: maskVehicleResponse(cachedVehicle.api_data),
           data_source: cachedVehicle.data_source,
         },
+        challan_credits: remainingCredits,
       });
     }
 
@@ -72,6 +131,10 @@ const addVehicle = async (req, res) => {
       data_source: dataSource,
     });
 
+    if (deductCredit && userId) {
+      await User.updateOne({ _id: userId }, { $set: { challan_credits: remainingCredits } });
+    }
+
     return res.status(200).json({
       status: true,
       message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
@@ -79,6 +142,7 @@ const addVehicle = async (req, res) => {
         result: maskVehicleResponse(vehicleData),
         data_source: dataSource,
       },
+      challan_credits: remainingCredits,
     });
   } catch (error) {
     console.error("Add vehicle error:", error);
@@ -673,6 +737,40 @@ const RefreshVehicleData = async (req, res) => {
       });
     }
 
+    let user = null;
+    let refreshRemainingCredits = null;
+
+    if (userId) {
+      user = await User.findById(userId).select("account_status blocked_reason challan_credits");
+      
+      if (user && user.account_status === "BLOCKED") {
+        return res.status(403).json({
+          status: false,
+          error_type: "blocked",
+          message: "Your account has been blocked. You cannot use this service.",
+          reason: user.blocked_reason || "Blocked by admin",
+        });
+      }
+
+      if (user && user.account_status === "DELETED") {
+        return res.status(401).json({
+          status: false,
+          error_type: "user_deleted",
+          message: "User account is deleted.",
+        });
+      }
+
+      const refreshCredits = user?.challan_credits ?? 3;
+      if (refreshCredits <= 0) {
+        return res.status(403).json({
+          status: false,
+          error_type: "no_credits",
+          message: getNoCreditsMessage(),
+          challan_credits: 0,
+        });
+      }
+    }
+
     // 1️⃣ Get vehicle from master collection
     const vehicleDoc = await VehicleInfoData.findOne({ vehicle_id });
 
@@ -697,10 +795,17 @@ const RefreshVehicleData = async (req, res) => {
     vehicleDoc.api_data.last_updated = new Date();
     await vehicleDoc.save();
 
+    if (userId && user) {
+      const currentRefreshCredits = user.challan_credits ?? 3;
+      refreshRemainingCredits = Math.max(0, currentRefreshCredits - 1);
+      await User.updateOne({ _id: userId }, { $set: { challan_credits: refreshRemainingCredits } });
+    }
+
     return res.status(200).json({
       status: true,
       message: "Vehicle data refreshed successfully",
       data: transformedData,
+      challan_credits: refreshRemainingCredits,
     });
   } catch (error) {
     console.error("RefreshVehicleData Error:", error);

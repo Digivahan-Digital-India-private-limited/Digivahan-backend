@@ -285,6 +285,27 @@ exports.updateChallanPay = async (req, res) => {
   }
 };
 
+// ONE SIGNAL ID DATA UPDATE
+exports.updateOneSignalID = async (req, res) => {
+  try {
+    const { oneSignalID } = req.body;
+
+    const doc = await getMainDoc();
+    doc.oneSignalID = oneSignalID || "";
+    await doc.save();
+
+    return res.json({ 
+      success: true, 
+      message: "One Signal ID data updated successfully",
+      data: doc.oneSignalID 
+    });
+  } catch (e) {
+    console.error("One Signal ID Update Error:", e);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
 exports.getAppInfo = async (req, res) => {
   try {
     const doc = await AppInfo.findOne().lean().exec();

@@ -13,7 +13,8 @@ const {
   updateRazorpayliveKey,
   getAppInfo,
   updateZigoAppData,
-  updateChallanPay
+  updateChallanPay,
+  updateOneSignalID
 } = require("../controllers/appInfo.controller");
 
 // GET ANDROID VERSION
@@ -46,6 +47,9 @@ router.post("/api/v1/app-info/zigo-app", updateZigoAppData)
 
 //  CHALLAN PAY DATA ROUTES (Only POST to update)
 router.post("/api/v1/app-info/challan", updateChallanPay);
+
+//  ONE SIGNAL ID ROUTES (Only POST to update)
+router.post("/api/v1/app-info/onesignal", updateOneSignalID);
 
 // GET FULL APP INFO (Android, iOS, Policies everything)
 router.get("/api/v1/app-info", getAppInfo);

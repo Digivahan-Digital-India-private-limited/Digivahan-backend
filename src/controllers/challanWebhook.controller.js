@@ -69,6 +69,8 @@ const challanWebHook = async (req, res) => {
  */
 const getAllChallanWebhooks = async (req, res) => {
   try {
+    const RTOApiLog = require("../models/RTOApiLog");
+
     // Fetch all records with userId populated (phone number)
     const records = await ChallanWebhook.find({})
       .sort({ createdAt: -1 })
@@ -83,6 +85,47 @@ const getAllChallanWebhooks = async (req, res) => {
       }
     }
 
+    // Identify rcNumbers that are still missing phone mapping
+    const missingRcNumbers = records
+      .filter((rec) => !rec.userId && rec.rcNumber && !rcToPhone[rec.rcNumber])
+      .map((rec) => rec.rcNumber);
+
+    if (missingRcNumbers.length > 0) {
+      // Find logs for these missing RC numbers
+      const logs = await RTOApiLog.find({
+        vehicleNumber: { $in: missingRcNumbers },
+        userId: { $ne: null }
+      }).sort({ createdAt: -1 }).lean();
+
+      const rcToUserId = {};
+      const userIdsToFetch = new Set();
+
+      // Since it's sorted by latest, the first match per RC is the most recent user
+      for (const log of logs) {
+        if (!rcToUserId[log.vehicleNumber]) {
+          rcToUserId[log.vehicleNumber] = log.userId;
+          userIdsToFetch.add(log.userId.toString());
+        }
+      }
+
+      if (userIdsToFetch.size > 0) {
+        const users = await User.find({ _id: { $in: Array.from(userIdsToFetch) } })
+          .select("basic_details.phone_number");
+        const userIdToPhone = {};
+        for (const user of users) {
+          userIdToPhone[user._id.toString()] = user.basic_details?.phone_number;
+        }
+
+        // Add them to rcToPhone
+        for (const rc of missingRcNumbers) {
+          if (rcToUserId[rc]) {
+            const phone = userIdToPhone[rcToUserId[rc].toString()];
+            if (phone) rcToPhone[rc] = phone;
+          }
+        }
+      }
+    }
+
     // Enrich records that are external webhooks (no userId) using the rcToPhone map
     const enriched = records.map((rec) => {
       const obj = rec.toObject();
@@ -91,15 +134,15 @@ const getAllChallanWebhooks = async (req, res) => {
         obj.userPhone = obj.userId.basic_details.phone_number || null;
         obj.userId = obj.userId._id; // collapse back to ID for clean response
       } else {
-        // Try to find phone by rcNumber from SEARCHED records map
+        // Try to find phone by rcNumber from our mapped records (SEARCHED or RTOApiLog)
         obj.userPhone = obj.rcNumber ? (rcToPhone[obj.rcNumber] || null) : null;
       }
-      
+
       // Specifically remove userPhone for these two challans as per request
       if (obj.challanNumber === 'TN14040240424105603' || obj.challanNumber === 'TN14184260224191310') {
         obj.userPhone = null;
       }
-      
+
       return obj;
     });
 
@@ -126,7 +169,7 @@ const deleteChallanWebhook = async (req, res) => {
   try {
     const { id } = req.params;
     const result = await ChallanWebhook.findByIdAndDelete(id);
-    
+
     if (!result) {
       return res.status(404).json({
         success: false,
@@ -155,7 +198,7 @@ const deleteChallanWebhook = async (req, res) => {
 const bulkDeleteChallanWebhooks = async (req, res) => {
   try {
     const { ids } = req.body;
-    
+
     if (!ids || !Array.isArray(ids)) {
       return res.status(400).json({
         success: false,

@@ -57,6 +57,9 @@ const AppInfoSchema = new mongoose.Schema({
 
   // ✅ Challan Pay String Data
   challanPay: { type: String, default: "" },
+  
+  // ✅ One Signal ID Data
+  oneSignalID: { type: String, default: "" },
 });
 
 module.exports = mongoose.model("AppInfo", AppInfoSchema);

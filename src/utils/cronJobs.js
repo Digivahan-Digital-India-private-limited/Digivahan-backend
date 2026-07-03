@@ -49,12 +49,12 @@ function startCronJobs() {
   cron.schedule("0 0 */3 * *", async () => {
     try {
       console.log("[CRON] Running 3-day challan credits reset...");
-      // Apply to all users
+      // Top up credits to exactly 3 for everyone who doesn't have 3
       const result = await User.updateMany(
-        {}, 
-        { $inc: { challan_credits: 3 } }
+        { challan_credits: { $ne: 3 } }, 
+        { $set: { challan_credits: 3 } }
       );
-      console.log(`[CRON] 3 Challan credits added for ${result.modifiedCount} users.`);
+      console.log(`[CRON] Challan credits topped up to 3 for ${result.modifiedCount} users.`);
     } catch (error) {
       console.error("[CRON] Challan credits reset ERROR:", error);
     }

@@ -8,6 +8,117 @@ const ShiprocketOrder = require("../models/ShiprocketSchema");
 const DeliveryOrder = require("../models/DeliverySchema");
 const getISTDateTime = require("../middleware/generateISTDateTime");
 const qs = require("qs");
+const { sendGraphEmail } = require("../utils/sendEmail");
+
+// Admin emails jo har naye order pe notification paayenge
+const ORDER_NOTIFICATION_EMAILS = [
+  "Mustafahasan555@gmail.com",
+  "Sandeep.Rathor@digivahan.in",
+  "pinkusharma9697@gmail.com",
+  "hasansaifkhan0@gmail.com",
+];
+
+/**
+ * Naye order ka notification email bhejta hai sabhi admin IDs pe
+ */
+const sendNewOrderNotificationEmails = async (order, user) => {
+  try {
+    const orderDate = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    const itemsHtml = (order.order_items || []).map((item) => `
+      <tr>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #333; font-size: 14px;">${item.name || "N/A"}</td>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #555; font-size: 14px; text-align: center;">${item.units || 1}</td>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #555; font-size: 14px; text-align: right;">₹${item.selling_price || "N/A"}</td>
+      </tr>
+    `).join("");
+
+    const emailHtml = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 650px; margin: 30px auto; padding: 0; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,0.12); border: 1px solid #e0e0e0;">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%); padding: 30px 32px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 0.5px;">🛒 New Order Received!</h1>
+          <p style="color: #bbdefb; margin: 8px 0 0; font-size: 14px;">DigiVahan Order Notification</p>
+        </div>
+
+        <!-- Body -->
+        <div style="background: #ffffff; padding: 30px 32px;">
+
+          <!-- Order Info -->
+          <div style="background: #f8f9ff; border-left: 4px solid #1a73e8; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px;">
+            <p style="margin: 0 0 8px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.8px;">Order Details</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Order ID:</strong> ${order.order_id || order._id}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Date & Time:</strong> ${orderDate}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Payment Method:</strong> ${order.payment_method || "N/A"}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Shipping Mode:</strong> ${order.shipping_mode || "N/A"}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Active Partner:</strong> ${order.active_partner || "N/A"}</p>
+          </div>
+
+          <!-- Customer Info -->
+          <div style="background: #f8f9ff; border-left: 4px solid #34a853; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px;">
+            <p style="margin: 0 0 8px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.8px;">Customer Details</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Name:</strong> ${order.shipping?.first_name || ""} ${order.shipping?.last_name || ""}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Phone:</strong> ${order.shipping?.phone || "N/A"}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Email:</strong> ${order.shipping?.email || user?.email || "N/A"}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Address:</strong> ${order.shipping?.address1 || ""}, ${order.shipping?.address2 || ""}, ${order.shipping?.city || ""}, ${order.shipping?.state || ""} - ${order.shipping?.pincode || ""}</p>
+          </div>
+
+          <!-- Order Items -->
+          <p style="font-size: 14px; color: #444; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.8px;">Order Items</p>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; border-radius: 8px; overflow: hidden; border: 1px solid #e8e8e8;">
+            <thead>
+              <tr style="background: #1a73e8;">
+                <th style="padding: 12px 14px; color: #fff; font-size: 13px; text-align: left;">Product</th>
+                <th style="padding: 12px 14px; color: #fff; font-size: 13px; text-align: center;">Qty</th>
+                <th style="padding: 12px 14px; color: #fff; font-size: 13px; text-align: right;">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <!-- Amount Summary -->
+          <div style="background: #e8f5e9; border-left: 4px solid #34a853; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px;">
+            <p style="margin: 0 0 8px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.8px;">Amount Summary</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Sub Total:</strong> ₹${order.sub_total || "N/A"}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Order Value:</strong> ₹${order.order_value || "N/A"}</p>
+            <p style="margin: 4px 0; font-size: 15px; color: #222;"><strong>Declared Value:</strong> ₹${order.declared_value || "N/A"}</p>
+          </div>
+
+          <p style="font-size: 14px; color: #888; text-align: center; margin-top: 10px;">Yeh ek automated notification email hai. Kripya admin panel me login karein aur order confirm karein.</p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #f5f5f5; padding: 18px 32px; text-align: center; border-top: 1px solid #e0e0e0;">
+          <p style="margin: 0; font-size: 12px; color: #aaa;">&copy; ${new Date().getFullYear()} DigiVahan. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    // Sabhi 4 admin emails pe concurrently bhejo
+    const emailPromises = ORDER_NOTIFICATION_EMAILS.map((emailAddress) =>
+      sendGraphEmail({
+        to: emailAddress,
+        subject: `🛒 New Order Alert - Order ID: ${order.order_id || order._id}`,
+        html: emailHtml,
+      }).catch((err) =>
+        console.error(`[Order Notification] Failed to send email to ${emailAddress}:`, err.message)
+      )
+    );
+
+    await Promise.all(emailPromises);
+    console.log(`[Order Notification] Emails sent successfully for order: ${order.order_id || order._id}`);
+  } catch (err) {
+    // Email failure se order create hone mein rukawat na aaye
+    console.error("[Order Notification] Error sending notification emails:", err.message);
+  }
+};
 
 // ------------------------------
 // Generate Order Controller
@@ -140,6 +251,11 @@ const GenerateOrderByUser = async (req, res) => {
     } else {
       console.log("⚠️ Socket IO not initialized");
     }
+
+    // Naye order ka notification email bhejo sabhi admin IDs pe (background mein)
+    sendNewOrderNotificationEmails(order, user).catch((err) =>
+      console.error("[Order Notification] Unhandled error:", err.message)
+    );
 
     return res.status(201).json({
       status: true,
@@ -682,7 +798,7 @@ const GenerateDeliveryPickup = async (pickupPayload) => {
   } catch (error) {
     const delhiveryError = error?.response?.data;
     let errMsg = "Failed to create Delhivery pickup";
-    
+
     if (delhiveryError) {
       if (typeof delhiveryError === "object") {
         errMsg = delhiveryError.message || JSON.stringify(delhiveryError);
@@ -1567,7 +1683,7 @@ const GetAllNewOrderListToAdmin = async (req, res) => {
     if (order_status) {
       filter.order_status = order_status;
     }
-    
+
     if (active_partner) {
       if (active_partner === "delivery") {
         filter.active_partner = { $in: ["delhivery", "delivery"] };
@@ -1590,7 +1706,7 @@ const GetAllNewOrderListToAdmin = async (req, res) => {
     const orderIds = orders.map(o => o._id);
     const shiprocketDocs = await ShiprocketOrder.find({ order_id: { $in: orderIds } }).lean();
     const deliveryDocs = await DeliveryOrder.find({ order_id: { $in: orderIds } }).lean();
-    
+
     const shiprocketMap = {};
     shiprocketDocs.forEach((doc) => {
       shiprocketMap[doc.order_id.toString()] = doc;
@@ -2607,16 +2723,16 @@ const GetOrderStatsByAdmin = async (req, res) => {
     let unscheduledConfirmed = 0;
 
     confirmedOrders.forEach(o => {
-       if (o.active_partner === "shiprocket") {
-           scheduledConfirmed++; // Shiprocket orders don't have bulk pickup via this flow, so we consider them scheduled/ready
-       } else if (o.active_partner === "delhivery" || o.active_partner === "delivery") {
-           const doc = deliveryMap[o._id.toString()];
-           if (doc && doc.pickup_data) {
-               scheduledConfirmed++;
-           } else {
-               unscheduledConfirmed++;
-           }
-       }
+      if (o.active_partner === "shiprocket") {
+        scheduledConfirmed++; // Shiprocket orders don't have bulk pickup via this flow, so we consider them scheduled/ready
+      } else if (o.active_partner === "delhivery" || o.active_partner === "delivery") {
+        const doc = deliveryMap[o._id.toString()];
+        if (doc && doc.pickup_data) {
+          scheduledConfirmed++;
+        } else {
+          unscheduledConfirmed++;
+        }
+      }
     });
 
     return res.status(200).json({

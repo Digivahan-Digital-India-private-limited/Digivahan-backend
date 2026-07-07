@@ -1,6 +1,7 @@
 const ChallanWebhook = require("../models/ChallanWebhook");
 const User = require("../models/User");
 const { sendGraphEmail } = require("../utils/sendEmail");
+const axios = require("axios");
 
 // Admin emails jo challan Under Process hone pe notification paayenge
 const CHALLAN_NOTIFICATION_EMAILS = [
@@ -370,10 +371,51 @@ const deleteAllChallanWebhooks = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/challan-webhook/receipt-url
+ * Proxy call to Invincible Ocean pre-signed URL API.
+ * Accepts { key: "filename.pdf" } and returns the signed URL.
+ * clientId is kept secret on the server side.
+ */
+const getReceiptPresignedUrl = async (req, res) => {
+  try {
+    const { key } = req.body;
+
+    if (!key) {
+      return res.status(400).json({ success: false, message: "PDF key is required" });
+    }
+
+    const response = await axios.post(
+      "https://api.invincibleocean.com/receipt/preSignedUrl",
+      { key },
+      {
+        headers: {
+          clientId: process.env.INVINCIBLE_CLIENT_ID,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      url: response.data?.url || response.data,
+      data: response.data,
+    });
+  } catch (error) {
+    console.error("[ChallanWebhook] Receipt Pre-signed URL Error:", error?.response?.data || error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get receipt pre-signed URL",
+      error: error?.response?.data || error.message,
+    });
+  }
+};
+
 module.exports = {
   challanWebHook,
   getAllChallanWebhooks,
   deleteChallanWebhook,
   bulkDeleteChallanWebhooks,
   deleteAllChallanWebhooks,
+  getReceiptPresignedUrl,
 };

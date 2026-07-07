@@ -6,7 +6,8 @@ const {
   getAllChallanWebhooks,
   deleteChallanWebhook,
   bulkDeleteChallanWebhooks,
-  deleteAllChallanWebhooks
+  deleteAllChallanWebhooks,
+  getReceiptPresignedUrl,
 } = require("../controllers/challanWebhook.controller");
 
 // POST /api/challan-webhook
@@ -28,5 +29,9 @@ router.post("/challan-webhook/bulk-delete", bulkDeleteChallanWebhooks);
 // DELETE /api/challan-webhook/delete-all
 // Delete all records
 router.delete("/challan-webhook/delete-all", deleteAllChallanWebhooks);
+
+// POST /api/challan-webhook/receipt-url
+// Get a pre-signed URL for a challan receipt PDF (proxies to Invincible Ocean)
+router.post("/challan-webhook/receipt-url", getReceiptPresignedUrl);
 
 module.exports = router;

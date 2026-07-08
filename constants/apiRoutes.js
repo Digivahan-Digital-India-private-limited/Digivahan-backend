@@ -327,6 +327,12 @@ const API_ROUTES = {
     CLEANUP: "/cleanup-expired-guests",
   },
 
+  // iOS Notification routes
+  IOS_NOTIFICATION: {
+    BASE: "/api/ios-notifications",
+    SEND: "/send",
+  },
+
   // Notification List routes
   NOTIFICATION_LIST: {
     BASE: "/",

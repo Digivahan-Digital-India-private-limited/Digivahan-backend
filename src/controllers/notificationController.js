@@ -59,8 +59,7 @@ const sendNotification = async (req, res) => {
     );
 
     const senderName = sender
-      ? `${sender.basic_details.first_name || ""} ${
-          sender.basic_details.last_name || ""
+      ? `${sender.basic_details.first_name || ""} ${sender.basic_details.last_name || ""
         }`.trim() || "Guest User"
       : "Guest User";
 
@@ -128,32 +127,6 @@ const sendNotification = async (req, res) => {
       : DEFAULT_CHANNEL;
 
     /* ===============================
-       6️⃣B iOS SOUND LOGIC
-       Android me Channel ID se alag-alag sound/behaviour control hota hai.
-       iOS me Channel ID ka concept nahi hai — sirf sound file ka naam bhejna hota hai.
-       IOS_SOUND_MAP Android ke CHANNEL_MAP ka iOS equivalent hai.
-    =============================== */
-
-    const IOS_SOUND_MAP = {
-      no_parking:                  "no_parking",
-      congested_parking:           "congested_parking",
-      road_block_alert:            "road_block_alert",
-      blocked_vehicle_alert:       "blocked_vehicle_alert",
-      car_lights_windows_left_open:"car_lights_windows_left_open",
-      car_horn_alarm_going_on:     "car_horn_alarm_going_on",
-      unknown_issue_alert:         "unknown_issue_alert",
-      doc_access:                  "doc_access",
-      accident_alert:              "accident_alert",
-    };
-
-    const DEFAULT_IOS_SOUND = "default"; // iOS system default sound
-
-    // Same logic as Android: agar notification sound ON hai to custom sound, warna default
-    const iosSound = receiver.is_notification_sound_on
-      ? IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND
-      : DEFAULT_IOS_SOUND;
-
-    /* ===============================
        7️⃣ SEND PUSH NOTIFICATION
     =============================== */
 
@@ -172,7 +145,6 @@ const sendNotification = async (req, res) => {
         longitude,
       },
       androidChannelId,
-      iosSound,
       largeIconUrl: incidentProofArray[0],
       bigPictureUrl: incidentProofArray[0],
     });
@@ -225,8 +197,8 @@ const sendNotificationForCall = async (req, res) => {
     const [sender, receiver] = await Promise.all([
       sender_id
         ? User.findById(sender_id).select(
-            "basic_details.first_name basic_details.last_name",
-          )
+          "basic_details.first_name basic_details.last_name",
+        )
         : null,
       User.findById(receiver_id).select("_id is_notification_sound_on"),
     ]);
@@ -241,9 +213,8 @@ const sendNotificationForCall = async (req, res) => {
     let senderName = "Unknown User";
 
     if (sender) {
-      senderName = `${sender.basic_details.first_name || ""} ${
-        sender.basic_details.last_name || ""
-      }`.trim();
+      senderName = `${sender.basic_details.first_name || ""} ${sender.basic_details.last_name || ""
+        }`.trim();
     }
 
     const message = "Incoming call request";
@@ -260,7 +231,6 @@ const sendNotificationForCall = async (req, res) => {
         type: "call",
       },
       androidChannelId,
-      iosSound: "ringtone", // iOS ke liye call ringtone sound (ringtone.wav iOS app bundle me hona chahiye)
     });
 
     return res.status(200).json({
@@ -284,7 +254,6 @@ const sendOneSignalNotification = async ({
   androidChannelId,
   largeIconUrl = "",
   bigPictureUrl = "",
-  iosSound = "default", // iOS custom sound file name (without extension), default = system sound
 }) => {
   try {
     const payload = {
@@ -296,19 +265,8 @@ const sendOneSignalNotification = async ({
       headings: { en: title },
       contents: { en: message },
 
-      // ─── Android Channel ─────────────────────────────
+      // ✅ THIS IS THE KEY FIX
       android_channel_id: androidChannelId,
-
-      // ─── iOS Channel (apns) ──────────────────────────
-      // apns_alert sends title+body in the iOS notification payload
-      apns_alert: {
-        title,
-        body: message,
-      },
-      // iOS sound: "default" uses system sound, or pass a custom .wav/.aiff filename
-      ios_sound: iosSound,
-      // Ensures iOS treats this as a regular visible notification
-      apns_push_type_override: "alert",
 
       // App-side logic data (unchanged)
       data,
@@ -337,7 +295,6 @@ const sendOneSignalNotification = async ({
     throw error;
   }
 };
-
 
 const getAllNotification = async (req, res) => {
   try {
@@ -530,9 +487,8 @@ const isOnnotification = async (req, res) => {
 
     return res.status(200).json({
       status: true,
-      message: `Notification ${
-        is_notification_on ? "enabled" : "disabled"
-      } successfully`,
+      message: `Notification ${is_notification_on ? "enabled" : "disabled"
+        } successfully`,
       data: {
         is_notification_on: updatedUser.is_notification_sound_on,
       },

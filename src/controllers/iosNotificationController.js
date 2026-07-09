@@ -302,7 +302,6 @@ const sendOneSignalNotification = async ({
       ios_sound: iosSound,
       ios_badgeType: "SetTo",
       ios_badgeCount: iosBadgeCount,
-      apns_push_type_override: "alert",
       ttl: 86400,
 
       // App-side logic data

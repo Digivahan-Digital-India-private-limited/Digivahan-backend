@@ -4,13 +4,6 @@ const ChatList = require("../models/Chat");
 const axios = require("axios");
 const mongoose = require("mongoose");
 
-/* ================================================
-   iOS NOTIFICATION CONTROLLER
-   — Exact same as notificationController.js
-   — Extra: iOS sound logic + apns_push_type_override
-   — Old file is NOT touched
-================================================ */
-
 const sendIosNotification = async (req, res) => {
   try {
     let {
@@ -66,7 +59,8 @@ const sendIosNotification = async (req, res) => {
     );
 
     const senderName = sender
-      ? `${sender.basic_details.first_name || ""} ${sender.basic_details.last_name || ""}`.trim() || "Guest User"
+      ? `${sender.basic_details.first_name || ""} ${sender.basic_details.last_name || ""
+        }`.trim() || "Guest User"
       : "Guest User";
 
     const senderPic = sender?.basic_details?.profile_pic || "";
@@ -112,7 +106,7 @@ const sendIosNotification = async (req, res) => {
     );
 
     /* ===============================
-       5️⃣ ANDROID CHANNEL LOGIC
+       6️⃣ ANDROID CHANNEL LOGIC
     =============================== */
 
     const CHANNEL_MAP = {
@@ -134,10 +128,7 @@ const sendIosNotification = async (req, res) => {
       : DEFAULT_CHANNEL;
 
     /* ===============================
-       6️⃣ iOS SOUND LOGIC
-       Android me Channel ID se alag-alag sound/behaviour control hota hai.
-       iOS me Channel ID ka concept nahi hai — sirf sound file ka naam bhejna hota hai.
-       IOS_SOUND_MAP Android ke CHANNEL_MAP ka iOS equivalent hai.
+       iOS SOUND LOGIC
     =============================== */
 
     const IOS_SOUND_MAP = {
@@ -154,41 +145,34 @@ const sendIosNotification = async (req, res) => {
 
     const DEFAULT_IOS_SOUND = "default"; // iOS system default sound
 
-    // Same logic as Android: agar notification sound ON hai to custom sound, warna default
     const iosSound = receiver.is_notification_sound_on
       ? IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND
       : DEFAULT_IOS_SOUND;
 
     /* ===============================
-       7️⃣ SEND PUSH NOTIFICATION (iOS)
+       7️⃣ SEND PUSH NOTIFICATION
     =============================== */
 
-    // 🔥 Send push notification (non-blocking — agar push fail ho toh bhi notification save ho)
-    try {
-      await sendIosOneSignalNotification({
-        externalUserId: receiver_id.toString(),
-        title: notification_title,
-        message: vehicle_id ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})` : message,
-        data: {
-          sender_id,
-          notification_type,
-          order_id: order_id || "",
-          vehicle_id: vehicle_id || "",
-          chat_room_id: chat_room_id || "",
-          issue_type: issue_type || "",
-          latitude,
-          longitude,
-        },
-        androidChannelId,
-        iosSound,
-        iosBadgeCount: updatedUser.notification_count,
-        largeIconUrl: incidentProofArray[0],
-        bigPictureUrl: incidentProofArray[0],
-      });
-    } catch (pushError) {
-      // Push fail hone par bhi in-app notification save ho chuki hai — sirf log karo
-      console.error("iOS OneSignal push failed (non-fatal):", pushError?.response?.data || pushError?.message);
-    }
+    await sendOneSignalNotification({
+      externalUserId: receiver_id.toString(),
+      title: notification_title,
+      message: vehicle_id ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})` : message,
+      data: {
+        sender_id,
+        notification_type,
+        order_id: order_id || "",
+        vehicle_id: vehicle_id || "",
+        chat_room_id: chat_room_id || "",
+        issue_type: issue_type || "",
+        latitude,
+        longitude,
+      },
+      androidChannelId,
+      iosSound,
+      iosBadgeCount: updatedUser.notification_count,
+      largeIconUrl: incidentProofArray[0],
+      bigPictureUrl: incidentProofArray[0],
+    });
 
     /* ===============================
        8️⃣ SUCCESS RESPONSE
@@ -196,11 +180,11 @@ const sendIosNotification = async (req, res) => {
 
     return res.status(201).json({
       status: true,
-      message: "iOS Notification sent successfully",
+      message: "Notification sent successfully",
       data: response,
     });
   } catch (error) {
-    console.error("Send iOS notification error:", error);
+    console.error("Send notification error:", error);
 
     return res.status(500).json({
       status: false,
@@ -209,13 +193,88 @@ const sendIosNotification = async (req, res) => {
   }
 };
 
-/* ================================================
-   iOS OneSignal Sender
-   — Android ke CHANNEL_MAP + iOS ke ios_sound +
-     apns_push_type_override: "alert" — dono handle karta hai
-================================================ */
+const sendNotificationForCall = async (req, res) => {
+  try {
+    const { sender_id, receiver_id } = req.body;
 
-const sendIosOneSignalNotification = async ({
+    if (!receiver_id) {
+      return res.status(400).json({
+        status: false,
+        message: "receiver_id is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(receiver_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid receiver_id",
+      });
+    }
+
+    if (sender_id && !mongoose.Types.ObjectId.isValid(sender_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid sender_id",
+      });
+    }
+
+    // 🔥 Fetch sender & receiver in parallel (faster)
+    const [sender, receiver] = await Promise.all([
+      sender_id
+        ? User.findById(sender_id).select(
+          "basic_details.first_name basic_details.last_name",
+        )
+        : null,
+      User.findById(receiver_id).select("_id is_notification_sound_on notification_count"),
+    ]);
+
+    if (!receiver) {
+      return res.status(404).json({
+        status: false,
+        message: "Receiver not found",
+      });
+    }
+
+    let senderName = "Unknown User";
+
+    if (sender) {
+      senderName = `${sender.basic_details.first_name || ""} ${sender.basic_details.last_name || ""
+        }`.trim();
+    }
+
+    const message = "Incoming call request";
+
+    const androidChannelId = "0f86d5a8-1877-4a8a-ad45-d609c14d16bd";
+    const iosSound = "default";
+
+    // 🔥 Send push (non-blocking safe pattern)
+    await sendOneSignalNotification({
+      externalUserId: receiver._id.toString(),
+      title: senderName,
+      message,
+      data: {
+        sender_id: sender_id || "",
+        type: "call",
+      },
+      androidChannelId,
+      iosSound,
+      iosBadgeCount: receiver.notification_count || 1,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Call notification sent successfully",
+    });
+  } catch (error) {
+    console.error("Send call notification error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+const sendOneSignalNotification = async ({
   externalUserId,
   title,
   message,
@@ -236,57 +295,356 @@ const sendIosOneSignalNotification = async ({
       headings: { en: title },
       contents: { en: message },
 
-      // ─── Android Channel ─────────────────────────────
+      // ✅ Android
       android_channel_id: androidChannelId,
 
-      // ─── iOS Sound ───────────────────────────────────
+      // ✅ iOS
       ios_sound: iosSound,
-
-      // ─── iOS Badge ───────────────────────────────────
       ios_badgeType: "SetTo",
       ios_badgeCount: iosBadgeCount,
-
-      // Ensures iOS treats this as a visible alert notification (not silent)
       apns_push_type_override: "alert",
-
-      // ─── Delivery TTL ────────────────────────────────
-      // 86400 = 24 hours — agar device offline ho to bhi deliver hoga
       ttl: 86400,
 
-      // App-side data (same as Android)
+      // App-side logic data
       data,
 
       android_visibility: 1,
       priority: 10,
     };
 
-    // Only add image fields if they have valid values
     if (largeIconUrl) {
       payload.large_icon = largeIconUrl;
     }
     if (bigPictureUrl) {
       payload.android_big_picture = bigPictureUrl;
-      payload.ios_attachments = { id1: bigPictureUrl }; // iOS rich notification image
+      payload.ios_attachments = { id1: bigPictureUrl };
     }
 
-    console.log("OS Key is loaded:", !!process.env.ONESIGNAL_REST_API_KEY);
-    
-    const response = await axios.post("https://onesignal.com/api/v1/notifications", payload, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY.replace('>', '').trim()}`,
-      },
-    });
+    // Use Basic authorization if present. Handle older key formatting too.
+    let authHeader = `Basic ${process.env.ONESIGNAL_REST_API_KEY}`;
+    if (process.env.ONESIGNAL_REST_API_KEY.includes(">")) {
+      authHeader = `Basic ${process.env.ONESIGNAL_REST_API_KEY.replace('>', '').trim()}`;
+    }
 
-    console.log("[iOS OneSignal] Response:", JSON.stringify(response.data, null, 2));
+    const response = await axios.post(
+      "https://onesignal.com/api/v1/notifications",
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+      }
+    );
 
     return response.data;
   } catch (error) {
-    console.error("iOS OneSignal Error:", error.response?.data || error.message);
+    console.error("OneSignal Error:", error.response?.data || error.message);
     throw error;
+  }
+};
+
+const getAllNotification = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    let { current_page = 1 } = req.query;
+
+    current_page = parseInt(current_page) || 1;
+
+    const PAGE_SIZE = 20;
+    const skip = (current_page - 1) * PAGE_SIZE;
+
+    // Validate user_id
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid user_id",
+      });
+    }
+
+    const receiverObjectId = new mongoose.Types.ObjectId(user_id);
+
+    /* ===============================
+       1️⃣ Fetch notifications
+    =============================== */
+
+    const notifications = await Notification.find({
+      receiver_id: receiverObjectId,
+    })
+      .sort({ createdAt: -1 }) // latest first
+      .skip(skip)
+      .limit(PAGE_SIZE)
+      .lean();
+
+    /* ===============================
+       2️⃣ Get total & unseen count
+    =============================== */
+
+    const [totalNotifications, unseenCount] = await Promise.all([
+      Notification.countDocuments({
+        receiver_id: receiverObjectId,
+      }),
+
+      Notification.countDocuments({
+        receiver_id: receiverObjectId,
+        seen_status: false,
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalNotifications / PAGE_SIZE);
+
+    /* ===============================
+       3️⃣ Response
+    =============================== */
+
+    return res.status(200).json({
+      status: true,
+      message: "Notifications fetched successfully",
+
+      unseen_count: unseenCount,
+
+      pagination: {
+        current_page,
+        page_size: PAGE_SIZE,
+        total_pages: totalPages,
+        total_notifications: totalNotifications,
+      },
+
+      data: notifications,
+    });
+  } catch (error) {
+    console.error("Get notifications error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+const seenNotificationByUser = async (req, res) => {
+  try {
+    const { user_id, notification_id } = req.body;
+
+    // 1️⃣ Validate ObjectIds
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(notification_id)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "Valid user_id and notification_id required",
+      });
+    }
+
+    const receiverObjectId = new mongoose.Types.ObjectId(user_id);
+    const notificationObjectId = new mongoose.Types.ObjectId(notification_id);
+
+    // 2️⃣ Atomic update directly in Notification collection
+    const updatedNotification = await Notification.findOneAndUpdate(
+      {
+        _id: notificationObjectId,
+        receiver_id: receiverObjectId,
+      },
+      {
+        $set: {
+          seen_status: true,
+          seen_at: new Date(),
+        },
+      },
+      {
+        new: true, // return updated document
+      },
+    );
+
+    // 3️⃣ If not found
+    if (!updatedNotification) {
+      return res.status(404).json({
+        status: false,
+        message: "Notification not found for this user",
+      });
+    }
+
+    // 4️⃣ Success response
+    return res.status(200).json({
+      status: true,
+      message: "Notification marked as seen",
+      data: {
+        notification_id: updatedNotification._id,
+        seen_status: updatedNotification.seen_status,
+        seen_at: updatedNotification.seen_at,
+      },
+    });
+  } catch (error) {
+    console.error("Seen notification error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+const isOnnotification = async (req, res) => {
+  try {
+    const { user_id, is_notification_on } = req.body;
+
+    // ✅ Validation
+    if (typeof is_notification_on !== "boolean" || !user_id) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid parameters",
+      });
+    }
+
+    // ✅ Build query (NO multiple DB calls)
+    let query;
+
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      query = { _id: user_id };
+    } else if (user_id.includes("@")) {
+      query = { "basic_details.email": user_id.toLowerCase().trim() };
+    } else {
+      query = { "basic_details.phone_number": String(user_id).trim() };
+    }
+
+    // ✅ Atomic update (FASTEST METHOD)
+    const updatedUser = await User.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          is_notification_sound_on: is_notification_on,
+        },
+      },
+      {
+        new: true,
+        projection: {
+          is_notification_sound_on: 1,
+        },
+      },
+    ).lean();
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: `Notification ${is_notification_on ? "enabled" : "disabled"
+        } successfully`,
+      data: {
+        is_notification_on: updatedUser.is_notification_sound_on,
+      },
+    });
+  } catch (error) {
+    console.error("Notification toggle error:", error);
+
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+const DeleteNotification = async (req, res) => {
+  try {
+    const { user_id, notification_id, chat_room_id } = req.body;
+
+    /* ===============================
+       1️⃣ Validate input
+    =============================== */
+
+    if (!user_id || !notification_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id and notification_id are required",
+      });
+    }
+
+    if (
+      !mongoose.Types.ObjectId.isValid(user_id) ||
+      !mongoose.Types.ObjectId.isValid(notification_id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ID format",
+      });
+    }
+
+    const receiverObjectId = new mongoose.Types.ObjectId(user_id);
+    const notificationObjectId = new mongoose.Types.ObjectId(notification_id);
+
+    /* ===============================
+       2️⃣ Find and delete notification
+    =============================== */
+
+    const deletedNotification = await Notification.findOneAndDelete({
+      _id: notificationObjectId,
+      receiver_id: receiverObjectId,
+    });
+
+    if (!deletedNotification) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found for this user",
+      });
+    }
+
+    /* ===============================
+       3️⃣ Decrease notification count
+    =============================== */
+
+    await User.updateOne(
+      { _id: receiverObjectId },
+      {
+        $inc: { notification_count: -1 },
+      },
+    );
+
+    /* ===============================
+       4️⃣ Delete chat messages if exists
+    =============================== */
+
+    if (chat_room_id && mongoose.Types.ObjectId.isValid(chat_room_id)) {
+      await ChatList.deleteMany({
+        chat_room_id: new mongoose.Types.ObjectId(chat_room_id),
+      });
+    }
+
+    /* ===============================
+       5️⃣ Success response
+    =============================== */
+
+    return res.status(200).json({
+      success: true,
+      message: "Notification deleted successfully",
+      data: {
+        notification_id,
+        chat_room_id: chat_room_id || null,
+      },
+    });
+  } catch (error) {
+    console.error("DeleteNotification error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 
 module.exports = {
   sendIosNotification,
+  sendNotification: sendIosNotification,
+  sendNotificationForCall,
+  getAllNotification,
+  DeleteNotification,
+  seenNotificationByUser,
+  isOnnotification,
 };

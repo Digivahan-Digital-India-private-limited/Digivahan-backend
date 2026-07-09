@@ -45,7 +45,7 @@ const sendIosNotification = async (req, res) => {
     }
 
     const receiver = await User.findById(receiver_id).select(
-      "_id is_notification_sound_on",
+      "_id is_notification_sound_on notification_count",
     );
 
     if (!receiver) {
@@ -95,6 +95,7 @@ const sendIosNotification = async (req, res) => {
       message,
       link,
       vehicle_id,
+      order_id,
       issue_type,
       chat_room_id,
       latitude,
@@ -104,9 +105,10 @@ const sendIosNotification = async (req, res) => {
       seen_status,
     });
 
-    await User.updateOne(
+    const updatedUser = await User.findOneAndUpdate(
       { _id: receiver_id },
       { $inc: { notification_count: 1 } },
+      { new: true }
     );
 
     /* ===============================
@@ -139,15 +141,15 @@ const sendIosNotification = async (req, res) => {
     =============================== */
 
     const IOS_SOUND_MAP = {
-      no_parking: "no_parking",
-      congested_parking: "congested_parking",
-      road_block_alert: "road_block_alert",
-      blocked_vehicle_alert: "blocked_vehicle_alert",
-      car_lights_windows_left_open: "car_lights_windows_left_open",
-      car_horn_alarm_going_on: "car_horn_alarm_going_on",
-      unknown_issue_alert: "unknown_issue_alert",
-      doc_access: "doc_access",
-      accident_alert: "accident_alert",
+      no_parking: "no_parking.caf",
+      congested_parking: "congested_parking.caf",
+      road_block_alert: "road_block_alert.caf",
+      blocked_vehicle_alert: "blocked_vehicle_alert.caf",
+      car_lights_windows_left_open: "car_lights_windows_left_open.caf",
+      car_horn_alarm_going_on: "car_horn_alarm_going_on.caf",
+      unknown_issue_alert: "unknown_issue_alert.caf",
+      doc_access: "doc_access.caf",
+      accident_alert: "accident_alert.caf",
     };
 
     const DEFAULT_IOS_SOUND = "default"; // iOS system default sound
@@ -179,6 +181,7 @@ const sendIosNotification = async (req, res) => {
         },
         androidChannelId,
         iosSound,
+        iosBadgeCount: updatedUser.notification_count,
         largeIconUrl: incidentProofArray[0],
         bigPictureUrl: incidentProofArray[0],
       });
@@ -219,12 +222,13 @@ const sendIosOneSignalNotification = async ({
   data = {},
   androidChannelId,
   iosSound = "default",
+  iosBadgeCount = 1,
   largeIconUrl = "",
   bigPictureUrl = "",
 }) => {
   try {
     const payload = {
-      app_id: process.env.ONESIGNAL_APP_ID,
+      app_id: process.env.ONESIGNAL_APP_ID.trim(),
 
       // Target specific device
       include_external_user_ids: [externalUserId],
@@ -236,33 +240,45 @@ const sendIosOneSignalNotification = async ({
       android_channel_id: androidChannelId,
 
       // ─── iOS Sound ───────────────────────────────────
-      // ios_sound: custom .wav/.aiff filename (without extension)
-      // "default" = iOS system default sound
       ios_sound: iosSound,
+
+      // ─── iOS Badge ───────────────────────────────────
+      ios_badgeType: "SetTo",
+      ios_badgeCount: iosBadgeCount,
 
       // Ensures iOS treats this as a visible alert notification (not silent)
       apns_push_type_override: "alert",
 
+      // ─── Delivery TTL ────────────────────────────────
+      // 86400 = 24 hours — agar device offline ho to bhi deliver hoga
+      ttl: 86400,
+
       // App-side data (same as Android)
       data,
-
-      large_icon: largeIconUrl || undefined,
-      android_big_picture: bigPictureUrl || undefined,
 
       android_visibility: 1,
       priority: 10,
     };
 
-    const response = await axios.post(
-      "https://onesignal.com/api/v1/notifications",
-      payload,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Basic ${(process.env.ONESIGNAL_REST_API_KEY || "").trim()}`,
-        },
+    // Only add image fields if they have valid values
+    if (largeIconUrl) {
+      payload.large_icon = largeIconUrl;
+    }
+    if (bigPictureUrl) {
+      payload.android_big_picture = bigPictureUrl;
+      payload.ios_attachments = { id1: bigPictureUrl }; // iOS rich notification image
+    }
+
+    console.log("OS Key is loaded:", !!process.env.ONESIGNAL_REST_API_KEY);
+    
+    const response = await axios.post("https://onesignal.com/api/v1/notifications", payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY.replace('>', '').trim()}`,
       },
-    );
+    });
+
+    console.log("[iOS OneSignal] Response:", JSON.stringify(response.data, null, 2));
 
     return response.data;
   } catch (error) {

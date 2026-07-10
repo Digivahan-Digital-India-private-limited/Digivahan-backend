@@ -38,7 +38,7 @@ const sendNotification = async (req, res) => {
     }
 
     const receiver = await User.findById(receiver_id).select(
-      "_id is_notification_sound_on",
+      "_id is_notification_sound_on notification_count",
     );
 
     if (!receiver) {
@@ -99,9 +99,10 @@ const sendNotification = async (req, res) => {
       seen_status,
     });
 
-    await User.updateOne(
+    const updatedUser = await User.findOneAndUpdate(
       { _id: receiver_id },
       { $inc: { notification_count: 1 } },
+      { new: true }
     );
 
     /* ===============================
@@ -127,6 +128,28 @@ const sendNotification = async (req, res) => {
       : DEFAULT_CHANNEL;
 
     /* ===============================
+       iOS SOUND LOGIC
+    =============================== */
+
+    const IOS_SOUND_MAP = {
+      no_parking: "no_parking.caf",
+      congested_parking: "congested_parking.caf",
+      road_block_alert: "road_block_alert.caf",
+      blocked_vehicle_alert: "blocked_vehicle_alert.caf",
+      car_lights_windows_left_open: "car_lights_windows_left_open.caf",
+      car_horn_alarm_going_on: "car_horn_alarm_going_on.caf",
+      unknown_issue_alert: "unknown_issue_alert.caf",
+      doc_access: "doc_access.caf",
+      accident_alert: "accident_alert.caf",
+    };
+
+    const DEFAULT_IOS_SOUND = "default"; // iOS system default sound
+
+    const iosSound = receiver.is_notification_sound_on
+      ? IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND
+      : DEFAULT_IOS_SOUND;
+
+    /* ===============================
        7️⃣ SEND PUSH NOTIFICATION
     =============================== */
 
@@ -145,6 +168,8 @@ const sendNotification = async (req, res) => {
         longitude,
       },
       androidChannelId,
+      iosSound,
+      iosBadgeCount: updatedUser.notification_count,
       largeIconUrl: incidentProofArray[0],
       bigPictureUrl: incidentProofArray[0],
     });
@@ -200,7 +225,7 @@ const sendNotificationForCall = async (req, res) => {
           "basic_details.first_name basic_details.last_name",
         )
         : null,
-      User.findById(receiver_id).select("_id is_notification_sound_on"),
+      User.findById(receiver_id).select("_id is_notification_sound_on notification_count"),
     ]);
 
     if (!receiver) {
@@ -220,6 +245,7 @@ const sendNotificationForCall = async (req, res) => {
     const message = "Incoming call request";
 
     const androidChannelId = "0f86d5a8-1877-4a8a-ad45-d609c14d16bd";
+    const iosSound = "default";
 
     // 🔥 Send push (non-blocking safe pattern)
     await sendOneSignalNotification({
@@ -231,6 +257,8 @@ const sendNotificationForCall = async (req, res) => {
         type: "call",
       },
       androidChannelId,
+      iosSound,
+      iosBadgeCount: receiver.notification_count || 1,
     });
 
     return res.status(200).json({
@@ -252,12 +280,14 @@ const sendOneSignalNotification = async ({
   message,
   data = {},
   androidChannelId,
+  iosSound = "default",
+  iosBadgeCount = 1,
   largeIconUrl = "",
   bigPictureUrl = "",
 }) => {
   try {
     const payload = {
-      app_id: process.env.ONESIGNAL_APP_ID,
+      app_id: process.env.ONESIGNAL_APP_ID.trim(),
 
       // Target specific device
       include_external_user_ids: [externalUserId],
@@ -265,18 +295,35 @@ const sendOneSignalNotification = async ({
       headings: { en: title },
       contents: { en: message },
 
-      // ✅ THIS IS THE KEY FIX
+      // ✅ Android
       android_channel_id: androidChannelId,
 
-      // App-side logic data (unchanged)
-      data,
+      // ✅ iOS
+      ios_sound: iosSound,
+      ios_badgeType: "SetTo",
+      ios_badgeCount: iosBadgeCount,
+      ttl: 86400,
 
-      large_icon: largeIconUrl,
-      android_big_picture: bigPictureUrl,
+      // App-side logic data
+      data,
 
       android_visibility: 1,
       priority: 10,
     };
+
+    if (largeIconUrl) {
+      payload.large_icon = largeIconUrl;
+    }
+    if (bigPictureUrl) {
+      payload.android_big_picture = bigPictureUrl;
+      payload.ios_attachments = { id1: bigPictureUrl };
+    }
+
+    // Use Basic authorization if present. Handle older key formatting too.
+    let authHeader = `Basic ${process.env.ONESIGNAL_REST_API_KEY}`;
+    if (process.env.ONESIGNAL_REST_API_KEY.includes(">")) {
+      authHeader = `Basic ${process.env.ONESIGNAL_REST_API_KEY.replace('>', '').trim()}`;
+    }
 
     const response = await axios.post(
       "https://onesignal.com/api/v1/notifications",
@@ -284,9 +331,9 @@ const sendOneSignalNotification = async ({
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
+          Authorization: authHeader,
         },
-      },
+      }
     );
 
     return response.data;

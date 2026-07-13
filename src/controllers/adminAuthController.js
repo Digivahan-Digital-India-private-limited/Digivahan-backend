@@ -10,7 +10,7 @@ const SignInAdmin = async (req, res) => {
     const { phone } = req.body;
 
     /* ===============================
-       1️⃣ Validate phone
+       1️⃣ Validate phone number
     =============================== */
 
     if (!phone) {

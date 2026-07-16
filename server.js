@@ -54,6 +54,7 @@ const reportIssueRoutes = require("./src/routes/reportIssue.routes");
 const serviceRoutes = require("./src/routes/service.routes.js")
 const challanWebhookRoutes = require("./src/routes/challanWebhook.routes.js")
 const challanFlowRoutes = require("./src/routes/challanFlow.routes.js")
+const careerRoutes = require("./src/routes/career.routes.js")
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -124,6 +125,7 @@ app.use(API_ROUTES.QUERY.BASE, queryRoutes)
 app.use(API_ROUTES.BBPS.BASE, serviceRoutes)
 app.use("/api", challanWebhookRoutes)
 app.use(API_ROUTES.CHALLAN_FLOW.BASE, challanFlowRoutes)
+app.use("/api/career", careerRoutes)
 
 
 // -------------------- HEALTH CHECK --------------------
@@ -134,6 +136,11 @@ app.use(API_ROUTES.CHALLAN_FLOW.BASE, challanFlowRoutes)
 
 app.get("/", (req, res) => {
   res.status(200).json({ message: "Welcome To Digivahan Server" });
+});
+
+// Logo direct URL
+app.get("/logo", (req, res) => {
+  res.redirect("https://res.cloudinary.com/dikbzoeh7/image/upload/v1784199257/digivahan_logo_main.png");
 });
 
 // -------------------- SERVER SETUP --------------------

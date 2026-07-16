@@ -171,8 +171,42 @@ const getAllvehicleCompairesionList = async (req, res) => {
   }
 };
 
+const DeleteCompareVehicle = async (req, res) => {
+  try {
+    const { compare_id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(compare_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid compare_id",
+      });
+    }
+
+    const result = await VehicleComparison.deleteOne({ _id: compare_id });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Comparison not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Comparison deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete comparison error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   CompareVehicle,
   CompareVehicleUpdate,
   getAllvehicleCompairesionList,
+  DeleteCompareVehicle,
 };

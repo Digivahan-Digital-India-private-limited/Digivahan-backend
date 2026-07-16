@@ -11,7 +11,8 @@ const { API_ROUTES } = require("../../constants/apiRoutes.js");
 const {
   CompareVehicle,
   CompareVehicleUpdate,
-  getAllvehicleCompairesionList
+  getAllvehicleCompairesionList,
+  DeleteCompareVehicle
 } = require("../controllers/vehicleComparisonController.js");
 
 router.post(
@@ -31,5 +32,7 @@ router.get(
   [handleValidationErrors],
   getAllvehicleCompairesionList
 );
+
+router.delete("/vehicles/compare/delete-compare/:compare_id", DeleteCompareVehicle);
 
 module.exports = router;

@@ -32,12 +32,12 @@ const addVehicle = async (req, res) => {
     }
 
     let user = null;
-    let deductCredit = false;
     let remainingCredits = null;
 
+    // ─── Step 1: Account status check ────────────────────────────────────────
     if (userId) {
       user = await User.findById(userId).select("account_status blocked_reason challan_credits garage");
-      
+
       if (user && user.account_status === "BLOCKED") {
         return res.status(403).json({
           status: false,
@@ -54,13 +54,41 @@ const addVehicle = async (req, res) => {
           message: "User account is deleted.",
         });
       }
+    }
 
+    // ─── Step 2: DB cache check FIRST — NO credit deducted if data exists ────
+    // If this vehicle number is already in our VehicleInfoData collection,
+    // return immediately without touching credits.
+    const cachedVehicle = await VehicleInfoData.findOne({
+      vehicle_id: vehicle_number,
+    }).lean();
+
+    if (cachedVehicle) {
+      if (user) {
+        remainingCredits = user.challan_credits ?? 3;
+      }
+      return res.status(200).json({
+        status: true,
+        message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
+        data: {
+          result: maskVehicleResponse(cachedVehicle.api_data),
+          data_source: cachedVehicle.data_source,
+        },
+        challan_credits: remainingCredits,
+      });
+    }
+
+    // ─── Step 3: Vehicle NOT in DB — credit check before calling external API ─
+    let deductCredit = false;
+
+    if (userId && user) {
       const cleanRc = vehicle_number.toUpperCase().trim();
-      const directCredits = user?.challan_credits ?? 3;
-      
+      const directCredits = user.challan_credits ?? 3;
+
+      // Check if user has any prior record for this vehicle number
       let userHasSearchRecord = false;
       userHasSearchRecord = await ChallanWebhook.exists({ userId: user._id, rcNumber: cleanRc });
-      
+
       if (!userHasSearchRecord && user.garage?.vehicles?.some(v => v.vehicle_id === cleanRc)) {
         userHasSearchRecord = true;
       }
@@ -69,6 +97,7 @@ const addVehicle = async (req, res) => {
       }
 
       if (!userHasSearchRecord) {
+        // Completely new search for both user + DB → deduct credit
         if (directCredits <= 0) {
           return res.status(403).json({
             status: false,
@@ -84,27 +113,7 @@ const addVehicle = async (req, res) => {
       }
     }
 
-    // 🔥 FAST indexed lookup
-    const cachedVehicle = await VehicleInfoData.findOne({
-      vehicle_id: vehicle_number,
-    }).lean();
-
-    if (cachedVehicle) {
-      if (deductCredit && userId) {
-        await User.updateOne({ _id: userId }, { $set: { challan_credits: remainingCredits } });
-      }
-      return res.status(200).json({
-        status: true,
-        message: SUCCESS_MESSAGES.GARAGE_RETRIEVED_SUCCESSFULLY,
-        data: {
-          result: maskVehicleResponse(cachedVehicle.api_data),
-          data_source: cachedVehicle.data_source,
-        },
-        challan_credits: remainingCredits,
-      });
-    }
-
-    // ⛔ External API only if not cached — LOG every real call
+    // ─── Step 4: Fetch from external RTO API (real cost) ─────────────────────
     let rtoData;
     let dataSource = "rto_api";
 
@@ -119,18 +128,16 @@ const addVehicle = async (req, res) => {
       }
     }
 
-    const vehicleData = transformRTODataToVehicleSchema(
-      rtoData,
-      vehicle_number,
-    );
+    const vehicleData = transformRTODataToVehicleSchema(rtoData, vehicle_number);
 
-    // 🔥 Single insert, no array push
+    // Cache in DB so future lookups are free (no credit deduction)
     await VehicleInfoData.create({
       vehicle_id: vehicle_number,
       api_data: vehicleData,
       data_source: dataSource,
     });
 
+    // Deduct credit only for a brand-new vehicle + new user search
     if (deductCredit && userId) {
       await User.updateOne({ _id: userId }, { $set: { challan_credits: remainingCredits } });
     }
@@ -152,6 +159,7 @@ const addVehicle = async (req, res) => {
     });
   }
 };
+
 
 const maskVehicleResponse = (data) => {
   if (!data) return data;

@@ -1,9 +1,10 @@
 const TrendingCars = require("../models/TrendingCarsSchema");
 const mongoose = require("mongoose");
+const cloudinary = require("cloudinary").v2;
 
 const addTrendingCar = async (req, res) => {
   try {
-    const { brand_name, model_name = "", ...restBody } = req.body;
+    let { brand_name, model_name = "", car_details, image_url, ...restBody } = req.body;
 
     if (!brand_name) {
       return res.status(400).json({
@@ -25,10 +26,29 @@ const addTrendingCar = async (req, res) => {
       });
     }
 
+    let parsedDetails = {};
+    if (car_details) {
+      parsedDetails = typeof car_details === "string" ? JSON.parse(car_details) : car_details;
+    } else {
+      parsedDetails = restBody; // fallback for old JSON requests
+    }
+
+    if (req.file) {
+      const uploadRes = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream({ folder: "trending_cars" }, (err, result) => {
+           if (err) reject(err);
+           else resolve(result);
+        }).end(req.file.buffer);
+      });
+      parsedDetails.image_url = uploadRes.secure_url;
+    } else if (image_url) {
+      parsedDetails.image_url = image_url;
+    }
+
     const car = await TrendingCars.create({
       brand_name,
       model_name,
-      car_details: restBody,
+      car_details: parsedDetails,
     });
 
     return res.status(201).json({

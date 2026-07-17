@@ -15,8 +15,11 @@ const {
   DeleteCarDetails
 } = require("../controllers/trendingCarsController.js");
 
+const { upload } = require("../middleware/cloudinary.js");
+
 router.post(
   API_ROUTES.TRENDING_CARS.ADD_TRENDING_CAR,
+  upload.single("image"),
   [handleValidationErrors],
   addTrendingCar
 );

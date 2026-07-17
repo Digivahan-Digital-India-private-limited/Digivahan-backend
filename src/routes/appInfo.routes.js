@@ -17,7 +17,7 @@ const {
   updateOneSignalID
 } = require("../controllers/appInfo.controller");
 
-// GET ANDROID VERSION
+// GET ANDOID VERSION
 router.get("/api/v1/app-info/android", getAndroidVersion);
 
 // GET IOS VERSION
@@ -54,6 +54,6 @@ router.post("/api/v1/app-info/onesignal", updateOneSignalID);
 // GET FULL APP INFO (Android, iOS, Policies everything)
 router.get("/api/v1/app-info", getAppInfo);
 
-  
+
 
 module.exports = router;

@@ -5,7 +5,7 @@ const {
   commonValidations,
 } = require("../middleware/validation.js");
 
-const { authenticateTokenForAdmin } = require("../middleware/auth.js");
+const { authenticateTokenForAdmin, authenticateTokenForMasterAdmin } = require("../middleware/auth.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
@@ -55,13 +55,13 @@ router.post(
 );
 
 // ── Master Admin: Admin Management Routes ──
-router.get("/admin/master/admins", listAdmins);
-router.post("/admin/master/admins", addAdmin);
-router.delete("/admin/master/admins/:id", deleteAdmin);
+router.get("/admin/master/admins", authenticateTokenForMasterAdmin, listAdmins);
+router.post("/admin/master/admins", authenticateTokenForMasterAdmin, addAdmin);
+router.delete("/admin/master/admins/:id", authenticateTokenForMasterAdmin, deleteAdmin);
 
 // ── Master Admin: Permissions Routes ──
-router.get("/admin/master/permissions/:adminId", getAdminPermissions);
-router.put("/admin/master/permissions/:adminId", updateAdminPermissions);
+router.get("/admin/master/permissions/:adminId", authenticateTokenForMasterAdmin, getAdminPermissions);
+router.put("/admin/master/permissions/:adminId", authenticateTokenForMasterAdmin, updateAdminPermissions);
 
 // ── Regular Admin: Get Own Permissions ──
 router.get("/admin/my-permissions", authenticateTokenForAdmin, getMyPermissions);

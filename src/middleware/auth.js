@@ -191,6 +191,81 @@ const authenticateTokenForAdmin = async (req, res, next) => {
   }
 };
 
+const authenticateTokenForMasterAdmin = async (req, res, next) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
+
+    if (!token) {
+      return res.status(401).json({
+        status: false,
+        message: "Access token required",
+      });
+    }
+
+    // 🔥 1️⃣ Check if token is revoked (LOGOUT CHECK)
+    const revoked = await RevokedToken.findOne({ token });
+    if (revoked) {
+      return res.status(401).json({
+        status: false,
+        message: "Your token is invalid, please login again",
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-secret-key",
+    );
+
+    // Check if master admin flag is present in token
+    if (!decoded.isMasterAdmin) {
+      return res.status(403).json({
+        status: false,
+        message: "Forbidden: Master Admin access required",
+      });
+    }
+
+    const admin = await Admin.findById(decoded.userId);
+
+    if (!admin) {
+      return res.status(401).json({
+        status: false,
+        message: "Invalid token - user not found",
+      });
+    }
+
+    // Check if user is active
+    if (!admin.is_active) {
+      return res.status(401).json({
+        status: false,
+        message: "Admin account De-activated ",
+      });
+    }
+
+    req.admin = decoded;
+    next();
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({
+        status: false,
+        message: "Invalid token",
+      });
+    }
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        status: false,
+        message: "Token expired",
+      });
+    }
+
+    console.error("Authentication error:", error);
+    return res.status(500).json({
+      status: false,
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
 /**
  * Optional auth middleware — agar token ho toh userId set karo,
  * nahi ho toh silently pass karo. Public routes ke liye.
@@ -229,5 +304,6 @@ module.exports = {
   generateAuthToken,
   authenticateToken,
   authenticateTokenForAdmin,
+  authenticateTokenForMasterAdmin,
   optionalAuthToken,
 };

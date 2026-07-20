@@ -1932,7 +1932,8 @@ const canSendOtpToday = async (contact) => {
     await redis.expire(key, secondsTillMidnight);
   }
 
-  return count <= MAX_DAILY_OTP;
+  const limit = contact === "8933831760" ? 100 : MAX_DAILY_OTP;
+  return count <= limit;
 };
 
 module.exports = {

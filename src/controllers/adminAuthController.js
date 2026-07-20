@@ -1,4 +1,5 @@
 const Admin = require("../models/admin.model");
+const AdminPermissions = require("../models/adminPermissions.model");
 const jwt = require("jsonwebtoken");
 const RevokedToken = require("../models/revokedTokenSchema");
 const redis = require("../utils/redis");
@@ -378,4 +379,54 @@ const deleteAdmin = async (req, res) => {
   }
 };
 
-module.exports = { SignInAdmin, verifyAdminOTP, LogoutAdmin, MasterSignInAdmin, verifyMasterAdminOTP, listAdmins, addAdmin, deleteAdmin };
+// ── Get permissions for a specific admin (master admin only) ──
+const getAdminPermissions = async (req, res) => {
+  try {
+    const { adminId } = req.params;
+    const doc = await AdminPermissions.findOne({ admin_id: adminId }).lean();
+    const pages = doc?.pages || {};
+    return res.status(200).json({ status: true, adminId, pages });
+  } catch (error) {
+    console.error("Get Permissions Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+// ── Update/set permissions for a specific admin (master admin only) ──
+const updateAdminPermissions = async (req, res) => {
+  try {
+    const { adminId } = req.params;
+    const { pages } = req.body; // { dashboard: true, orders: false, ... }
+    if (!pages || typeof pages !== "object") {
+      return res.status(400).json({ status: false, message: "pages object is required" });
+    }
+    const doc = await AdminPermissions.findOneAndUpdate(
+      { admin_id: adminId },
+      { $set: { pages } },
+      { upsert: true, new: true, lean: true }
+    );
+    const updatedPages = doc.pages || {};
+    return res.status(200).json({ status: true, message: "Permissions updated", pages: updatedPages });
+  } catch (error) {
+    console.error("Update Permissions Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+// ── Get own permissions (called by logged-in admin at login time) ──
+const getMyPermissions = async (req, res) => {
+  try {
+    const adminId = req.admin?.userId || req.user?.userId;
+    if (!adminId) {
+      return res.status(401).json({ status: false, message: "Unauthorized: admin ID missing" });
+    }
+    const doc = await AdminPermissions.findOne({ admin_id: adminId }).lean();
+    const pages = doc?.pages || {};
+    return res.status(200).json({ status: true, pages });
+  } catch (error) {
+    console.error("Get My Permissions Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+module.exports = { SignInAdmin, verifyAdminOTP, LogoutAdmin, MasterSignInAdmin, verifyMasterAdminOTP, listAdmins, addAdmin, deleteAdmin, getAdminPermissions, updateAdminPermissions, getMyPermissions };

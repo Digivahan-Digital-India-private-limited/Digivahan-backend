@@ -18,6 +18,9 @@ const {
   listAdmins,
   addAdmin,
   deleteAdmin,
+  getAdminPermissions,
+  updateAdminPermissions,
+  getMyPermissions,
 } = require("../controllers/adminAuthController.js");
 
 router.post(
@@ -55,5 +58,12 @@ router.post(
 router.get("/admin/master/admins", listAdmins);
 router.post("/admin/master/admins", addAdmin);
 router.delete("/admin/master/admins/:id", deleteAdmin);
+
+// ── Master Admin: Permissions Routes ──
+router.get("/admin/master/permissions/:adminId", getAdminPermissions);
+router.put("/admin/master/permissions/:adminId", updateAdminPermissions);
+
+// ── Regular Admin: Get Own Permissions ──
+router.get("/admin/my-permissions", authenticateTokenForAdmin, getMyPermissions);
 
 module.exports = router;

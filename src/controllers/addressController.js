@@ -37,7 +37,7 @@ const UserAddAddress = async (req, res) => {
       default_status,
     };
 
-    // If new address is defaulti → unset old default (atomic)
+    // If new address is default → unset old default (atomic)
     if (default_status === true) {
       await User.updateOne(
         { _id: user_id },

@@ -13,6 +13,11 @@ const {
   SignInAdmin,
   verifyAdminOTP,
   LogoutAdmin,
+  MasterSignInAdmin,
+  verifyMasterAdminOTP,
+  listAdmins,
+  addAdmin,
+  deleteAdmin,
 } = require("../controllers/adminAuthController.js");
 
 router.post(
@@ -33,5 +38,22 @@ router.post(
   [handleValidationErrors],
   LogoutAdmin,
 );
+
+router.post(
+  "/admin/master/sign-in",
+  [commonValidations.phone("phone"), handleValidationErrors],
+  MasterSignInAdmin,
+);
+
+router.post(
+  "/admin/master/verify",
+  [handleValidationErrors],
+  verifyMasterAdminOTP,
+);
+
+// ── Master Admin: Admin Management Routes ──
+router.get("/admin/master/admins", listAdmins);
+router.post("/admin/master/admins", addAdmin);
+router.delete("/admin/master/admins/:id", deleteAdmin);
 
 module.exports = router;

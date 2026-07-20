@@ -233,4 +233,149 @@ const LogoutAdmin = async (req, res) => {
   }
 };
 
-module.exports = { SignInAdmin, verifyAdminOTP, LogoutAdmin };
+const MasterSignInAdmin = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ status: false, message: "Valid phone number is required" });
+    }
+
+    const adminPhones = (process.env.ADMIN_PHONES || "").split(",");
+    if (!adminPhones.includes(phone)) {
+      return res.status(403).json({ status: false, message: "Not authorized as Master Admin" });
+    }
+
+    const admin = await Admin.findOne({ phone, is_active: true }, { _id: 1, phone: 1 }).lean();
+    if (!admin) {
+      return res.status(404).json({ status: false, message: "Admin not registered" });
+    }
+
+    const otpCode = generateOTP(6);
+    const redisKey = `masteradmin:otp:${phone}`;
+    await redis.set(redisKey, otpCode, "EX", 600);
+
+    const otpSent = await sendOTP(phone, otpCode, "PHONE", "login");
+    if (!otpSent) {
+      await redis.del(redisKey);
+      return res.status(500).json({ status: false, message: "Failed to send OTP. Please try again." });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: `OTP sent successfully to ${phone}`,
+      valid_until: new Date(Date.now() + 600000).toISOString(),
+    });
+  } catch (error) {
+    console.error("Master Admin SignIn OTP Error:", error);
+    return res.status(500).json({ status: false, message: "Internal Server Error" });
+  }
+};
+
+const verifyMasterAdminOTP = async (req, res) => {
+  try {
+    const { phone, OtpCode } = req.body;
+
+    if (!phone || !OtpCode) {
+      return res.status(400).json({ status: false, message: "phone and OtpCode are required" });
+    }
+
+    const adminPhones = (process.env.ADMIN_PHONES || "").split(",");
+    if (!adminPhones.includes(phone)) {
+      return res.status(403).json({ status: false, message: "Not authorized as Master Admin" });
+    }
+
+    const redisKey = `masteradmin:otp:${phone}`;
+    const storedOtp = await redis.get(redisKey);
+
+    if (!storedOtp || storedOtp !== OtpCode) {
+      return res.status(400).json({ status: false, message: "Invalid or expired OTP" });
+    }
+
+    await redis.del(redisKey);
+
+    const admin = await Admin.findOne({ phone, is_active: true }).lean();
+    if (!admin) {
+      return res.status(404).json({ status: false, message: "Admin not registered" });
+    }
+
+    const token = generateAuthToken({
+      user_id: admin._id,
+      email: admin.email,
+      phone_number: admin.phone,
+      isMasterAdmin: true,
+    });
+
+    await Admin.updateOne({ _id: admin._id }, { $set: { last_login: new Date() } });
+
+    return res.status(200).json({
+      status: true,
+      message: "Master Admin login successful",
+      token,
+      admin: {
+        user_id: admin._id,
+        phone: admin.phone,
+        email: admin.email,
+        name: `${admin.first_name} ${admin.last_name}`,
+        isMasterAdmin: true,
+      },
+    });
+  } catch (error) {
+    console.error("Verify Master Admin OTP Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+const listAdmins = async (req, res) => {
+  try {
+    const admins = await Admin.find({}, {
+      _id: 1, first_name: 1, last_name: 1, phone: 1, email: 1, role: 1, is_active: 1, createdAt: 1
+    }).sort({ createdAt: -1 }).lean();
+    return res.status(200).json({ status: true, admins });
+  } catch (error) {
+    console.error("List Admins Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+const addAdmin = async (req, res) => {
+  try {
+    const { first_name, last_name, phone, email } = req.body;
+    if (!first_name || !phone || !email) {
+      return res.status(400).json({ status: false, message: "first_name, phone, and email are required" });
+    }
+    const existing = await Admin.findOne({ $or: [{ phone }, { email }] });
+    if (existing) {
+      return res.status(400).json({ status: false, message: "Admin with this phone or email already exists" });
+    }
+    const newAdmin = new Admin({
+      first_name,
+      last_name: last_name || "",
+      phone,
+      email,
+      role: "admin",
+      is_active: true,
+    });
+    await newAdmin.save();
+    return res.status(201).json({ status: true, message: "Admin added successfully", admin: newAdmin });
+  } catch (error) {
+    console.error("Add Admin Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+const deleteAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const admin = await Admin.findByIdAndDelete(id);
+    if (!admin) {
+      return res.status(404).json({ status: false, message: "Admin not found" });
+    }
+    return res.status(200).json({ status: true, message: "Admin deleted successfully" });
+  } catch (error) {
+    console.error("Delete Admin Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+module.exports = { SignInAdmin, verifyAdminOTP, LogoutAdmin, MasterSignInAdmin, verifyMasterAdminOTP, listAdmins, addAdmin, deleteAdmin };

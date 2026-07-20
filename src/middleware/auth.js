@@ -111,6 +111,7 @@ const generateAuthToken = (payloadData) => {
       userId: payloadData.user_id,
       email: payloadData.email || null,
       phone_number: payloadData.phone_number || null,
+      isMasterAdmin: payloadData.isMasterAdmin || false,
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {

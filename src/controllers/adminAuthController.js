@@ -339,6 +339,23 @@ const listAdmins = async (req, res) => {
   }
 };
 
+// All page keys — must match exactly what Sidebar.jsx and ManageAdminPermissions.jsx use
+const ALL_PAGE_KEYS = [
+  "dashboard",
+  "orders",
+  "qr_management",
+  "user_management",
+  "analytics",
+  "customer_queries",
+  "raise_concern",
+  "delete_account_requests",
+  "report_issue",
+  "manage_appointment",
+  "challan_webhook",
+  "app_management",
+  "hr_manager",
+];
+
 const addAdmin = async (req, res) => {
   try {
     const { first_name, last_name, phone, email } = req.body;
@@ -358,7 +375,21 @@ const addAdmin = async (req, res) => {
       is_active: true,
     });
     await newAdmin.save();
-    return res.status(201).json({ status: true, message: "Admin added successfully", admin: newAdmin });
+
+    // ✅ Create default permissions — ALL pages set to FALSE (no access by default)
+    // Master Admin must explicitly grant access to each page after creation.
+    const defaultPages = {};
+    ALL_PAGE_KEYS.forEach(key => { defaultPages[key] = false; });
+    await AdminPermissions.create({
+      admin_id: newAdmin._id,
+      pages: defaultPages,
+    });
+
+    return res.status(201).json({
+      status: true,
+      message: "Admin added successfully. No page access granted yet — please configure permissions.",
+      admin: newAdmin,
+    });
   } catch (error) {
     console.error("Add Admin Error:", error);
     return res.status(500).json({ status: false, message: "Internal server error" });
@@ -421,7 +452,17 @@ const getMyPermissions = async (req, res) => {
       return res.status(401).json({ status: false, message: "Unauthorized: admin ID missing" });
     }
     const doc = await AdminPermissions.findOne({ admin_id: adminId }).lean();
-    const pages = doc?.pages || {};
+
+    // ✅ If no permissions doc exists (legacy admin), default ALL to false — no access
+    // This ensures even old admins without a permission record see nothing until granted.
+    if (!doc) {
+      const defaultPages = {};
+      ALL_PAGE_KEYS.forEach(key => { defaultPages[key] = false; });
+      return res.status(200).json({ status: true, pages: defaultPages });
+    }
+
+    // Return exactly what is stored — master admin controls what is true/false
+    const pages = doc.pages instanceof Map ? Object.fromEntries(doc.pages) : (doc.pages || {});
     return res.status(200).json({ status: true, pages });
   } catch (error) {
     console.error("Get My Permissions Error:", error);

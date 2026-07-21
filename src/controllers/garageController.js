@@ -257,7 +257,9 @@ const maskVehicleResponse = (data) => {
  * Makes actual API call to RTO service
  */
 const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
-  console.log("➡️ Calling NORMAL RTO API");
+  // OLD: Kashi Digital API — https://core.kashidigitalapis.com/v1/vehicles (commented out)
+  // NEW: STAK API — https://core.stakapis.com/v1/vehicles (set via RTO_API_URL in .env)
+  console.log("➡️ Calling NORMAL RTO API:", process.env.RTO_API_URL);
 
   try {
     const response = await axios.post(
@@ -290,7 +292,9 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
-  console.log("➡️ Calling PREMIUM RTO API for:", vehicleNumber);
+  // OLD: Kashi Digital Premium API — https://core.kashidigitalapis.com/v1/rc-premium (commented out)
+  // NEW: STAK Premium API — https://core.stakapis.com/v1/rc-premium (set via RTO_PREMIMUM_API_URL in .env)
+  console.log("➡️ Calling PREMIUM RTO API for:", vehicleNumber, "via", process.env.RTO_PREMIMUM_API_URL);
 
   let response;
   try {

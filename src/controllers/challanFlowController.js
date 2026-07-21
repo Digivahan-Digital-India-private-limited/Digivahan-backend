@@ -15,7 +15,8 @@ const { getNoCreditsMessage } = require("../utils/creditUtils");
  */
 const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_search") => {
   try {
-    const url = process.env.RTO_CHALLAN_PLUS_URL || "https://core.kashidigitalapis.com/v1/challan-plus";
+    // OLD: const url = "https://core.kashidigitalapis.com/v1/challan-plus"; // Kashi Digital (commented out)
+    const url = process.env.RTO_CHALLAN_PLUS_URL || "https://core.stakapis.com/v1/challan-plus";
     console.log(`[ChallanFlow] Fetching challans for ${rcNumber} via ${url}`);
 
     const response = await axios.post(

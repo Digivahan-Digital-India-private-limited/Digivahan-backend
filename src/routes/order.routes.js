@@ -26,6 +26,7 @@ const {
   AddNewActivePatner,
   GetOrderStatsByAdmin,
   ScheduleBulkDeliveryPickup,
+  ResendToDelhivery,
 } = require("../controllers/OrderController.js");
 
 router.post(
@@ -144,6 +145,11 @@ router.post(
 router.post(
   "/admin/schedule-delhivery-pickup",
   ScheduleBulkDeliveryPickup
+);
+
+router.post(
+  "/admin/resend-to-delhivery",
+  ResendToDelhivery
 );
 
 module.exports = router;

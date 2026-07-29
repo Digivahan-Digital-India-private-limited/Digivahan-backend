@@ -1988,6 +1988,178 @@ const OrderCancelByAdmin = async (req, res) => {
   }
 };
 
+// ------------------------------
+// Resend Cancelled Order to Delhivery
+// ------------------------------
+const ResendToDelhivery = async (req, res) => {
+  try {
+    const { order_id } = req.body;
+
+    /* -----------------------------
+       1️⃣ VALIDATION
+    ----------------------------- */
+
+    if (!order_id) {
+      return res.status(400).json({
+        status: false,
+        message: "order_id is required",
+      });
+    }
+
+    /* -----------------------------
+       2️⃣ FIND ORDER
+    ----------------------------- */
+
+    const order = await Order.findOne({ order_id: order_id }).sort({ createdAt: -1 });
+
+    if (!order) {
+      return res.status(404).json({
+        status: false,
+        message: "Order not found",
+      });
+    }
+
+    /* -----------------------------
+       3️⃣ VALIDATE — SIRF DELHIVERY CANCELED ORDERS
+    ----------------------------- */
+
+    if (order.active_partner !== "delhivery") {
+      return res.status(400).json({
+        status: false,
+        message: "Sirf Delhivery orders ko resend kiya ja sakta hai",
+      });
+    }
+
+    if (order.order_status !== "CANCELED") {
+      return res.status(400).json({
+        status: false,
+        message: `Order already in '${order.order_status}' status. Sirf CANCELED orders resend ho sakte hain.`,
+      });
+    }
+
+    /* -----------------------------
+       4️⃣ PURANA DeliveryOrder DELETE KARO
+    ----------------------------- */
+
+    await DeliveryOrder.deleteOne({ order_id: order._id });
+    console.log(`[ResendToDelhivery] Old DeliveryOrder deleted for order: ${order.order_id}`);
+
+    /* -----------------------------
+       5️⃣ DELHIVERY PAYLOAD BANAO
+    ----------------------------- */
+
+    const Deliverypayload = {
+      shipments: [
+        {
+          name: `${order.shipping.first_name} ${order.shipping.last_name}`,
+          add: `${order.shipping.address1} ${order.shipping.address2}`,
+          pin: order.shipping.pincode,
+          city: order.shipping.city,
+          state: order.shipping.state,
+          country: order.shipping.country,
+          phone: order.shipping.phone,
+          order: order.order_id,
+          payment_mode: order.payment_method,
+          shipment_length: order.parcel.length?.toString() || "10",
+          shipment_width: order.parcel.breadth?.toString() || "10",
+          shipment_height: order.parcel.height?.toString() || "5",
+          weight: order.parcel.weight?.toString() || "0.05",
+          products_desc: order.order_items[0]?.name || "QR Code Sticker",
+          total_amount: order.sub_total?.toString() || "0",
+          cod_amount: order.payment_method === "COD" ? order.sub_total?.toString() : "0",
+          shipping_mode: order.shipping_mode || "Surface",
+        },
+      ],
+      pickup_location: {
+        name: "DIGIVAHAN",
+      },
+    };
+
+    /* -----------------------------
+       6️⃣ NAYA DELHIVERY ORDER BANAO
+    ----------------------------- */
+
+    const response = await createDeliveryOrder(Deliverypayload);
+    console.log(`[ResendToDelhivery] Delhivery response:`, response);
+
+    if (!response?.success || !response?.packages?.length) {
+      const delhiveryError =
+        response?.rmk ||
+        response?.error ||
+        response?.packages?.[0]?.remarks ||
+        JSON.stringify(response);
+      return res.status(400).json({
+        status: false,
+        message: `Delhivery order creation failed: ${delhiveryError}`,
+      });
+    }
+
+    const packageData = response.packages[0];
+
+    /* -----------------------------
+       7️⃣ NAYA DeliveryOrder SAVE KARO
+    ----------------------------- */
+
+    await DeliveryOrder.create({
+      order_id: order._id,
+      waybill: packageData.waybill,
+      reference_number: packageData.refnum,
+      client: packageData.client,
+      payment_mode: packageData.payment,
+      status: packageData.status,
+      sort_code: packageData.sort_code,
+      serviceable: packageData.serviceable,
+      remarks: packageData.remarks,
+      replacement_count: response.replacement_count,
+      cash_pickups: response.cash_pickups,
+      cod_amount: response.cod_amount,
+      upload_wbn: response.upload_wbn,
+      package_count: response.package_count,
+      prepaid_count: response.prepaid_count,
+      cod_count: response.cod_count,
+      cash_pickups_count: response.cash_pickups_count,
+      pickups_count: response.pickups_count,
+      pickup_data: null,
+    });
+
+    /* -----------------------------
+       8️⃣ ORDER STATUS RESET KARO
+    ----------------------------- */
+
+    order.order_status = "CONFIRMED";
+    order.partner_order_created = true;
+    order.is_prepared = true;
+    order.canceled_at = null;
+    order.cancellation_reason = null;
+    order.cancellation_notes = null;
+    await order.save();
+
+    /* -----------------------------
+       9️⃣ SUCCESS RESPONSE
+    ----------------------------- */
+
+    return res.status(200).json({
+      status: true,
+      message: "Order successfully resent to Delhivery",
+      data: {
+        order_id: order.order_id,
+        waybill: packageData.waybill,
+        new_status: "CONFIRMED",
+      },
+    });
+  } catch (error) {
+    console.error(
+      "ResendToDelhivery Error:",
+      error?.response?.data || error.message,
+    );
+    return res.status(500).json({
+      status: false,
+      message: "Failed to resend order to Delhivery",
+      error: error.message,
+    });
+  }
+};
+
 // Ship Rocket cancel order apis
 const cancelShiprocketOrder = async (orderId) => {
   try {
@@ -2831,4 +3003,5 @@ module.exports = {
   CheckCourierService,
   GetOrderStatsByAdmin,
   ScheduleBulkDeliveryPickup,
+  ResendToDelhivery,
 };

@@ -11,19 +11,42 @@ const { getNoCreditsMessage } = require("../utils/creditUtils");
 
 
 /**
- * Fetch real challans from RTO API (Kashidigital Challan Plus)
+ * Map raw challan item from old/new RTO APIs to our backend response format
+ */
+const mapChallanItem = (challan, defaultRc = "") => ({
+  challanNumber: challan.challanNumber || challan.challan_number || challan.challanNo || "",
+  offence: challan.offences?.[0]?.offence_name || challan.offence || (Array.isArray(challan.detailsViolation) && challan.detailsViolation[0]?.offence) || challan.violation || "Traffic Violation",
+  motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || challan.mva || "",
+  amountSettledAt: parseInt(challan.challanAmount || challan.amount || challan.amountChallan || (Array.isArray(challan.detailsViolation) && challan.detailsViolation[0]?.penalty) || 0) || 0,
+  transactionStatus: ["cash", "paid", "online"].includes((challan.challanStatus || challan.status || "").toLowerCase()) ? "PAID" : "UNPAID",
+  isSettled: ["cash", "paid", "online"].includes((challan.challanStatus || challan.status || "").toLowerCase()),
+  location: challan.challanPlace || challan.location || challan.locationChallan || "Unknown",
+  createdAt: challan.challanDate || challan.createdAt || challan.dateChallan || new Date().toISOString(),
+  receiptLink: challan.receipt_url || challan.receiptLink || challan.receiptOffline || challan.receiptUrl || "",
+  ownerName: challan.accusedName || challan.ownerName || challan.owner_name || challan.nameViolator || challan.nameOwner || challan.accNameDL || "",
+  ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || challan.violatorFatherName || challan.nameFatherOwner || challan.accFatherNameDL || "",
+  rcNumber: challan.rcNumber || challan.dlRcNumber || challan.rcNo || defaultRc
+});
+
+/**
+ * Fetch real challans from RTO API (Invincible / PiChain vehicle-challan-detailed)
  */
 const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_search") => {
   try {
-    // OLD: const url = "https://core.kashidigitalapis.com/v1/challan-plus"; // Kashi Digital (commented out)
-    const url = process.env.RTO_CHALLAN_PLUS_URL || "https://core.stakapis.com/v1/challan-plus";
+    const url = process.env.INVINCIBLE_CHALLAN_API_URL || process.env.RTO_CHALLAN_PLUS_URL || "https://api-prod.kyc-flow.com/vehicle-challan-detailed";
     console.log(`[ChallanFlow] Fetching challans for ${rcNumber} via ${url}`);
 
     const response = await axios.post(
       url,
-      { rcNumber: rcNumber.toUpperCase() },
+      {
+        vehicleNumber: rcNumber.toUpperCase().trim(),
+        rcNumber: rcNumber.toUpperCase().trim(),
+        consent: "I explicitly consent to the collection, processing, and verification of my data for authentication, KYC, and compliance purposes."
+      },
       {
         headers: {
+          clientId: process.env.INVINCIBLE_CLIENT_ID,
+          secretKey: process.env.INVINCIBLE_SECRET_KEY,
           accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
@@ -33,16 +56,23 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
 
     console.log(`[ChallanFlow] API Response for ${rcNumber}:`, JSON.stringify(response.data));
 
-    // The API returns { statusCode: 200, data: [...] }
-    if (response.data && (response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.code === 200)) {
-      // ✅ Log successful Challan Plus API call
+    // The API returns { code: 200, message: "Data Found Successfully.", result: [...] }
+    if (response.data && (response.data.code === 200 || response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.status === "success")) {
+      // ✅ Log successful Challan API call
       RTOApiLog.create({ userId, vehicleNumber: rcNumber, apiType: "challan_plus_api", trigger, success: true }).catch(() => { });
-      return response.data.data || [];
+      let rawChallans = response.data.result || response.data.data || [];
+      if (rawChallans && !Array.isArray(rawChallans) && Array.isArray(rawChallans.data)) {
+        rawChallans = rawChallans.data;
+      }
+      if (!Array.isArray(rawChallans)) {
+        rawChallans = [];
+      }
+      return rawChallans;
     }
 
     return [];
   } catch (error) {
-    console.error("[ChallanFlow] Challan Plus API Error:", error.response?.data || error.message);
+    console.error("[ChallanFlow] Challan API Error:", error.response?.data || error.message);
     return [];
   }
 };
@@ -306,20 +336,7 @@ const verifyChallanOtp = async (req, res) => {
           const fetchedChallans = await fetchRealChallans(flowData.rcNumber, user._id, "challan_search");
 
           if (fetchedChallans && fetchedChallans.length > 0) {
-            const mappedChallans = fetchedChallans.map(challan => ({
-              challanNumber: challan.challanNumber || challan.challan_number,
-              offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
-              motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
-              amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
-              transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
-              isSettled: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()),
-              location: challan.challanPlace || challan.location || "Unknown",
-              createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
-              receiptLink: challan.receipt_url || challan.receiptLink || "",
-              ownerName: challan.accusedName || challan.ownerName || challan.owner_name || "",
-              ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || "",
-              rcNumber: challan.rcNumber || flowData.rcNumber
-            }));
+            const mappedChallans = fetchedChallans.map(challan => mapChallanItem(challan, flowData.rcNumber));
 
             // Save to new Cache schema
             await RTOChallanCache.findOneAndUpdate(
@@ -568,20 +585,7 @@ const refreshChallans = async (req, res) => {
 
     let realChallans = [];
     if (fetchedChallans && fetchedChallans.length > 0) {
-      realChallans = fetchedChallans.map(challan => ({
-        challanNumber: challan.challanNumber || challan.challan_number,
-        offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
-        motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
-        amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
-        transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
-        isSettled: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()),
-        location: challan.challanPlace || challan.location || "Unknown",
-        createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
-        receiptLink: challan.receipt_url || challan.receiptLink || "",
-        ownerName: challan.accusedName || challan.ownerName || challan.owner_name || "",
-        ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || "",
-        rcNumber: challan.rcNumber || rcNumber
-      }));
+      realChallans = fetchedChallans.map(challan => mapChallanItem(challan, rcNumber));
     }
 
     // Overwrite realChallans status with real-time webhook status
@@ -741,20 +745,7 @@ const directSearchChallans = async (req, res) => {
       console.log(`[ChallanFlow] Fetching real challans for ${cleanRc} from API`);
       const fetchedChallans = await fetchRealChallans(cleanRc, user._id, "challan_search");
       if (fetchedChallans && fetchedChallans.length > 0) {
-        realChallans = fetchedChallans.map(challan => ({
-          challanNumber: challan.challanNumber || challan.challan_number,
-          offence: challan.offences?.[0]?.offence_name || challan.offence || "Traffic Violation",
-          motorVehicleAct: challan.offences?.[0]?.motor_vehicle_act || "",
-          amountSettledAt: parseInt(challan.challanAmount || challan.amount || 0),
-          transactionStatus: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()) ? "PAID" : "UNPAID",
-          isSettled: ["cash", "paid", "online"].includes(challan.challanStatus?.toLowerCase()),
-          location: challan.challanPlace || challan.location || "Unknown",
-          createdAt: challan.challanDate || challan.createdAt || new Date().toISOString(),
-          receiptLink: challan.receipt_url || challan.receiptLink || "",
-          ownerName: challan.accusedName || challan.ownerName || challan.owner_name || "",
-          ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || "",
-          rcNumber: challan.rcNumber || cleanRc
-        }));
+        realChallans = fetchedChallans.map(challan => mapChallanItem(challan, cleanRc));
 
         await RTOChallanCache.findOneAndUpdate(
           { rcNumber: cleanRc },

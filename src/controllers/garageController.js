@@ -253,20 +253,130 @@ const maskVehicleResponse = (data) => {
 };
 
 /**
- * Fetch vehicle data from RTO API
+ * Normalize RTO data from both old (Kashi/STAK) and new (Invincible RC V6) APIs
+ * Ensures both nested properties (registration, vehicle, insurance, etc.) and flat properties exist.
+ */
+const normalizeRTOData = (resData) => {
+  if (!resData) return {};
+  const data = resData.data && typeof resData.data === "object" && !Array.isArray(resData.data)
+    ? resData.data
+    : resData;
+
+  const regNumber = data.regNo || data.vehicleNumber || data.rcNumber || data.registration?.number || "";
+  const ownerName = data.owner || data.ownerName || data.registration?.owner?.name || "";
+  const ownerFatherName = data.ownerFatherName || data.fatherName || data.registration?.owner?.fatherName || "";
+  const regDate = data.regDate || data.registrationDate || data.registration?.date || null;
+  const ownerCount = data.ownerCount || data.registration?.ownerCount || "1";
+  const authority = data.regAuthority || data.authority || data.registration?.authority || "N/A";
+  const isActive = (data.status || "").toUpperCase() === "ACTIVE" || data.registration?.status?.active || false;
+  const regExpiry = data.rcExpiryDate || data.expiryDate || data.registration?.expiryDate || null;
+
+  const manufacturer = data.vehicleManufacturerName || data.manufacturer || data.vehicle?.manufacturer || "Unknown";
+  const model = data.model || data.vehicle?.model || "Model";
+  const vehicleClass = data.class || data.vehicleClass || data.vehicle?.class || "N/A";
+  const fuelType = data.type || data.fuelType || data.vehicle?.fuelType || "N/A";
+  const normsType = data.normsType || data.fuelNorms || data.vehicle?.normsType || "N/A";
+  const engine = data.engine || data.vehicle?.engine || "N/A";
+  const chassis = data.chassis || data.chassisNumber || data.vehicle?.chassis || "N/A";
+  const color = data.vehicleColour || data.color || data.vehicle?.color || "N/A";
+  const unladenWeight = data.unladenWeight || data.vehicle?.unladenWeight || "0";
+  const category = data.vehicleCategory || data.category || data.vehicle?.category || "N/A";
+  const manufacturingYear = data.vehicleManufacturingMonthYear || data.manufacturingYear || data.vehicle?.manufacturingYear || "";
+  const fitnessUpTo = data.rcExpiryDate || data.vehicleTaxUpto || data.fitnessUpto || data.vehicle?.fitnessUpTo || null;
+
+  const insCompany = data.vehicleInsuranceCompanyName || data.insuranceCompany || data.insurance?.company || "N/A";
+  const insExpiry = data.vehicleInsuranceUpto || data.insuranceExpiry || data.insurance?.expiryDate || null;
+  const insPolicy = data.vehicleInsurancePolicyNumber || data.insurancePolicyNumber || data.insurance?.policyNumber || "N/A";
+
+  const puccValidUpto = data.puccUpto || data.pollutionExpiry || data.pollutionControl?.validUpto || null;
+  const puccCertNo = data.puccNumber || data.pollutionCertificate || data.pollutionControl?.certificateNumber || "N/A";
+
+  const isFinanced = data.financed !== undefined ? data.financed : (data.finance?.isFinanced || false);
+  const rcFinancer = data.rcFinancer || data.financerName || data.finance?.rcFinancer || "";
+
+  return {
+    ...resData,
+    ...data,
+    regNo: regNumber,
+    vehicleNumber: regNumber,
+    owner: ownerName,
+    ownerFatherName: ownerFatherName,
+    model: model,
+    engine: engine,
+    chassis: chassis,
+    registration: {
+      ...(data.registration || {}),
+      number: regNumber,
+      date: regDate,
+      ownerCount: String(ownerCount),
+      authority: authority,
+      status: {
+        active: isActive,
+        ...(data.registration?.status || {})
+      },
+      expiryDate: regExpiry,
+      owner: {
+        ...(data.registration?.owner || {}),
+        name: ownerName,
+        fatherName: ownerFatherName,
+        presentAddress: data.presentAddress || data.registration?.owner?.presentAddress || "",
+        permanentAddress: data.permanentAddress || data.registration?.owner?.permanentAddress || ""
+      }
+    },
+    vehicle: {
+      ...(data.vehicle || {}),
+      manufacturer: manufacturer,
+      model: model,
+      class: vehicleClass,
+      fuelType: fuelType,
+      normsType: normsType,
+      engine: engine,
+      chassis: chassis,
+      color: color,
+      unladenWeight: unladenWeight,
+      category: category,
+      manufacturingYear: manufacturingYear,
+      fitnessUpTo: fitnessUpTo
+    },
+    insurance: {
+      ...(data.insurance || {}),
+      company: insCompany,
+      expiryDate: insExpiry,
+      policyNumber: insPolicy
+    },
+    pollutionControl: {
+      ...(data.pollutionControl || {}),
+      validUpto: puccValidUpto,
+      certificateNumber: puccCertNo
+    },
+    finance: {
+      ...(data.finance || {}),
+      isFinanced: isFinanced,
+      rcFinancer: rcFinancer
+    }
+  };
+};
+
+/**
+ * Fetch vehicle data from RTO API (Invincible RC V6)
  * Makes actual API call to RTO service
  */
 const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
-  // OLD: Kashi Digital API — https://core.kashidigitalapis.com/v1/vehicles (commented out)
-  // NEW: STAK API — https://core.stakapis.com/v1/vehicles (set via RTO_API_URL in .env)
-  console.log("➡️ Calling NORMAL RTO API:", process.env.RTO_API_URL);
+  const url = process.env.INVINCIBLE_RC_API_URL || process.env.RTO_API_URL || "https://api-prod.kyc-flow.com/vehicleRCV6";
+  console.log("➡️ Calling RTO RC API:", url);
 
   try {
     const response = await axios.post(
-      process.env.RTO_API_URL,
-      { rcNumber: vehicleNumber },
+      url,
+      {
+        vehicleNumber: vehicleNumber.toUpperCase().trim(),
+        rcNumber: vehicleNumber.toUpperCase().trim(),
+        consent: "I explicitly consent to the collection, processing, and verification of my data for authentication, KYC, and compliance purposes."
+      },
       {
         headers: {
+          clientId: process.env.INVINCIBLE_CLIENT_ID,
+          secretKey: process.env.INVINCIBLE_SECRET_KEY,
           accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
@@ -274,35 +384,40 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
       },
     );
 
-    if (response.status === 200 && response.data.code === 200) {
+    if (response.status === 200 && (response.data.code === 200 || response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.status === "success")) {
       // ✅ Log successful API call
       RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_api", trigger, success: true }).catch(() => {});
-      return response.data.result;
+      return normalizeRTOData(response.data.result || response.data.data || response.data);
     }
 
-    // logical not found
-    const err = new Error("NORMAL_RTO_FAILED");
-    err.statusCode = 500;
+    const err = new Error(response.data?.message || "NORMAL_RTO_FAILED");
+    err.statusCode = response.data?.code || response.data?.statusCode || 500;
     throw err;
   } catch (error) {
-    const err = new Error("NORMAL_RTO_FAILED");
-    err.statusCode = 500;
+    console.error("❌ RTO RC API error:", error.response?.data || error.message);
+    const err = new Error(error.response?.data?.message || error.message || "NORMAL_RTO_FAILED");
+    err.statusCode = error.response?.status || 500;
     throw err;
   }
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
-  // OLD: Kashi Digital Premium API — https://core.kashidigitalapis.com/v1/rc-premium (commented out)
-  // NEW: STAK Premium API — https://core.stakapis.com/v1/rc-premium (set via RTO_PREMIMUM_API_URL in .env)
-  console.log("➡️ Calling PREMIUM RTO API for:", vehicleNumber, "via", process.env.RTO_PREMIMUM_API_URL);
+  const url = process.env.INVINCIBLE_RC_API_URL || process.env.RTO_PREMIMUM_API_URL || "https://api-prod.kyc-flow.com/vehicleRCV6";
+  console.log("➡️ Calling PREMIUM RTO RC API for:", vehicleNumber, "via", url);
 
   let response;
   try {
     response = await axios.post(
-      process.env.RTO_PREMIMUM_API_URL,
-      { rcNumber: vehicleNumber },
+      url,
+      {
+        vehicleNumber: vehicleNumber.toUpperCase().trim(),
+        rcNumber: vehicleNumber.toUpperCase().trim(),
+        consent: "I explicitly consent to the collection, processing, and verification of my data for authentication, KYC, and compliance purposes."
+      },
       {
         headers: {
+          clientId: process.env.INVINCIBLE_CLIENT_ID,
+          secretKey: process.env.INVINCIBLE_SECRET_KEY,
           accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
@@ -340,19 +455,19 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
 
   console.log("⬅️ PREMIUM RTO API response:", {
     httpStatus: response.status,
-    statusCode: response.data?.statusCode,
+    statusCode: response.data?.statusCode || response.data?.code,
     message: response.data?.message,
     hasResult: !!response.data?.result,
   });
 
-  if (response.status === 200 && response.data.statusCode === 200) {
+  if (response.status === 200 && (response.data.code === 200 || response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.status === "success")) {
     // ✅ Log successful premium API call
     RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_premium_api", trigger, success: true }).catch(() => {});
-    return response.data.result;
+    return normalizeRTOData(response.data.result || response.data.data || response.data);
   }
 
   const err = new Error(response.data?.message || "Premium RTO API failed");
-  err.statusCode = response.data?.statusCode || 500;
+  err.statusCode = response.data?.code || response.data?.statusCode || 500;
   throw err;
 };
 

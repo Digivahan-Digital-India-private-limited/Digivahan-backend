@@ -46,7 +46,6 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
         headers: {
           clientId: process.env.INVINCIBLE_CLIENT_ID,
           secretKey: process.env.INVINCIBLE_SECRET_KEY,
-          accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
         timeout: 30000,

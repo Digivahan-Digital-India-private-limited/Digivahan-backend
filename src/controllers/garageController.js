@@ -376,7 +376,6 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
         headers: {
           clientId: process.env.INVINCIBLE_CLIENT_ID,
           secretKey: process.env.INVINCIBLE_SECRET_KEY,
-          accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
         timeout: 30000,
@@ -416,7 +415,6 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
         headers: {
           clientId: process.env.INVINCIBLE_CLIENT_ID,
           secretKey: process.env.INVINCIBLE_SECRET_KEY,
-          accessToken: process.env.RTO_API_ACCESS_TOKEN,
           "Content-Type": "application/json",
         },
         timeout: 30000,

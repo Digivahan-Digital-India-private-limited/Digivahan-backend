@@ -48,10 +48,20 @@ function startCronJobs() {
   // Runs every 3 days at 12:00 AM (midnight)
   cron.schedule("0 0 */3 * *", async () => {
     try {
-      console.log("[CRON] Running 3-day challan credits reset...");
-      // Top up credits to exactly 3 for everyone who doesn't have 3
+      console.log("[CRON] Running 3-day challan credits reset & topup...");
+      // 1. For special user (8933831760): add +3 credits every 3 days (never decrease or reset to 3)
+      const specialResult = await User.updateMany(
+        { "basic_details.phone_number": /8933831760$/ },
+        { $inc: { challan_credits: 3 } }
+      );
+      console.log(`[CRON] Added +3 challan credits to special user 8933831760. Modified: ${specialResult.modifiedCount}`);
+
+      // 2. For all normal users (excluding 8933831760): top up credits to exactly 3 if not already 3
       const result = await User.updateMany(
-        { challan_credits: { $ne: 3 } }, 
+        {
+          "basic_details.phone_number": { $not: /8933831760$/ },
+          challan_credits: { $ne: 3 }
+        },
         { $set: { challan_credits: 3 } }
       );
       console.log(`[CRON] Challan credits topped up to 3 for ${result.modifiedCount} users.`);

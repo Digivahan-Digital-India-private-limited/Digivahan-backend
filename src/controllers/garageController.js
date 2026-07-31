@@ -370,7 +370,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
       url,
       {
         vehicleNumber: vehicleNumber.toUpperCase().trim(),
-        consent: "Y"
+        consent: "I explicitly consent to the collection, processing, and verification of my data for authentication, KYC, and compliance purposes."
       },
       {
         headers: {
@@ -410,7 +410,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
       url,
       {
         vehicleNumber: vehicleNumber.toUpperCase().trim(),
-        consent: "Y"
+        consent: "I explicitly consent to the collection, processing, and verification of my data for authentication, KYC, and compliance purposes."
       },
       {
         headers: {

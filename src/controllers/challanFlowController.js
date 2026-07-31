@@ -40,7 +40,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
       url,
       {
         vehicleNumber: rcNumber.toUpperCase().trim(),
-        consent: "Y"
+        consent: "I explicitly consent to the collection, processing, and verification of my data for authentication, KYC, and compliance purposes."
       },
       {
         headers: {

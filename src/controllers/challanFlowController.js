@@ -33,7 +33,7 @@ const mapChallanItem = (challan, defaultRc = "") => ({
  */
 const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_search") => {
   try {
-    const url = process.env.INVINCIBLE_CHALLAN_API_URL || process.env.RTO_CHALLAN_PLUS_URL || "https://api-prod.kyc-flow.com/vehicle-challan-detailed";
+    const url = process.env.INVINCIBLE_CHALLAN_API_URL || "https://api-prod.kyc-flow.com/vehicle-challan-detailed";
     console.log(`[ChallanFlow] Fetching challans for ${rcNumber} via ${url}`);
 
     const response = await axios.post(

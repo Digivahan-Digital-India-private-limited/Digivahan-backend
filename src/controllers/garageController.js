@@ -362,7 +362,7 @@ const normalizeRTOData = (resData) => {
  * Makes actual API call to RTO service
  */
 const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
-  const url = process.env.INVINCIBLE_RC_API_URL || "https://api-prod.kyc-flow.com/vehicleRCV6";
+  const url = process.env.INVINCIBLE_RC_API_URL || "https://api-prod.kyc-flow.com/vehicleRcV6";
   console.log("➡️ Calling RTO RC API:", url);
 
   try {
@@ -401,7 +401,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
 };
 
 const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, trigger = "add_vehicle") => {
-  const url = process.env.INVINCIBLE_RC_API_URL || "https://api-prod.kyc-flow.com/vehicleRCV6";
+  const url = process.env.INVINCIBLE_RC_API_URL || "https://api-prod.kyc-flow.com/vehicleRcV6";
   console.log("➡️ Calling PREMIUM RTO RC API for:", vehicleNumber, "via", url);
 
   let response;

@@ -61,6 +61,9 @@ const { setupSocketIO } = require("./src/socket/socketHandler.js");
 
 const app = express();
 
+// ✅ Trust nginx proxy so req.protocol returns "https" correctly
+app.set("trust proxy", 1);
+
 // -------------------- MIDDLEWARES --------------------
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));

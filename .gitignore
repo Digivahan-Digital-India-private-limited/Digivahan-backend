@@ -22,3 +22,6 @@
 
 
 package-lock.json
+
+# One-time admin scripts
+scripts/updateCredits.js

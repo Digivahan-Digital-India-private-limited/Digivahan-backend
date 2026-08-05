@@ -509,7 +509,7 @@ const getChallanPaymentUrl = async (req, res) => {
 
     if (paymentUrl.toLowerCase().includes("<!doctype html>") || paymentUrl.toLowerCase().includes("<html")) {
       const checkoutId = `checkout_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      await redis.set(checkoutId, paymentUrl, "EX", 1800); // 30 minutes
+      await redis.set(checkoutId, paymentUrl, "EX", 7200); // 2 hours
 
       const baseUrl = `${req.protocol}://${req.get("host")}`;
       const finalUrl = `${baseUrl}/api/challan-flow/render-checkout/${checkoutId}`;

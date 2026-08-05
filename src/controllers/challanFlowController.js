@@ -70,7 +70,19 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
 
     return [];
   } catch (error) {
-    console.error("[ChallanFlow] Challan API Error:", error.response?.data || error.message);
+    const apiError = error.response?.data;
+    const statusCode = error.response?.status;
+
+    // 404 "Challan Details not found" = vehicle has no challans — this is normal, not an error
+    if (
+      statusCode === 404 ||
+      (apiError?.code === 404 && apiError?.message?.toLowerCase().includes("not found"))
+    ) {
+      console.log(`[ChallanFlow] No challans found for ${rcNumber} (vehicle is clear)`);
+      return [];
+    }
+
+    console.error("[ChallanFlow] Challan API Error:", apiError || error.message);
     return [];
   }
 };

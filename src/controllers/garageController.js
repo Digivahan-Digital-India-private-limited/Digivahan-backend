@@ -12,6 +12,7 @@ const {
   maskAlphaNumeric,
 } = require("../utils/maskData");
 const ChallanWebhook = require("../models/ChallanWebhook");
+const VehicleForAdd = require("../models/VehicleForAdd");
 const { getNoCreditsMessage } = require("../utils/creditUtils");
 
 /**
@@ -388,10 +389,39 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
       return normalizeRTOData(response.data.result || response.data.data || response.data);
     }
 
+    const isApiNoData = response.data?.code === 500 || response.data?.statusCode === 500 || (response.data?.message || "").toLowerCase().includes("contact support");
+    if (isApiNoData && vehicleNumber) {
+      VehicleForAdd.findOneAndUpdate(
+        { vehicleNumber: vehicleNumber.toUpperCase().trim() },
+        {
+          $inc: { failCount: 1 },
+          $set: { lastFailedAt: new Date() },
+          $setOnInsert: { isDownloaded: false },
+        },
+        { upsert: true, new: true }
+      ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+    }
+
     const err = new Error(response.data?.message || "NORMAL_RTO_FAILED");
     err.statusCode = response.data?.code || response.data?.statusCode || 500;
     throw err;
   } catch (error) {
+    if (error.response) {
+      const isApiNoData = error.response.status === 500 || (error.response.data?.message || "").toLowerCase().includes("contact support");
+      
+      if (isApiNoData && vehicleNumber) {
+        VehicleForAdd.findOneAndUpdate(
+          { vehicleNumber: vehicleNumber.toUpperCase().trim() },
+          {
+            $inc: { failCount: 1 },
+            $set: { lastFailedAt: new Date() },
+            $setOnInsert: { isDownloaded: false },
+          },
+          { upsert: true, new: true }
+        ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+      }
+    }
+
     console.error("❌ RTO RC API error:", error.response?.data || error.message);
     const err = new Error(error.response?.data?.message || error.message || "NORMAL_RTO_FAILED");
     err.statusCode = error.response?.status || 500;
@@ -435,6 +465,20 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     }
 
     if (axiosError.response) {
+      const isApiNoData = axiosError.response.status === 500 || (axiosError.response.data?.message || "").toLowerCase().includes("contact support");
+      
+      if (isApiNoData && vehicleNumber) {
+        VehicleForAdd.findOneAndUpdate(
+          { vehicleNumber: vehicleNumber.toUpperCase().trim() },
+          {
+            $inc: { failCount: 1 },
+            $set: { lastFailedAt: new Date() },
+            $setOnInsert: { isDownloaded: false },
+          },
+          { upsert: true, new: true }
+        ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+      }
+
       const err = new Error(
         axiosError.response.data?.message ||
           axiosError.response.statusText ||
@@ -460,6 +504,19 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     // ✅ Log successful premium API call
     RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_premium_api", trigger, success: true }).catch(() => {});
     return normalizeRTOData(response.data.result || response.data.data || response.data);
+  }
+
+  const isApiNoData = response.data?.code === 500 || response.data?.statusCode === 500 || (response.data?.message || "").toLowerCase().includes("contact support");
+  if (isApiNoData && vehicleNumber) {
+    VehicleForAdd.findOneAndUpdate(
+      { vehicleNumber: vehicleNumber.toUpperCase().trim() },
+      {
+        $inc: { failCount: 1 },
+        $set: { lastFailedAt: new Date() },
+        $setOnInsert: { isDownloaded: false },
+      },
+      { upsert: true, new: true }
+    ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
   }
 
   const err = new Error(response.data?.message || "Premium RTO API failed");
@@ -1086,6 +1143,304 @@ const verifySecurityCode = async (req, res) => {
   }
 };
 
+/**
+ * Admin: Get All Vehicles (garage + challan-searched) across all users
+ * GET /api/v1/garage/admin/all-garages
+ * Query: ?page=1&limit=20&search=UP54&tab=all|garage|challan
+ */
+const adminGetAllGarages = async (req, res) => {
+  try {
+    const page   = parseInt(req.query.page)  || 1;
+    const limit  = parseInt(req.query.limit) || 20;
+    const search = (req.query.search || "").trim().toUpperCase();
+    const tab    = req.query.tab || "all"; // 'all' | 'garage' | 'challan'
+    const skip   = (page - 1) * limit;
+
+    // ── 1. GARAGE vehicles (ALWAYS fetch — needed for counts) ─────────────────
+    const garageRows = [];
+    {
+      let garageMatch = { "garage.vehicles": { $exists: true, $ne: [] } };
+      if (search) {
+        garageMatch.$or = [
+          { "garage.vehicles.vehicle_id": { $regex: search, $options: "i" } },
+          { "basic_details.phone_number": { $regex: search, $options: "i" } },
+          { "basic_details.first_name":   { $regex: search, $options: "i" } },
+          { "basic_details.last_name":    { $regex: search, $options: "i" } },
+        ];
+      }
+      const garageUsers = await User.find(garageMatch)
+        .select("_id basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email basic_details.profile_pic garage.vehicles.vehicle_id account_status updatedAt")
+        .lean();
+
+      for (const user of garageUsers) {
+        const name = `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A";
+        for (const v of (user.garage?.vehicles || [])) {
+          if (search && !v.vehicle_id.includes(search) &&
+              !name.toUpperCase().includes(search) &&
+              !(user.basic_details?.phone_number || "").includes(search)) continue;
+          garageRows.push({
+            source:        "garage",
+            vehicle_id:    v.vehicle_id,
+            userId:        user._id,
+            userName:      name,
+            userPhone:     user.basic_details?.phone_number || "N/A",
+            userEmail:     user.basic_details?.email || "",
+            profilePic:    user.basic_details?.profile_pic || "",
+            accountStatus: user.account_status,
+            sortTime:      user.updatedAt || new Date(0),
+          });
+        }
+      }
+    }
+
+    // ── 2. CHALLAN-SEARCHED vehicles (ALWAYS fetch — needed for counts) ────────
+    const challanRows = [];
+    {
+      const rtoMatch = {};
+      if (search) rtoMatch.vehicleNumber = { $regex: search, $options: "i" };
+
+      // ✅ FIX: Group FIRST (no pre-sort), then sort after for stable deterministic results.
+      //         Pre-sort before $group made $first non-deterministic across runs.
+      //         Removed $limit:500 cap — use all unique vehicles.
+      const rtoLogs = await RTOApiLog.aggregate([
+        { $match: rtoMatch },
+        {
+          $group: {
+            _id:      "$vehicleNumber",
+            userId:   { $last: "$userId" },     // most recent user who searched this
+            lastSeen: { $max: "$createdAt" },   // most recent search time (stable)
+            apiType:  { $last: "$apiType" },
+          },
+        },
+        { $sort: { lastSeen: -1 } },            // sort AFTER group (stable)
+      ]);
+
+      const userIds  = [...new Set(rtoLogs.map(l => l.userId).filter(Boolean))];
+      const logUsers = await User.find({ _id: { $in: userIds } })
+        .select("_id basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email account_status")
+        .lean();
+      const userMap = {};
+      for (const u of logUsers) userMap[String(u._id)] = u;
+
+      // Dedupe: if vehicle is already in garage, skip it from challan list
+      const garageKeys = new Set(garageRows.map(r => String(r.vehicle_id)));
+
+      for (const log of rtoLogs) {
+        const vehicleId = log._id;
+        if (!vehicleId) continue;
+        // Skip vehicles already shown under garage
+        if (garageKeys.has(String(vehicleId))) continue;
+
+        const user   = userMap[String(log.userId)] || null;
+        const userId = user?._id || log.userId;
+
+        // Skip Guest Users (users without an account)
+        if (!userId) continue;
+
+        challanRows.push({
+          source:        "challan",
+          vehicle_id:    vehicleId,
+          userId:        userId || null,
+          userName:      user ? `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A" : "Guest User",
+          userPhone:     user?.basic_details?.phone_number || "-",
+          userEmail:     user?.basic_details?.email || "-",
+          profilePic:    "",
+          accountStatus: user?.account_status || "GUEST",
+          lastChecked:   log.lastSeen,
+          apiType:       log.apiType,
+          sortTime:      log.lastSeen || new Date(0),
+        });
+      }
+    }
+
+    // ── 3. Apply tab filter ONLY for display, counts are always from both ──────
+    let displayRows;
+    if (tab === "garage")       displayRows = garageRows;
+    else if (tab === "challan") displayRows = challanRows;
+    else                        displayRows = [...garageRows, ...challanRows];
+
+    // Sort newest first
+    displayRows.sort((a, b) => new Date(b.sortTime) - new Date(a.sortTime));
+
+    const total    = displayRows.length;
+    const paginated = displayRows.slice(skip, skip + limit);
+
+    return res.status(200).json({
+      status: true,
+      message: "Vehicles fetched successfully",
+      data: paginated,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages:   Math.ceil(total / limit) || 1,
+        garageCount:  garageRows.length,
+        challanCount: challanRows.length,
+        allCount:     garageRows.length + challanRows.length,
+      },
+    });
+  } catch (error) {
+    console.error("adminGetAllGarages error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+/**
+ * Admin: Autocomplete vehicle number suggestions
+ * GET /api/v1/garage/admin/autocomplete?q=UP54
+ */
+const adminVehicleAutocomplete = async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim().toUpperCase();
+    if (q.length < 2) return res.status(200).json({ status: true, suggestions: [] });
+
+    // Search garage vehicles
+    const garageUsers = await User.find(
+      { "garage.vehicles.vehicle_id": { $regex: q, $options: "i" } },
+      { "garage.vehicles.vehicle_id": 1 }
+    ).limit(20).lean();
+
+    const garageNumbers = new Set();
+    for (const u of garageUsers) {
+      for (const v of (u.garage?.vehicles || [])) {
+        if (v.vehicle_id.includes(q)) garageNumbers.add(v.vehicle_id);
+      }
+    }
+
+    // Search RTO logs
+    const rtoLogs = await RTOApiLog.find(
+      { vehicleNumber: { $regex: q, $options: "i" } },
+      { vehicleNumber: 1 }
+    ).limit(30).lean();
+
+    const allNumbers = new Set([...garageNumbers, ...rtoLogs.map(l => l.vehicleNumber)]);
+
+    const suggestions = [...allNumbers]
+      .filter(Boolean)
+      .sort()
+      .slice(0, 10);
+
+    return res.status(200).json({ status: true, suggestions });
+  } catch (error) {
+    console.error("adminVehicleAutocomplete error:", error);
+    return res.status(500).json({ status: false, suggestions: [] });
+  }
+};
+
+/**
+ * Admin: Delete a vehicle from any user's garage
+ * DELETE /api/v1/garage/admin/delete-vehicle
+ */
+const adminDeleteVehicleFromGarage = async (req, res) => {
+  try {
+    const { user_id, vehicle_number } = req.body;
+
+    if (!user_id || !vehicle_number) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id and vehicle_number are required",
+      });
+    }
+
+    const user = await User.findOne({
+      _id: user_id,
+      "garage.vehicles.vehicle_id": vehicle_number,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "Vehicle not found in user's garage",
+      });
+    }
+
+    const vehicle = user.garage.vehicles.find((v) => v.vehicle_id === vehicle_number);
+    const qrIds = vehicle?.qr_list || [];
+
+    // Unassign all related QR codes
+    if (qrIds.length > 0) {
+      await QRAssignment.updateMany(
+        { qr_id: { $in: qrIds } },
+        {
+          $set: {
+            qr_status: "unassigned",
+            assigned_to: null,
+            assigned_by: null,
+            vehicle_id: null,
+            assigned_at: null,
+          },
+        },
+      );
+    }
+
+    // Remove the vehicle from garage
+    await User.updateOne(
+      { _id: user_id },
+      { $pull: { "garage.vehicles": { vehicle_id: vehicle_number } } },
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: `Vehicle ${vehicle_number} removed from garage successfully`,
+      data: { vehicle_id: vehicle_number, unassigned_qr: qrIds },
+    });
+  } catch (error) {
+    console.error("adminDeleteVehicleFromGarage error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+/**
+ * Admin: Delete challan-check record (RTOApiLog) for a vehicle
+ * DELETE /api/v1/garage/admin/delete-challan-record
+ * Body: { vehicle_number, user_id? }
+ */
+const adminDeleteChallanRecord = async (req, res) => {
+  try {
+    const { vehicle_number, user_id } = req.body;
+
+    if (!vehicle_number) {
+      return res.status(400).json({
+        status: false,
+        message: "vehicle_number is required",
+      });
+    }
+
+    // Build delete filter — if user_id provided, delete only that user's records
+    const filter = { vehicleNumber: vehicle_number.toUpperCase().trim() };
+    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
+      filter.userId = user_id;
+    }
+
+    const result = await RTOApiLog.deleteMany(filter);
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No challan search record found for this vehicle",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: `Challan record for ${vehicle_number} deleted successfully`,
+      data: { vehicle_number, deletedCount: result.deletedCount },
+    });
+  } catch (error) {
+    console.error("adminDeleteChallanRecord error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   addVehicle,
   addVehicleInUsergarage,
@@ -1094,4 +1449,8 @@ module.exports = {
   removeVehicle,
   checkSecurityCode,
   verifySecurityCode,
+  adminGetAllGarages,
+  adminDeleteVehicleFromGarage,
+  adminVehicleAutocomplete,
+  adminDeleteChallanRecord,
 };

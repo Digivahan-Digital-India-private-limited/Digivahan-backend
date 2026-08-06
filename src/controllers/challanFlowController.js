@@ -6,6 +6,7 @@ const { generateAuthToken } = require("../middleware/auth.js");
 const ChallanWebhook = require("../models/ChallanWebhook");
 const RTOChallanCache = require("../models/RTOChallanCache");
 const RTOApiLog = require("../models/RTOApiLog");
+const VehicleForAdd = require("../models/VehicleForAdd");
 const axios = require("axios");
 const { getNoCreditsMessage } = require("../utils/creditUtils");
 
@@ -83,6 +84,26 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
     }
 
     console.error("[ChallanFlow] Challan API Error:", apiError || error.message);
+
+    // ✅ Save vehicle number if 3rd party API has no data for it (code 500 / support error)
+    // This means the API doesn't have this vehicle in their database — admin needs to add it manually
+    const isApiNoData =
+      apiError?.code === 500 ||
+      statusCode === 500 ||
+      (typeof apiError?.message === "string" && apiError.message.toLowerCase().includes("contact support"));
+
+    if (isApiNoData && rcNumber) {
+      VehicleForAdd.findOneAndUpdate(
+        { vehicleNumber: rcNumber.toUpperCase().trim() },
+        {
+          $inc: { failCount: 1 },
+          $set: { lastFailedAt: new Date() },
+          $setOnInsert: { isDownloaded: false },
+        },
+        { upsert: true, new: true }
+      ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+    }
+
     return [];
   }
 };

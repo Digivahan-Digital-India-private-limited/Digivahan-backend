@@ -14,10 +14,14 @@ const {
   removeVehicle,
   checkSecurityCode,
   verifySecurityCode,
+  adminGetAllGarages,
+  adminDeleteVehicleFromGarage,
+  adminVehicleAutocomplete,
+  adminDeleteChallanRecord,
 } = require("../controllers/garageController.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
-const { optionalAuthToken } = require("../middleware/auth.js");
+const { optionalAuthToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 
 // Add Vehicle to Garage - Fetch vehicle data from RTO and save to user's garage
 // ✅ optionalAuthToken: logged-in user ka userId track hoga (analytics), public access bhi kaam karega
@@ -73,5 +77,18 @@ router.post(
   ],
   verifySecurityCode,
 );
+
+// ── Admin Garage Management Routes ──────────────────────────────────────────
+// Autocomplete: GET /api/v1/garage/admin/autocomplete?q=UP54
+router.get("/v1/garage/admin/autocomplete", authenticateTokenForAdmin, adminVehicleAutocomplete);
+
+// List all vehicles (garage + challan): GET /api/v1/garage/admin/all-garages
+router.get("/v1/garage/admin/all-garages", authenticateTokenForAdmin, adminGetAllGarages);
+
+// Admin delete vehicle from garage: DELETE /api/v1/garage/admin/delete-vehicle
+router.delete("/v1/garage/admin/delete-vehicle", authenticateTokenForAdmin, adminDeleteVehicleFromGarage);
+
+// Admin delete challan search record: DELETE /api/v1/garage/admin/delete-challan-record
+router.delete("/v1/garage/admin/delete-challan-record", authenticateTokenForAdmin, adminDeleteChallanRecord);
 
 module.exports = router;

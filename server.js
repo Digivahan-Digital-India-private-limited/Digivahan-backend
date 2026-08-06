@@ -55,6 +55,7 @@ const serviceRoutes = require("./src/routes/service.routes.js")
 const challanWebhookRoutes = require("./src/routes/challanWebhook.routes.js")
 const challanFlowRoutes = require("./src/routes/challanFlow.routes.js")
 const careerRoutes = require("./src/routes/career.routes.js")
+const vehicleForAddRoutes = require("./src/routes/vehicleForAdd.routes.js");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -103,7 +104,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/delete-account",deleteAccountRoutes);
 app.use("/api/report-issue",reportIssueRoutes);
 
-// -------------------- ROUTES --------------------
+// -------------------- ROUTES -------------------- //
 
 app.use(API_ROUTES.AUTH.BASE, authRoutes);
 app.use(API_ROUTES.AUTH.BASE, AdminauthRoutes);
@@ -112,6 +113,7 @@ app.use(API_ROUTES.UPDATE_USER.BASE, profileUpdateRoutes);
 app.use(API_ROUTES.EMERGENCY_CONTACT.BASE, emergencyContactRoutes);
 app.use(API_ROUTES.ADDRESSBOOK.BASE, addUserAddressRoutes);
 app.use(API_ROUTES.GARAGE.BASE, garageRoutes);
+app.use("/api/v1/vehicle-for-add", vehicleForAddRoutes);
 app.use(API_ROUTES.UPLOAD.BASE, uploadVehicleDoc);
 app.use(API_ROUTES.REVIEW.BASE, userReviewroutes);
 app.use(API_ROUTES.ORDER.BASE, userOrderRoutes);

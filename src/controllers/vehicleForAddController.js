@@ -12,11 +12,14 @@ const adminGetVehiclesForAdd = async (req, res) => {
     const limit  = parseInt(req.query.limit) || 50;
     const filter = req.query.filter || "all"; // all | pending | downloaded
     const search = (req.query.search || "").trim().toUpperCase();
+    const apiType = req.query.apiType || "ALL"; // ALL | VEHICLE | CHALLAN
     const skip   = (page - 1) * limit;
 
     const query = {};
     if (filter === "pending")    query.isDownloaded = false;
     if (filter === "downloaded") query.isDownloaded = true;
+    if (apiType === "VEHICLE")   query.failedApis = "VEHICLE";
+    if (apiType === "CHALLAN")   query.failedApis = "CHALLAN";
     if (search)                  query.vehicleNumber = { $regex: search, $options: "i" };
 
     const [total, records] = await Promise.all([
@@ -39,6 +42,8 @@ const adminGetVehiclesForAdd = async (req, res) => {
         totalPages:      Math.ceil(total / limit) || 1,
         pendingCount:    await VehicleForAdd.countDocuments({ isDownloaded: false }),
         downloadedCount: await VehicleForAdd.countDocuments({ isDownloaded: true }),
+        vehicleCount:    await VehicleForAdd.countDocuments({ failedApis: "VEHICLE" }),
+        challanCount:    await VehicleForAdd.countDocuments({ failedApis: "CHALLAN" }),
       },
     });
   } catch (error) {

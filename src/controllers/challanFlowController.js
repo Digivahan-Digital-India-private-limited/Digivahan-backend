@@ -84,6 +84,9 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
     }
 
     console.error("[ChallanFlow] Challan API Error:", apiError || error.message);
+    if (apiError) {
+      console.error("[ChallanFlow] ACTUAL API ERROR MSG:", JSON.stringify(apiError, null, 2));
+    }
 
     // ✅ Save vehicle number if 3rd party API has no data for it (code 500 / support error)
     // This means the API doesn't have this vehicle in their database — admin needs to add it manually

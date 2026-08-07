@@ -423,6 +423,9 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
     }
 
     console.error("❌ RTO RC API error:", error.response?.data || error.message);
+    if (error.response?.data) {
+      console.error("❌ ACTUAL API ERROR MSG (RTO):", JSON.stringify(error.response.data, null, 2));
+    }
     const err = new Error(error.response?.data?.message || error.message || "NORMAL_RTO_FAILED");
     err.statusCode = error.response?.status || 500;
     throw err;
@@ -457,6 +460,9 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
       data: axiosError.response?.data,
       message: axiosError.message,
     });
+    if (axiosError.response?.data) {
+      console.error("❌ ACTUAL PREMIUM API ERROR MSG (RTO):", JSON.stringify(axiosError.response.data, null, 2));
+    }
 
     if (axiosError.code === "ECONNABORTED") {
       const err = new Error("Premium RTO API timeout");

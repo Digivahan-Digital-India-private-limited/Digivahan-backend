@@ -1331,7 +1331,7 @@ const adminGetAllGarages = async (req, res) => {
     if      (tab === "garage")      displayRows = garageRows;
     else if (tab === "challan")     displayRows = challanRows;
     else if (tab === "vehicleinfo") displayRows = vehicleInfoRows;
-    else                            displayRows = [...garageRows, ...challanRows, ...vehicleInfoRows];
+    else                            displayRows = [...garageRows, ...challanRows]; // Exclude vehicleInfoRows from "All"
 
     // Sort newest first
     displayRows.sort((a, b) => new Date(b.sortTime) - new Date(a.sortTime));
@@ -1351,7 +1351,7 @@ const adminGetAllGarages = async (req, res) => {
         garageCount:      garageRows.length,
         challanCount:     challanRows.length,
         vehicleInfoCount: vehicleInfoRows.length,
-        allCount:         garageRows.length + challanRows.length + vehicleInfoRows.length,
+        allCount:         garageRows.length + challanRows.length, // Exclude vehicleInfoRows count
       },
     });
   } catch (error) {

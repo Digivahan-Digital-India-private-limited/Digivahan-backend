@@ -14,8 +14,13 @@ const adminGetVehiclesForAdd = async (req, res) => {
     const filter   = req.query.filter  || "all"; // all | pending | downloaded
     const search   = (req.query.search || "").trim().toUpperCase();
     const apiType  = req.query.apiType  || "ALL"; // ALL | VEHICLE | CHALLAN
-    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
-    const toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+    let fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
+    let toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+
+    if (!req.query.fromDate && !req.query.toDate) {
+      fromDate = new Date("2026-08-07T00:00:00.000+05:30");
+    }
+
     const skip     = (page - 1) * limit;
 
     const query = {};
@@ -199,8 +204,13 @@ const adminGetSuccessVehicles = async (req, res) => {
  */
 const adminGetApiStats = async (req, res) => {
   try {
-    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
-    const toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+    let fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
+    let toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+
+    if (!req.query.fromDate && !req.query.toDate) {
+      fromDate = new Date("2026-08-07T00:00:00.000+05:30");
+    }
+
 
     const failQuery = {};
     const successQuery = { success: true };

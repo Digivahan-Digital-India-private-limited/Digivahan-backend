@@ -1274,9 +1274,10 @@ const adminGetAllGarages = async (req, res) => {
         let userId = log?.userId || null;
         const user = userId ? (userMap[String(userId)] || null) : null;
 
-        // Previously we skipped Guest Users (!userId), but now we want to show all saved vehicles.
-        // If it's a guest user but the data IS NOT saved, we can skip it to avoid clutter, 
-        // OR we can just show it. Let's show it if it has an RTOApiLog OR is saved.
+        // Skip Guest Users and any user without a mobile number as per user request
+        if (!user || !user.basic_details?.phone_number) {
+          continue;
+        }
 
         let userName = "Guest User";
         if (user) {

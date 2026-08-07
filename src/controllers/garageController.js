@@ -1464,15 +1464,22 @@ const adminDeleteChallanRecord = async (req, res) => {
       });
     }
 
-    // Build delete filter — if user_id provided, delete only that user's records
+    // Build delete filter for RTOApiLog, ChallanWebhook, and RTOChallanCache
     const filter = { vehicleNumber: vehicle_number.toUpperCase().trim() };
+    const webhookFilter = { rcNumber: vehicle_number.toUpperCase().trim() };
+    const cacheFilter = { rcNumber: vehicle_number.toUpperCase().trim() };
+
     if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
       filter.userId = user_id;
+      webhookFilter.userId = user_id;
+      // We don't filter cache by userId because RTOChallanCache is global per RC
     }
 
     const result = await RTOApiLog.deleteMany(filter);
+    const webhookResult = await ChallanWebhook.deleteMany(webhookFilter);
+    const cacheResult = await RTOChallanCache.deleteMany(cacheFilter);
 
-    if (result.deletedCount === 0) {
+    if (result.deletedCount === 0 && webhookResult.deletedCount === 0 && cacheResult.deletedCount === 0) {
       return res.status(404).json({
         status: false,
         message: "No challan search record found for this vehicle",

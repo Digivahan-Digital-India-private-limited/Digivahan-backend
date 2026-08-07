@@ -80,6 +80,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
       (apiError?.code === 404 && apiError?.message?.toLowerCase().includes("not found"))
     ) {
       console.log(`[ChallanFlow] No challans found for ${rcNumber} (vehicle is clear)`);
+      RTOApiLog.create({ userId, vehicleNumber: rcNumber, apiType: "challan_plus_api", trigger, success: true }).catch(() => { });
       return [];
     }
 
@@ -846,6 +847,9 @@ const directSearchChallans = async (req, res) => {
         rcNumber: cleanRc,
         transactionStatus: "SEARCHED",
       });
+      
+      // Also ensure this search appears in the Admin Panel by creating an RTOApiLog
+      RTOApiLog.create({ userId: user._id, vehicleNumber: cleanRc, apiType: "direct_search", trigger: "challan_search", success: true }).catch(() => { });
 
       // 🪙 Deduct 1 credit after successful search for a NEW RC
       directRemainingCredits = Math.max(0, directCredits - 1);

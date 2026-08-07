@@ -13,6 +13,7 @@ const {
 } = require("../utils/maskData");
 const ChallanWebhook = require("../models/ChallanWebhook");
 const VehicleForAdd = require("../models/VehicleForAdd");
+const RTOChallanCache = require("../models/RTOChallanCache");
 const { getNoCreditsMessage } = require("../utils/creditUtils");
 
 /**
@@ -1240,6 +1241,17 @@ const adminGetAllGarages = async (req, res) => {
       // Dedupe: if vehicle is already in garage, skip it from challan list
       const garageKeys = new Set(garageRows.map(r => String(r.vehicle_id)));
 
+      // Check if data is saved in database (VehicleInfoData or RTOChallanCache)
+      const challanVehicleIds = rtoLogs.map(log => log._id).filter(Boolean);
+      
+      const savedInVehicleInfo = await VehicleInfoData.find({ vehicle_id: { $in: challanVehicleIds } }).select("vehicle_id").lean();
+      const savedInChallanCache = await RTOChallanCache.find({ rcNumber: { $in: challanVehicleIds } }).select("rcNumber").lean();
+
+      const savedVehicleIds = new Set([
+        ...savedInVehicleInfo.map(v => String(v.vehicle_id)),
+        ...savedInChallanCache.map(v => String(v.rcNumber))
+      ]);
+
       for (const log of rtoLogs) {
         const vehicleId = log._id;
         if (!vehicleId) continue;
@@ -1255,6 +1267,7 @@ const adminGetAllGarages = async (req, res) => {
         challanRows.push({
           source:        "challan",
           vehicle_id:    vehicleId,
+          isDataSaved:   savedVehicleIds.has(String(vehicleId)),
           userId:        userId || null,
           userName:      user ? `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A" : "Guest User",
           userPhone:     user?.basic_details?.phone_number || "-",

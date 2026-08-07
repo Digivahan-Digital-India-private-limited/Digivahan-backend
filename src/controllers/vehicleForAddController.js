@@ -90,8 +90,13 @@ const adminGetSuccessVehicles = async (req, res) => {
     const limit    = parseInt(req.query.limit) || 50;
     const search   = (req.query.search || "").trim().toUpperCase();
     const apiType  = req.query.apiType  || "ALL"; // ALL | VEHICLE | CHALLAN
-    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
-    const toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+    let fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
+    let toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+
+    if (!req.query.fromDate && !req.query.toDate) {
+      fromDate = new Date("2026-08-07T00:00:00.000+05:30");
+    }
+
     const skip     = (page - 1) * limit;
 
     const query = { success: true };
@@ -139,18 +144,25 @@ const adminGetSuccessVehicles = async (req, res) => {
     const total = countResult[0]?.total || 0;
 
     // Count for tabs: vehicle and challan type unique vehicles
+    const baseMatch = { success: true };
+    if (fromDate || toDate) {
+      baseMatch.createdAt = {};
+      if (fromDate) baseMatch.createdAt.$gte = fromDate;
+      if (toDate) baseMatch.createdAt.$lte = toDate;
+    }
+
     const vehicleCountPipeline = [
-      { $match: { success: true, apiType: { $in: ["rto_api", "rto_premium_api"] } } },
+      { $match: { ...baseMatch, apiType: { $in: ["rto_api", "rto_premium_api"] } } },
       { $group: { _id: "$vehicleNumber" } },
       { $count: "total" },
     ];
     const challanCountPipeline = [
-      { $match: { success: true, apiType: "challan_plus_api" } },
+      { $match: { ...baseMatch, apiType: "challan_plus_api" } },
       { $group: { _id: "$vehicleNumber" } },
       { $count: "total" },
     ];
     const allCountPipeline = [
-      { $match: { success: true } },
+      { $match: baseMatch },
       { $group: { _id: "$vehicleNumber" } },
       { $count: "total" },
     ];
@@ -187,6 +199,31 @@ const adminGetSuccessVehicles = async (req, res) => {
  */
 const adminGetApiStats = async (req, res) => {
   try {
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
+    const toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+
+    const failQuery = {};
+    const successQuery = { success: true };
+
+    if (fromDate || toDate) {
+      const fDateQuery = {};
+      const sDateQuery = {};
+      
+      if (fromDate) { 
+        const fDate = new Date(fromDate); fDate.setHours(0, 0, 0, 0); 
+        fDateQuery.$gte = fDate; 
+        sDateQuery.$gte = fDate; 
+      }
+      if (toDate) { 
+        const tDate = new Date(toDate); tDate.setHours(23, 59, 59, 999); 
+        fDateQuery.$lte = tDate; 
+        sDateQuery.$lte = tDate; 
+      }
+      
+      failQuery.lastFailedAt = fDateQuery;
+      successQuery.createdAt = sDateQuery;
+    }
+
     const [
       totalFail,
       totalSuccess,
@@ -195,12 +232,12 @@ const adminGetApiStats = async (req, res) => {
       challanFail,
       challanSuccess,
     ] = await Promise.all([
-      VehicleForAdd.countDocuments({}),
-      RTOApiLog.aggregate([{ $match: { success: true } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
-      VehicleForAdd.countDocuments({ failedApis: "VEHICLE" }),
-      RTOApiLog.aggregate([{ $match: { success: true, apiType: { $in: ["rto_api", "rto_premium_api"] } } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
-      VehicleForAdd.countDocuments({ failedApis: "CHALLAN" }),
-      RTOApiLog.aggregate([{ $match: { success: true, apiType: "challan_plus_api" } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
+      VehicleForAdd.countDocuments(failQuery),
+      RTOApiLog.aggregate([{ $match: successQuery }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
+      VehicleForAdd.countDocuments({ ...failQuery, failedApis: "VEHICLE" }),
+      RTOApiLog.aggregate([{ $match: { ...successQuery, apiType: { $in: ["rto_api", "rto_premium_api"] } } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
+      VehicleForAdd.countDocuments({ ...failQuery, failedApis: "CHALLAN" }),
+      RTOApiLog.aggregate([{ $match: { ...successQuery, apiType: "challan_plus_api" } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
     ]);
 
     const successTotal = totalSuccess[0]?.total || 0;

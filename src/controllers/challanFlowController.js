@@ -848,9 +848,6 @@ const directSearchChallans = async (req, res) => {
         transactionStatus: "SEARCHED",
       });
       
-      // Also ensure this search appears in the Admin Panel by creating an RTOApiLog
-      RTOApiLog.create({ userId: user._id, vehicleNumber: cleanRc, apiType: "direct_search", trigger: "challan_search", success: true }).catch(() => { });
-
       // 🪙 Deduct 1 credit after successful search for a NEW RC
       directRemainingCredits = Math.max(0, directCredits - 1);
       await User.updateOne({ _id: userId }, { $set: { challan_credits: directRemainingCredits } });

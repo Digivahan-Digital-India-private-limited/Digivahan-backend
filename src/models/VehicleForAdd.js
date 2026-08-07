@@ -25,6 +25,11 @@ const vehicleForAddSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Which APIs failed for this vehicle
+    failedApis: {
+      type: [String],
+      default: [],
+    },
     // Whether admin has downloaded this vehicle for manual addition
     isDownloaded: {
       type: Boolean,

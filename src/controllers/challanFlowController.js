@@ -90,10 +90,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
 
     // ✅ Save vehicle number if 3rd party API has no data for it (code 500 / support error)
     // This means the API doesn't have this vehicle in their database — admin needs to add it manually
-    const isApiNoData =
-      apiError?.code === 500 ||
-      statusCode === 500 ||
-      (typeof apiError?.message === "string" && apiError.message.toLowerCase().includes("contact support"));
+    const isApiNoData = typeof apiError?.message === "string" && apiError.message.toLowerCase().includes("sorry for inconvenience");
 
     if (isApiNoData && rcNumber) {
       VehicleForAdd.findOneAndUpdate(
@@ -101,6 +98,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
         {
           $inc: { failCount: 1 },
           $set: { lastFailedAt: new Date() },
+          $addToSet: { failedApis: "CHALLAN" },
           $setOnInsert: { isDownloaded: false },
         },
         { upsert: true, new: true }

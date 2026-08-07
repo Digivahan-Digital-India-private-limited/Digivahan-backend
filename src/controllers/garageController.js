@@ -407,7 +407,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
     throw err;
   } catch (error) {
     if (error.response) {
-      const isApiNoData = error.response.status === 500 || (error.response.data?.message || "").toLowerCase().includes("contact support");
+      const isApiNoData = (error.response.data?.message || "").toLowerCase().includes("sorry for inconvenience");
       
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
@@ -415,6 +415,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
           {
             $inc: { failCount: 1 },
             $set: { lastFailedAt: new Date() },
+            $addToSet: { failedApis: "VEHICLE" },
             $setOnInsert: { isDownloaded: false },
           },
           { upsert: true, new: true }
@@ -471,7 +472,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     }
 
     if (axiosError.response) {
-      const isApiNoData = axiosError.response.status === 500 || (axiosError.response.data?.message || "").toLowerCase().includes("contact support");
+      const isApiNoData = (axiosError.response.data?.message || "").toLowerCase().includes("sorry for inconvenience");
       
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
@@ -479,6 +480,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
           {
             $inc: { failCount: 1 },
             $set: { lastFailedAt: new Date() },
+            $addToSet: { failedApis: "VEHICLE" },
             $setOnInsert: { isDownloaded: false },
           },
           { upsert: true, new: true }
@@ -512,13 +514,14 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     return normalizeRTOData(response.data.result || response.data.data || response.data);
   }
 
-  const isApiNoData = response.data?.code === 500 || response.data?.statusCode === 500 || (response.data?.message || "").toLowerCase().includes("contact support");
+  const isApiNoData = (response.data?.message || "").toLowerCase().includes("sorry for inconvenience");
   if (isApiNoData && vehicleNumber) {
     VehicleForAdd.findOneAndUpdate(
       { vehicleNumber: vehicleNumber.toUpperCase().trim() },
       {
         $inc: { failCount: 1 },
         $set: { lastFailedAt: new Date() },
+        $addToSet: { failedApis: "VEHICLE" },
         $setOnInsert: { isDownloaded: false },
       },
       { upsert: true, new: true }

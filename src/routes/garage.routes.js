@@ -21,13 +21,13 @@ const {
 } = require("../controllers/garageController.js");
 
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
-const { optionalAuthToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
+const { authenticateToken, authenticateTokenForAdmin } = require("../middleware/auth.js");
 
 // Add Vehicle to Garage - Fetch vehicle data from RTO and save to user's garage
-// ✅ optionalAuthToken: logged-in user ka userId track hoga (analytics), public access bhi kaam karega
+// ✅ authenticateToken: now requires login
 router.post(
   API_ROUTES.GARAGE.ADD_VEHICLE,
-  [optionalAuthToken, handleValidationErrors],
+  [authenticateToken, handleValidationErrors],
   addVehicle,
 );
 
@@ -37,10 +37,10 @@ router.post(
   addVehicleInUsergarage,
 );
 
-// ✅ optionalAuthToken: refresh karte waqt bhi userId track hoga
+// ✅ authenticateToken: now requires login
 router.post(
   API_ROUTES.GARAGE.REFRESH_VEHICLE_DATA,
-  [optionalAuthToken, handleValidationErrors],
+  [authenticateToken, handleValidationErrors],
   RefreshVehicleData,
 );
 

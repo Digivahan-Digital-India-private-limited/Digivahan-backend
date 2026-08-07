@@ -1159,28 +1159,28 @@ const verifySecurityCode = async (req, res) => {
 };
 
 /**
- * Admin: Get All Vehicles (garage + challan-searched) across all users
+ * Admin: Get All Vehicles (garage + challan cache + vehicle details cache)
  * GET /api/v1/garage/admin/all-garages
- * Query: ?page=1&limit=20&search=UP54&tab=all|garage|challan
+ * Query: ?page=1&limit=20&search=UP54&tab=all|garage|challan|vehicleinfo
  */
 const adminGetAllGarages = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page   = parseInt(req.query.page)  || 1;
+    const limit  = parseInt(req.query.limit) || 20;
     const search = (req.query.search || "").trim().toUpperCase();
-    const tab = req.query.tab || "all"; // 'all' | 'garage' | 'challan'
-    const skip = (page - 1) * limit;
+    const tab    = req.query.tab || "all"; // 'all' | 'garage' | 'challan' | 'vehicleinfo'
+    const skip   = (page - 1) * limit;
 
-    // ── 1. GARAGE vehicles (ALWAYS fetch — needed for counts) ─────────────────
+    // ── 1. GARAGE vehicles ────────────────────────────────────────────────────
     const garageRows = [];
     {
       let garageMatch = { "garage.vehicles": { $exists: true, $ne: [] } };
       if (search) {
         garageMatch.$or = [
-          { "garage.vehicles.vehicle_id": { $regex: search, $options: "i" } },
-          { "basic_details.phone_number": { $regex: search, $options: "i" } },
-          { "basic_details.first_name": { $regex: search, $options: "i" } },
-          { "basic_details.last_name": { $regex: search, $options: "i" } },
+          { "garage.vehicles.vehicle_id":    { $regex: search, $options: "i" } },
+          { "basic_details.phone_number":    { $regex: search, $options: "i" } },
+          { "basic_details.first_name":      { $regex: search, $options: "i" } },
+          { "basic_details.last_name":       { $regex: search, $options: "i" } },
         ];
       }
       const garageUsers = await User.find(garageMatch)
@@ -1190,131 +1190,153 @@ const adminGetAllGarages = async (req, res) => {
       for (const user of garageUsers) {
         const name = `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A";
         for (const v of (user.garage?.vehicles || [])) {
-          if (search && !v.vehicle_id.includes(search) &&
+          if (search &&
+            !v.vehicle_id.includes(search) &&
             !name.toUpperCase().includes(search) &&
             !(user.basic_details?.phone_number || "").includes(search)) continue;
           garageRows.push({
-            source: "garage",
-            vehicle_id: v.vehicle_id,
-            userId: user._id,
-            userName: name,
-            userPhone: user.basic_details?.phone_number || "N/A",
-            userEmail: user.basic_details?.email || "",
-            profilePic: user.basic_details?.profile_pic || "",
+            source:        "garage",
+            vehicle_id:    v.vehicle_id,
+            userId:        user._id,
+            userName:      name,
+            userPhone:     user.basic_details?.phone_number || "N/A",
+            userEmail:     user.basic_details?.email || "",
+            profilePic:    user.basic_details?.profile_pic || "",
             accountStatus: user.account_status,
-            sortTime: user.updatedAt || new Date(0),
+            sortTime:      user.updatedAt || new Date(0),
           });
         }
       }
     }
 
-    // ── 2. CHALLAN-SEARCHED vehicles (ALWAYS fetch — needed for counts) ────────
+    // Garage vehicle_ids set — to skip duplication in other tabs
+    const garageVehicleSet = new Set(garageRows.map(r => String(r.vehicle_id)));
+
+    // ── 2. CHALLAN DATA — RTOChallanCache ────────────────────────────────────
     const challanRows = [];
     {
-      const rtoMatch = {};
-      if (search) rtoMatch.vehicleNumber = { $regex: search, $options: "i" };
+      const cacheQuery = search ? { rcNumber: { $regex: search, $options: "i" } } : {};
+      const allCache   = await RTOChallanCache.find(cacheQuery)
+        .select("rcNumber updatedAt")
+        .sort({ updatedAt: -1 })
+        .lean();
 
-      // ✅ FIX: Group FIRST (no pre-sort), then sort after for stable deterministic results.
-      //         Pre-sort before $group made $first non-deterministic across runs.
-      //         Removed $limit:500 cap — use all unique vehicles.
-      const rtoLogs = await RTOApiLog.aggregate([
-        { $match: rtoMatch },
-        {
-          $group: {
-            _id: "$vehicleNumber",
-            userId: { $last: "$userId" },     // most recent user who searched this
-            lastSeen: { $max: "$createdAt" },   // most recent search time (stable)
-            apiType: { $last: "$apiType" },
-          },
-        },
-        { $sort: { lastSeen: -1 } },            // sort AFTER group (stable)
+      // Get most recent user who searched each vehicle (from RTOApiLog)
+      const cachedRcNumbers = allCache.map(c => c.rcNumber).filter(Boolean);
+      const recentLogs = await RTOApiLog.aggregate([
+        { $match: { vehicleNumber: { $in: cachedRcNumbers } } },
+        { $group: { _id: "$vehicleNumber", userId: { $last: "$userId" }, lastSeen: { $max: "$createdAt" } } },
       ]);
-
       const logMap = {};
-      for (const log of rtoLogs) {
-        if (log._id) logMap[String(log._id)] = log;
-      }
+      for (const l of recentLogs) if (l._id) logMap[String(l._id)] = l;
 
-      // Get all saved challan data from RTOChallanCache
-      const cacheMatch = search ? { rcNumber: { $regex: search, $options: "i" } } : {};
-      const allChallanCache = await RTOChallanCache.find(cacheMatch).select("rcNumber updatedAt").lean();
-
-      const cacheMap = {};
-      for (const c of allChallanCache) {
-        if (c.rcNumber) cacheMap[String(c.rcNumber)] = c;
-      }
-
-      const allVehicleIds = [...new Set([...Object.keys(logMap), ...Object.keys(cacheMap)])];
-
-      const userIds = [...new Set(rtoLogs.map(l => l.userId).filter(Boolean))];
-      const logUsers = await User.find({ _id: { $in: userIds } })
+      // Fetch user details for all userIds from logs
+      const logUserIds = [...new Set(recentLogs.map(l => l.userId).filter(Boolean))];
+      const logUsers   = await User.find({ _id: { $in: logUserIds } })
         .select("_id basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email account_status")
         .lean();
       const userMap = {};
       for (const u of logUsers) userMap[String(u._id)] = u;
 
-      // Dedupe: if vehicle is already in garage, skip it from challan list
-      const garageKeys = new Set(garageRows.map(r => String(r.vehicle_id)));
+      for (const cache of allCache) {
+        const vid = String(cache.rcNumber);
+        if (!vid) continue;
+        if (garageVehicleSet.has(vid)) continue; // already shown in garage tab
 
-      // Check if data is saved in database (VehicleInfoData)
-      const savedInVehicleInfo = await VehicleInfoData.find({ vehicle_id: { $in: allVehicleIds } }).select("vehicle_id").lean();
-      const savedVehicleIds = new Set([
-        ...savedInVehicleInfo.map(v => String(v.vehicle_id)),
-        ...Object.keys(cacheMap) // anything in cacheMap is considered "data saved"
-      ]);
+        const log    = logMap[vid];
+        const user   = log?.userId ? (userMap[String(log.userId)] || null) : null;
 
-      for (const vehicleId of allVehicleIds) {
-        if (!vehicleId) continue;
-        // Skip vehicles already shown under garage
-        if (garageKeys.has(String(vehicleId))) continue;
+        // Skip if no phone number (guest/anonymous)
+        if (!user?.basic_details?.phone_number) continue;
 
-        const log = logMap[String(vehicleId)];
-        const cache = cacheMap[String(vehicleId)];
-
-        let userId = log?.userId || null;
-        const user = userId ? (userMap[String(userId)] || null) : null;
-
-        // Skip Guest Users and any user without a mobile number as per user request
-        if (!user || !user.basic_details?.phone_number) {
-          continue;
-        }
-
-        let userName = "Guest User";
-        if (user) {
-          userName = `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A";
-        } else if (cache && !log) {
-          userName = "System Saved";
-        }
-
-        const sortTime = log?.lastSeen || cache?.updatedAt || new Date(0);
+        const userName = `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A";
 
         challanRows.push({
-          source: "challan",
-          vehicle_id: vehicleId,
-          isDataSaved: savedVehicleIds.has(String(vehicleId)),
-          userId: userId || null,
-          userName: userName,
-          userPhone: user?.basic_details?.phone_number || "-",
-          userEmail: user?.basic_details?.email || "-",
-          profilePic: "",
-          accountStatus: user?.account_status || "GUEST",
-          lastChecked: log?.lastSeen || null,
-          apiType: log?.apiType || "cache",
-          sortTime: sortTime,
+          source:        "challan",
+          vehicle_id:    cache.rcNumber,
+          userId:        log?.userId || null,
+          userName,
+          userPhone:     user.basic_details?.phone_number || "-",
+          userEmail:     user.basic_details?.email || "-",
+          profilePic:    "",
+          accountStatus: user.account_status || "ACTIVE",
+          lastChecked:   log?.lastSeen || cache.updatedAt || null,
+          sortTime:      log?.lastSeen || cache.updatedAt || new Date(0),
         });
       }
     }
 
-    // ── 3. Apply tab filter ONLY for display, counts are always from both ──────
+    // Challan+Garage vehicle_ids set — to skip duplication in vehicleInfo tab
+    const existingVehicleSet = new Set([
+      ...garageVehicleSet,
+      ...challanRows.map(r => String(r.vehicle_id)),
+    ]);
+
+    // ── 3. VEHICLE DETAILS DATA — VehicleInfoData ─────────────────────────────
+    const vehicleInfoRows = [];
+    {
+      const viQuery = search ? { vehicle_id: { $regex: search, $options: "i" } } : {};
+      const allVI   = await VehicleInfoData.find(viQuery)
+        .select("vehicle_id data_source updatedAt")
+        .sort({ updatedAt: -1 })
+        .lean();
+
+      const viVehicleIds = allVI.map(v => v.vehicle_id).filter(Boolean);
+
+      // Get most recent user who fetched each vehicle (from RTOApiLog)
+      const viLogs = await RTOApiLog.aggregate([
+        { $match: { vehicleNumber: { $in: viVehicleIds }, trigger: { $in: ["add_vehicle", "refresh"] } } },
+        { $group: { _id: "$vehicleNumber", userId: { $last: "$userId" }, lastSeen: { $max: "$createdAt" } } },
+      ]);
+      const viLogMap = {};
+      for (const l of viLogs) if (l._id) viLogMap[String(l._id)] = l;
+
+      const viUserIds = [...new Set(viLogs.map(l => l.userId).filter(Boolean))];
+      const viUsers   = await User.find({ _id: { $in: viUserIds } })
+        .select("_id basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email account_status")
+        .lean();
+      const viUserMap = {};
+      for (const u of viUsers) viUserMap[String(u._id)] = u;
+
+      for (const vi of allVI) {
+        const vid = String(vi.vehicle_id);
+        if (!vid) continue;
+        if (existingVehicleSet.has(vid)) continue; // skip if already shown
+
+        const log    = viLogMap[vid];
+        const user   = log?.userId ? (viUserMap[String(log.userId)] || null) : null;
+
+        const userName = user
+          ? `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A"
+          : "System";
+
+        vehicleInfoRows.push({
+          source:        "vehicleinfo",
+          vehicle_id:    vi.vehicle_id,
+          userId:        log?.userId || null,
+          userName,
+          userPhone:     user?.basic_details?.phone_number || "-",
+          userEmail:     user?.basic_details?.email || "-",
+          profilePic:    "",
+          accountStatus: user?.account_status || "ACTIVE",
+          dataSource:    vi.data_source || "rto_api",
+          lastChecked:   log?.lastSeen || vi.updatedAt || null,
+          sortTime:      log?.lastSeen || vi.updatedAt || new Date(0),
+        });
+      }
+    }
+
+    // ── 4. Apply tab filter + paginate ────────────────────────────────────────
     let displayRows;
-    if (tab === "garage") displayRows = garageRows;
-    else if (tab === "challan") displayRows = challanRows;
-    else displayRows = [...garageRows, ...challanRows];
+    if      (tab === "garage")      displayRows = garageRows;
+    else if (tab === "challan")     displayRows = challanRows;
+    else if (tab === "vehicleinfo") displayRows = vehicleInfoRows;
+    else                            displayRows = [...garageRows, ...challanRows, ...vehicleInfoRows];
 
     // Sort newest first
     displayRows.sort((a, b) => new Date(b.sortTime) - new Date(a.sortTime));
 
-    const total = displayRows.length;
+    const total     = displayRows.length;
     const paginated = displayRows.slice(skip, skip + limit);
 
     return res.status(200).json({
@@ -1325,18 +1347,16 @@ const adminGetAllGarages = async (req, res) => {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit) || 1,
-        garageCount: garageRows.length,
-        challanCount: challanRows.length,
-        allCount: garageRows.length + challanRows.length,
+        totalPages:       Math.ceil(total / limit) || 1,
+        garageCount:      garageRows.length,
+        challanCount:     challanRows.length,
+        vehicleInfoCount: vehicleInfoRows.length,
+        allCount:         garageRows.length + challanRows.length + vehicleInfoRows.length,
       },
     });
   } catch (error) {
     console.error("adminGetAllGarages error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal server error",
-    });
+    return res.status(500).json({ status: false, message: "Internal server error" });
   }
 };
 
@@ -1449,11 +1469,73 @@ const adminDeleteVehicleFromGarage = async (req, res) => {
 };
 
 /**
- * Admin: Delete challan-check record (RTOApiLog) for a vehicle
+ * Admin: Full-wipe delete for a vehicle — clears ALL cached data
+ * so the next search always hits the 3rd party API fresh.
  * DELETE /api/v1/garage/admin/delete-challan-record
  * Body: { vehicle_number, user_id? }
  */
 const adminDeleteChallanRecord = async (req, res) => {
+  try {
+    const { vehicle_number, user_id } = req.body;
+
+    if (!vehicle_number) {
+      return res.status(400).json({ status: false, message: "vehicle_number is required" });
+    }
+
+    const cleanVehicleNumber = vehicle_number.toUpperCase().trim();
+
+    // Build filters
+    const rtoLogFilter    = { vehicleNumber: cleanVehicleNumber };
+    const webhookFilter   = { rcNumber:      cleanVehicleNumber };
+    const cacheFilter     = { rcNumber:      cleanVehicleNumber };
+    const vehicleInfoFilter = { vehicle_id:  cleanVehicleNumber };
+
+    // If user_id provided, scope RTOApiLog and ChallanWebhook to that user
+    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
+      rtoLogFilter.userId  = user_id;
+      webhookFilter.userId = user_id;
+    }
+
+    // Wipe all 4 collections in parallel
+    const [rtoResult, webhookResult, cacheResult, viResult] = await Promise.all([
+      RTOApiLog.deleteMany(rtoLogFilter),
+      ChallanWebhook.deleteMany(webhookFilter),
+      RTOChallanCache.deleteMany(cacheFilter),
+      VehicleInfoData.deleteMany(vehicleInfoFilter),
+    ]);
+
+    const totalDeleted =
+      rtoResult.deletedCount +
+      webhookResult.deletedCount +
+      cacheResult.deletedCount +
+      viResult.deletedCount;
+
+    if (totalDeleted === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No records found for this vehicle number",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      message: `All cached data for ${cleanVehicleNumber} deleted. Next search will hit the 3rd party API fresh.`,
+      data: {
+        vehicle_number: cleanVehicleNumber,
+        deleted: {
+          rtoApiLogs:       rtoResult.deletedCount,
+          challanWebhooks:  webhookResult.deletedCount,
+          challanCache:     cacheResult.deletedCount,
+          vehicleInfoData:  viResult.deletedCount,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("adminDeleteChallanRecord error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
   try {
     const { vehicle_number, user_id } = req.body;
 

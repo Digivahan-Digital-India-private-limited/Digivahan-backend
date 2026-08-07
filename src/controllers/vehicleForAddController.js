@@ -31,6 +31,10 @@ const adminGetVehiclesForAdd = async (req, res) => {
         .lean(),
     ]);
 
+    const baseCountQuery = {};
+    if (apiType === "VEHICLE") baseCountQuery.failedApis = "VEHICLE";
+    if (apiType === "CHALLAN") baseCountQuery.failedApis = "CHALLAN";
+
     return res.status(200).json({
       status: true,
       message: "Vehicles fetched successfully",
@@ -40,8 +44,9 @@ const adminGetVehiclesForAdd = async (req, res) => {
         page,
         limit,
         totalPages:      Math.ceil(total / limit) || 1,
-        pendingCount:    await VehicleForAdd.countDocuments({ isDownloaded: false }),
-        downloadedCount: await VehicleForAdd.countDocuments({ isDownloaded: true }),
+        allCount:        await VehicleForAdd.countDocuments(baseCountQuery),
+        pendingCount:    await VehicleForAdd.countDocuments({ ...baseCountQuery, isDownloaded: false }),
+        downloadedCount: await VehicleForAdd.countDocuments({ ...baseCountQuery, isDownloaded: true }),
         vehicleCount:    await VehicleForAdd.countDocuments({ failedApis: "VEHICLE" }),
         challanCount:    await VehicleForAdd.countDocuments({ failedApis: "CHALLAN" }),
       },

@@ -407,7 +407,9 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
     throw err;
   } catch (error) {
     if (error.response) {
-      const isApiNoData = (error.response.data?.message || "").toLowerCase().includes("sorry for inconvenience");
+      const errDataStr = typeof error.response.data === "string" ? error.response.data : JSON.stringify(error.response.data || "");
+      const errMsgStr = error.message || "";
+      const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
       
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
@@ -472,7 +474,9 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     }
 
     if (axiosError.response) {
-      const isApiNoData = (axiosError.response.data?.message || "").toLowerCase().includes("sorry for inconvenience");
+      const errDataStr = typeof axiosError.response.data === "string" ? axiosError.response.data : JSON.stringify(axiosError.response.data || "");
+      const errMsgStr = axiosError.message || "";
+      const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
       
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
@@ -514,7 +518,9 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     return normalizeRTOData(response.data.result || response.data.data || response.data);
   }
 
-  const isApiNoData = (response.data?.message || "").toLowerCase().includes("sorry for inconvenience");
+  const errDataStr = typeof response.data === "string" ? response.data : JSON.stringify(response.data || "");
+  const errMsgStr = response.statusText || "";
+  const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
   if (isApiNoData && vehicleNumber) {
     VehicleForAdd.findOneAndUpdate(
       { vehicleNumber: vehicleNumber.toUpperCase().trim() },

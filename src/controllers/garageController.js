@@ -1231,6 +1231,22 @@ const adminGetAllGarages = async (req, res) => {
         { $sort: { lastSeen: -1 } },            // sort AFTER group (stable)
       ]);
 
+      const logMap = {};
+      for (const log of rtoLogs) {
+        if (log._id) logMap[String(log._id)] = log;
+      }
+
+      // Get all saved challan data from RTOChallanCache
+      const cacheMatch = search ? { rcNumber: { $regex: search, $options: "i" } } : {};
+      const allChallanCache = await RTOChallanCache.find(cacheMatch).select("rcNumber updatedAt").lean();
+      
+      const cacheMap = {};
+      for (const c of allChallanCache) {
+        if (c.rcNumber) cacheMap[String(c.rcNumber)] = c;
+      }
+
+      const allVehicleIds = [...new Set([...Object.keys(logMap), ...Object.keys(cacheMap)])];
+
       const userIds  = [...new Set(rtoLogs.map(l => l.userId).filter(Boolean))];
       const logUsers = await User.find({ _id: { $in: userIds } })
         .select("_id basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email account_status")
@@ -1241,42 +1257,50 @@ const adminGetAllGarages = async (req, res) => {
       // Dedupe: if vehicle is already in garage, skip it from challan list
       const garageKeys = new Set(garageRows.map(r => String(r.vehicle_id)));
 
-      // Check if data is saved in database (VehicleInfoData or RTOChallanCache)
-      const challanVehicleIds = rtoLogs.map(log => log._id).filter(Boolean);
-      
-      const savedInVehicleInfo = await VehicleInfoData.find({ vehicle_id: { $in: challanVehicleIds } }).select("vehicle_id").lean();
-      const savedInChallanCache = await RTOChallanCache.find({ rcNumber: { $in: challanVehicleIds } }).select("rcNumber").lean();
-
+      // Check if data is saved in database (VehicleInfoData)
+      const savedInVehicleInfo = await VehicleInfoData.find({ vehicle_id: { $in: allVehicleIds } }).select("vehicle_id").lean();
       const savedVehicleIds = new Set([
         ...savedInVehicleInfo.map(v => String(v.vehicle_id)),
-        ...savedInChallanCache.map(v => String(v.rcNumber))
+        ...Object.keys(cacheMap) // anything in cacheMap is considered "data saved"
       ]);
 
-      for (const log of rtoLogs) {
-        const vehicleId = log._id;
+      for (const vehicleId of allVehicleIds) {
         if (!vehicleId) continue;
         // Skip vehicles already shown under garage
         if (garageKeys.has(String(vehicleId))) continue;
 
-        const user   = userMap[String(log.userId)] || null;
-        const userId = user?._id || log.userId;
+        const log = logMap[String(vehicleId)];
+        const cache = cacheMap[String(vehicleId)];
+        
+        let userId = log?.userId || null;
+        const user = userId ? (userMap[String(userId)] || null) : null;
 
-        // Skip Guest Users (users without an account)
-        if (!userId) continue;
+        // Previously we skipped Guest Users (!userId), but now we want to show all saved vehicles.
+        // If it's a guest user but the data IS NOT saved, we can skip it to avoid clutter, 
+        // OR we can just show it. Let's show it if it has an RTOApiLog OR is saved.
+        
+        let userName = "Guest User";
+        if (user) {
+          userName = `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A";
+        } else if (cache && !log) {
+          userName = "System Saved";
+        }
+
+        const sortTime = log?.lastSeen || cache?.updatedAt || new Date(0);
 
         challanRows.push({
           source:        "challan",
           vehicle_id:    vehicleId,
           isDataSaved:   savedVehicleIds.has(String(vehicleId)),
           userId:        userId || null,
-          userName:      user ? `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A" : "Guest User",
+          userName:      userName,
           userPhone:     user?.basic_details?.phone_number || "-",
           userEmail:     user?.basic_details?.email || "-",
           profilePic:    "",
           accountStatus: user?.account_status || "GUEST",
-          lastChecked:   log.lastSeen,
-          apiType:       log.apiType,
-          sortTime:      log.lastSeen || new Date(0),
+          lastChecked:   log?.lastSeen || null,
+          apiType:       log?.apiType || "cache",
+          sortTime:      sortTime,
         });
       }
     }

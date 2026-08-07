@@ -1536,52 +1536,6 @@ const adminDeleteChallanRecord = async (req, res) => {
   }
 };
 
-  try {
-    const { vehicle_number, user_id } = req.body;
-
-    if (!vehicle_number) {
-      return res.status(400).json({
-        status: false,
-        message: "vehicle_number is required",
-      });
-    }
-
-    // Build delete filter for RTOApiLog, ChallanWebhook, and RTOChallanCache
-    const filter = { vehicleNumber: vehicle_number.toUpperCase().trim() };
-    const webhookFilter = { rcNumber: vehicle_number.toUpperCase().trim() };
-    const cacheFilter = { rcNumber: vehicle_number.toUpperCase().trim() };
-
-    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
-      filter.userId = user_id;
-      webhookFilter.userId = user_id;
-      // We don't filter cache by userId because RTOChallanCache is global per RC
-    }
-
-    const result = await RTOApiLog.deleteMany(filter);
-    const webhookResult = await ChallanWebhook.deleteMany(webhookFilter);
-    const cacheResult = await RTOChallanCache.deleteMany(cacheFilter);
-
-    if (result.deletedCount === 0 && webhookResult.deletedCount === 0 && cacheResult.deletedCount === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "No challan search record found for this vehicle",
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: `Challan record for ${vehicle_number} deleted successfully`,
-      data: { vehicle_number, deletedCount: result.deletedCount },
-    });
-  } catch (error) {
-    console.error("adminDeleteChallanRecord error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal server error",
-    });
-  }
-};
-
 module.exports = {
   addVehicle,
   addVehicleInUsergarage,

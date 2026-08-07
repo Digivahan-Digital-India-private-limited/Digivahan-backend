@@ -1,19 +1,22 @@
 const VehicleForAdd = require("../models/VehicleForAdd");
+const RTOApiLog = require("../models/RTOApiLog");
 const mongoose = require("mongoose");
 
 /**
  * Admin: Get all "Vehicle For Add" records (3rd party API had no data)
  * GET /api/v1/vehicle-for-add/admin/list
- * Query: ?page=1&limit=50&filter=all|pending|downloaded&search=JK02
+ * Query: ?page=1&limit=50&filter=all|pending|downloaded&search=JK02&apiType=VEHICLE|CHALLAN
  */
 const adminGetVehiclesForAdd = async (req, res) => {
   try {
-    const page   = parseInt(req.query.page)  || 1;
-    const limit  = parseInt(req.query.limit) || 50;
-    const filter = req.query.filter || "all"; // all | pending | downloaded
-    const search = (req.query.search || "").trim().toUpperCase();
-    const apiType = req.query.apiType || "ALL"; // ALL | VEHICLE | CHALLAN
-    const skip   = (page - 1) * limit;
+    const page     = parseInt(req.query.page)  || 1;
+    const limit    = parseInt(req.query.limit) || 50;
+    const filter   = req.query.filter  || "all"; // all | pending | downloaded
+    const search   = (req.query.search || "").trim().toUpperCase();
+    const apiType  = req.query.apiType  || "ALL"; // ALL | VEHICLE | CHALLAN
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
+    const toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+    const skip     = (page - 1) * limit;
 
     const query = {};
     if (filter === "pending")    query.isDownloaded = false;
@@ -21,6 +24,11 @@ const adminGetVehiclesForAdd = async (req, res) => {
     if (apiType === "VEHICLE")   query.failedApis = "VEHICLE";
     if (apiType === "CHALLAN")   query.failedApis = "CHALLAN";
     if (search)                  query.vehicleNumber = { $regex: search, $options: "i" };
+    if (fromDate || toDate) {
+      query.lastFailedAt = {};
+      if (fromDate) { fromDate.setHours(0, 0, 0, 0);   query.lastFailedAt.$gte = fromDate; }
+      if (toDate)   { toDate.setHours(23, 59, 59, 999); query.lastFailedAt.$lte = toDate;   }
+    }
 
     const [total, records] = await Promise.all([
       VehicleForAdd.countDocuments(query),
@@ -31,9 +39,18 @@ const adminGetVehiclesForAdd = async (req, res) => {
         .lean(),
     ]);
 
+    // Base count query WITHOUT date filter (for tab counts)
     const baseCountQuery = {};
     if (apiType === "VEHICLE") baseCountQuery.failedApis = "VEHICLE";
     if (apiType === "CHALLAN") baseCountQuery.failedApis = "CHALLAN";
+
+    // Date-aware base for pending/downloaded/all sub-counts
+    const dateBase = { ...baseCountQuery };
+    if (fromDate || toDate) {
+      dateBase.lastFailedAt = {};
+      if (fromDate) dateBase.lastFailedAt.$gte = fromDate;
+      if (toDate)   dateBase.lastFailedAt.$lte = toDate;
+    }
 
     return res.status(200).json({
       status: true,
@@ -44,15 +61,184 @@ const adminGetVehiclesForAdd = async (req, res) => {
         page,
         limit,
         totalPages:      Math.ceil(total / limit) || 1,
-        allCount:        await VehicleForAdd.countDocuments(baseCountQuery),
-        pendingCount:    await VehicleForAdd.countDocuments({ ...baseCountQuery, isDownloaded: false }),
-        downloadedCount: await VehicleForAdd.countDocuments({ ...baseCountQuery, isDownloaded: true }),
-        vehicleCount:    await VehicleForAdd.countDocuments({ failedApis: "VEHICLE" }),
-        challanCount:    await VehicleForAdd.countDocuments({ failedApis: "CHALLAN" }),
+        allCount:        await VehicleForAdd.countDocuments(dateBase),
+        pendingCount:    await VehicleForAdd.countDocuments({ ...dateBase, isDownloaded: false }),
+        downloadedCount: await VehicleForAdd.countDocuments({ ...dateBase, isDownloaded: true }),
+        vehicleCount:    await VehicleForAdd.countDocuments({ ...dateBase, failedApis: "VEHICLE" }),
+        challanCount:    await VehicleForAdd.countDocuments({ ...dateBase, failedApis: "CHALLAN" }),
       },
     });
   } catch (error) {
     console.error("adminGetVehiclesForAdd error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+/**
+ * Admin: Get successful API vehicle records (RTOApiLog success=true)
+ * GET /api/v1/vehicle-for-add/admin/success-list
+ * Query: ?page=1&limit=50&filter=all|pending|downloaded&search=JK02&apiType=VEHICLE|CHALLAN
+ *
+ * apiType=VEHICLE  => rto_api, rto_premium_api logs
+ * apiType=CHALLAN  => challan_plus_api logs
+ *
+ * NOTE: success vehicles don't have downloaded status — filter for them is just all/vehicle/challan
+ */
+const adminGetSuccessVehicles = async (req, res) => {
+  try {
+    const page     = parseInt(req.query.page)  || 1;
+    const limit    = parseInt(req.query.limit) || 50;
+    const search   = (req.query.search || "").trim().toUpperCase();
+    const apiType  = req.query.apiType  || "ALL"; // ALL | VEHICLE | CHALLAN
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate) : null;
+    const toDate   = req.query.toDate   ? new Date(req.query.toDate)   : null;
+    const skip     = (page - 1) * limit;
+
+    const query = { success: true };
+    if (apiType === "VEHICLE") query.apiType = { $in: ["rto_api", "rto_premium_api"] };
+    if (apiType === "CHALLAN") query.apiType = "challan_plus_api";
+    if (search) query.vehicleNumber = { $regex: search, $options: "i" };
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) { fromDate.setHours(0, 0, 0, 0);   query.createdAt.$gte = fromDate; }
+      if (toDate)   { toDate.setHours(23, 59, 59, 999); query.createdAt.$lte = toDate;   }
+    }
+
+    // Aggregate to get unique vehicle numbers with latest call info
+    const pipeline = [
+      { $match: query },
+      {
+        $group: {
+          _id: "$vehicleNumber",
+          vehicleNumber: { $first: "$vehicleNumber" },
+          apiTypes: { $addToSet: "$apiType" },
+          callCount: { $sum: 1 },
+          lastSuccessAt: { $max: "$createdAt" },
+          userId: { $first: "$userId" },
+        }
+      },
+      { $sort: { lastSuccessAt: -1 } },
+    ];
+
+    // Count distinct vehicles matching query
+    const countPipeline = [
+      { $match: query },
+      { $group: { _id: "$vehicleNumber" } },
+      { $count: "total" },
+    ];
+
+    const [countResult, records] = await Promise.all([
+      RTOApiLog.aggregate(countPipeline),
+      RTOApiLog.aggregate([
+        ...pipeline,
+        { $skip: skip },
+        { $limit: limit },
+      ]),
+    ]);
+
+    const total = countResult[0]?.total || 0;
+
+    // Count for tabs: vehicle and challan type unique vehicles
+    const vehicleCountPipeline = [
+      { $match: { success: true, apiType: { $in: ["rto_api", "rto_premium_api"] } } },
+      { $group: { _id: "$vehicleNumber" } },
+      { $count: "total" },
+    ];
+    const challanCountPipeline = [
+      { $match: { success: true, apiType: "challan_plus_api" } },
+      { $group: { _id: "$vehicleNumber" } },
+      { $count: "total" },
+    ];
+    const allCountPipeline = [
+      { $match: { success: true } },
+      { $group: { _id: "$vehicleNumber" } },
+      { $count: "total" },
+    ];
+
+    const [vehicleCountRes, challanCountRes, allCountRes] = await Promise.all([
+      RTOApiLog.aggregate(vehicleCountPipeline),
+      RTOApiLog.aggregate(challanCountPipeline),
+      RTOApiLog.aggregate(allCountPipeline),
+    ]);
+
+    return res.status(200).json({
+      status: true,
+      message: "Success vehicles fetched",
+      data: records,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages:   Math.ceil(total / limit) || 1,
+        allCount:     allCountRes[0]?.total || 0,
+        vehicleCount: vehicleCountRes[0]?.total || 0,
+        challanCount: challanCountRes[0]?.total || 0,
+      },
+    });
+  } catch (error) {
+    console.error("adminGetSuccessVehicles error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
+/**
+ * Admin: Get API stats for pie chart (fail vs success counts)
+ * GET /api/v1/vehicle-for-add/admin/stats
+ */
+const adminGetApiStats = async (req, res) => {
+  try {
+    const [
+      totalFail,
+      totalSuccess,
+      vehicleFail,
+      vehicleSuccess,
+      challanFail,
+      challanSuccess,
+    ] = await Promise.all([
+      VehicleForAdd.countDocuments({}),
+      RTOApiLog.aggregate([{ $match: { success: true } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
+      VehicleForAdd.countDocuments({ failedApis: "VEHICLE" }),
+      RTOApiLog.aggregate([{ $match: { success: true, apiType: { $in: ["rto_api", "rto_premium_api"] } } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
+      VehicleForAdd.countDocuments({ failedApis: "CHALLAN" }),
+      RTOApiLog.aggregate([{ $match: { success: true, apiType: "challan_plus_api" } }, { $group: { _id: "$vehicleNumber" } }, { $count: "total" }]),
+    ]);
+
+    const successTotal = totalSuccess[0]?.total || 0;
+    const vehicleSuccessTotal = vehicleSuccess[0]?.total || 0;
+    const challanSuccessTotal = challanSuccess[0]?.total || 0;
+
+    const grandTotal = totalFail + successTotal;
+    const vehicleTotal = vehicleFail + vehicleSuccessTotal;
+    const challanTotal = challanFail + challanSuccessTotal;
+
+    return res.status(200).json({
+      status: true,
+      data: {
+        overall: {
+          fail: totalFail,
+          success: successTotal,
+          total: grandTotal,
+          failPct:    grandTotal > 0 ? Math.round((totalFail / grandTotal) * 100)    : 0,
+          successPct: grandTotal > 0 ? Math.round((successTotal / grandTotal) * 100) : 0,
+        },
+        vehicle: {
+          fail: vehicleFail,
+          success: vehicleSuccessTotal,
+          total: vehicleTotal,
+          failPct:    vehicleTotal > 0 ? Math.round((vehicleFail / vehicleTotal) * 100)           : 0,
+          successPct: vehicleTotal > 0 ? Math.round((vehicleSuccessTotal / vehicleTotal) * 100)   : 0,
+        },
+        challan: {
+          fail: challanFail,
+          success: challanSuccessTotal,
+          total: challanTotal,
+          failPct:    challanTotal > 0 ? Math.round((challanFail / challanTotal) * 100)            : 0,
+          successPct: challanTotal > 0 ? Math.round((challanSuccessTotal / challanTotal) * 100)    : 0,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("adminGetApiStats error:", error);
     return res.status(500).json({ status: false, message: "Internal server error" });
   }
 };
@@ -114,6 +300,8 @@ const adminDeleteVehiclesForAdd = async (req, res) => {
 
 module.exports = {
   adminGetVehiclesForAdd,
+  adminGetSuccessVehicles,
+  adminGetApiStats,
   adminMarkDownloaded,
   adminDeleteVehiclesForAdd,
 };

@@ -197,58 +197,58 @@ const maskVehicleResponse = (data) => {
 
       registration: rto.registration
         ? {
-            ...rto.registration,
-            number: rto.registration.number
-              ? maskVehicleNumber(rto.registration.number)
-              : rto.registration.number,
+          ...rto.registration,
+          number: rto.registration.number
+            ? maskVehicleNumber(rto.registration.number)
+            : rto.registration.number,
 
-            owner: rto.registration.owner
-              ? {
-                  ...rto.registration.owner,
-                  name: rto.registration.owner.name
-                    ? maskName(rto.registration.owner.name)
-                    : rto.registration.owner.name,
+          owner: rto.registration.owner
+            ? {
+              ...rto.registration.owner,
+              name: rto.registration.owner.name
+                ? maskName(rto.registration.owner.name)
+                : rto.registration.owner.name,
 
-                  fatherName: rto.registration.owner.fatherName
-                    ? maskName(rto.registration.owner.fatherName)
-                    : rto.registration.owner.fatherName,
+              fatherName: rto.registration.owner.fatherName
+                ? maskName(rto.registration.owner.fatherName)
+                : rto.registration.owner.fatherName,
 
-                  presentAddress: "******",
-                  permanentAddress: "******",
-                }
-              : rto.registration.owner,
-          }
+              presentAddress: "******",
+              permanentAddress: "******",
+            }
+            : rto.registration.owner,
+        }
         : rto.registration,
 
       vehicle: rto.vehicle
         ? {
-            ...rto.vehicle,
-            engine: rto.vehicle.engine
-              ? maskAlphaNumeric(rto.vehicle.engine)
-              : rto.vehicle.engine,
+          ...rto.vehicle,
+          engine: rto.vehicle.engine
+            ? maskAlphaNumeric(rto.vehicle.engine)
+            : rto.vehicle.engine,
 
-            chassis: rto.vehicle.chassis
-              ? maskAlphaNumeric(rto.vehicle.chassis)
-              : rto.vehicle.chassis,
-          }
+          chassis: rto.vehicle.chassis
+            ? maskAlphaNumeric(rto.vehicle.chassis)
+            : rto.vehicle.chassis,
+        }
         : rto.vehicle,
 
       insurance: rto.insurance
         ? {
-            ...rto.insurance,
-            policyNumber: rto.insurance.policyNumber
-              ? maskAlphaNumeric(rto.insurance.policyNumber)
-              : rto.insurance.policyNumber,
-          }
+          ...rto.insurance,
+          policyNumber: rto.insurance.policyNumber
+            ? maskAlphaNumeric(rto.insurance.policyNumber)
+            : rto.insurance.policyNumber,
+        }
         : rto.insurance,
 
       pollutionControl: rto.pollutionControl
         ? {
-            ...rto.pollutionControl,
-            certificateNumber: rto.pollutionControl.certificateNumber
-              ? maskAlphaNumeric(rto.pollutionControl.certificateNumber)
-              : rto.pollutionControl.certificateNumber,
-          }
+          ...rto.pollutionControl,
+          certificateNumber: rto.pollutionControl.certificateNumber
+            ? maskAlphaNumeric(rto.pollutionControl.certificateNumber)
+            : rto.pollutionControl.certificateNumber,
+        }
         : rto.pollutionControl,
     },
   };
@@ -386,7 +386,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
 
     if (response.status === 200 && (response.data.code === 200 || response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.status === "success")) {
       // ✅ Log successful API call
-      RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_api", trigger, success: true }).catch(() => {});
+      RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_api", trigger, success: true }).catch(() => { });
       return normalizeRTOData(response.data.result || response.data.data || response.data);
     }
 
@@ -411,7 +411,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
       const errDataStr = typeof error.response.data === "string" ? error.response.data : JSON.stringify(error.response.data || "");
       const errMsgStr = error.message || "";
       const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
-      
+
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
           { vehicleNumber: vehicleNumber.toUpperCase().trim() },
@@ -478,7 +478,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
       const errDataStr = typeof axiosError.response.data === "string" ? axiosError.response.data : JSON.stringify(axiosError.response.data || "");
       const errMsgStr = axiosError.message || "";
       const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
-      
+
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
           { vehicleNumber: vehicleNumber.toUpperCase().trim() },
@@ -494,8 +494,8 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
 
       const err = new Error(
         axiosError.response.data?.message ||
-          axiosError.response.statusText ||
-          "Premium RTO API error",
+        axiosError.response.statusText ||
+        "Premium RTO API error",
       );
       err.statusCode = axiosError.response.status;
       throw err;
@@ -515,7 +515,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
 
   if (response.status === 200 && (response.data.code === 200 || response.data.statusCode === 200 || response.data.statuscode === 200 || response.data.status === "success")) {
     // ✅ Log successful premium API call
-    RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_premium_api", trigger, success: true }).catch(() => {});
+    RTOApiLog.create({ userId, vehicleNumber, apiType: "rto_premium_api", trigger, success: true }).catch(() => { });
     return normalizeRTOData(response.data.result || response.data.data || response.data);
   }
 
@@ -578,7 +578,7 @@ const addVehicleInUsergarage = async (req, res) => {
     }
 
     const dbOwnerName = matchedVehicle.api_data?.custom_vehicle_info?.owner_name || "";
-    
+
     // Flexible Name Matching Logic supporting legacy masked data
     const cleanInput = owner_name.trim().toUpperCase().replace(/\s+/g, " ");
     const cleanDb = dbOwnerName.trim().toUpperCase().replace(/\s+/g, " ");
@@ -713,13 +713,12 @@ const transformRTODataToVehicleSchema = (rtoData, vehicleNumber) => {
           ?.replace(/\s+/g, " ")
           ?.toUpperCase() || "N/A",
       vehicle_number: vehicleNumber,
-      vehicle_name: `${rtoData.vehicle?.manufacturer || "Unknown"} ${
-        rtoData.vehicle?.model || "Model"
-      }`,
+      vehicle_name: `${rtoData.vehicle?.manufacturer || "Unknown"} ${rtoData.vehicle?.model || "Model"
+        }`,
       registration_date: parseDate(rtoData.registration?.date),
       ownership_details:
         rtoData.registration?.ownerCount === "1" ||
-        rtoData.registration?.ownerCount === 1
+          rtoData.registration?.ownerCount === 1
           ? "First Owner"
           : `Owner ${rtoData.registration?.ownerCount || "Unknown"}`,
       financer_name: rtoData.finance?.isFinanced
@@ -938,7 +937,7 @@ const RefreshVehicleData = async (req, res) => {
 
     if (userId) {
       user = await User.findById(userId).select("account_status blocked_reason challan_credits");
-      
+
       if (user && user.account_status === "BLOCKED") {
         return res.status(403).json({
           status: false,
@@ -1166,11 +1165,11 @@ const verifySecurityCode = async (req, res) => {
  */
 const adminGetAllGarages = async (req, res) => {
   try {
-    const page   = parseInt(req.query.page)  || 1;
-    const limit  = parseInt(req.query.limit) || 20;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
     const search = (req.query.search || "").trim().toUpperCase();
-    const tab    = req.query.tab || "all"; // 'all' | 'garage' | 'challan'
-    const skip   = (page - 1) * limit;
+    const tab = req.query.tab || "all"; // 'all' | 'garage' | 'challan'
+    const skip = (page - 1) * limit;
 
     // ── 1. GARAGE vehicles (ALWAYS fetch — needed for counts) ─────────────────
     const garageRows = [];
@@ -1180,8 +1179,8 @@ const adminGetAllGarages = async (req, res) => {
         garageMatch.$or = [
           { "garage.vehicles.vehicle_id": { $regex: search, $options: "i" } },
           { "basic_details.phone_number": { $regex: search, $options: "i" } },
-          { "basic_details.first_name":   { $regex: search, $options: "i" } },
-          { "basic_details.last_name":    { $regex: search, $options: "i" } },
+          { "basic_details.first_name": { $regex: search, $options: "i" } },
+          { "basic_details.last_name": { $regex: search, $options: "i" } },
         ];
       }
       const garageUsers = await User.find(garageMatch)
@@ -1192,18 +1191,18 @@ const adminGetAllGarages = async (req, res) => {
         const name = `${user.basic_details?.first_name || ""} ${user.basic_details?.last_name || ""}`.trim() || "N/A";
         for (const v of (user.garage?.vehicles || [])) {
           if (search && !v.vehicle_id.includes(search) &&
-              !name.toUpperCase().includes(search) &&
-              !(user.basic_details?.phone_number || "").includes(search)) continue;
+            !name.toUpperCase().includes(search) &&
+            !(user.basic_details?.phone_number || "").includes(search)) continue;
           garageRows.push({
-            source:        "garage",
-            vehicle_id:    v.vehicle_id,
-            userId:        user._id,
-            userName:      name,
-            userPhone:     user.basic_details?.phone_number || "N/A",
-            userEmail:     user.basic_details?.email || "",
-            profilePic:    user.basic_details?.profile_pic || "",
+            source: "garage",
+            vehicle_id: v.vehicle_id,
+            userId: user._id,
+            userName: name,
+            userPhone: user.basic_details?.phone_number || "N/A",
+            userEmail: user.basic_details?.email || "",
+            profilePic: user.basic_details?.profile_pic || "",
             accountStatus: user.account_status,
-            sortTime:      user.updatedAt || new Date(0),
+            sortTime: user.updatedAt || new Date(0),
           });
         }
       }
@@ -1222,10 +1221,10 @@ const adminGetAllGarages = async (req, res) => {
         { $match: rtoMatch },
         {
           $group: {
-            _id:      "$vehicleNumber",
-            userId:   { $last: "$userId" },     // most recent user who searched this
+            _id: "$vehicleNumber",
+            userId: { $last: "$userId" },     // most recent user who searched this
             lastSeen: { $max: "$createdAt" },   // most recent search time (stable)
-            apiType:  { $last: "$apiType" },
+            apiType: { $last: "$apiType" },
           },
         },
         { $sort: { lastSeen: -1 } },            // sort AFTER group (stable)
@@ -1239,7 +1238,7 @@ const adminGetAllGarages = async (req, res) => {
       // Get all saved challan data from RTOChallanCache
       const cacheMatch = search ? { rcNumber: { $regex: search, $options: "i" } } : {};
       const allChallanCache = await RTOChallanCache.find(cacheMatch).select("rcNumber updatedAt").lean();
-      
+
       const cacheMap = {};
       for (const c of allChallanCache) {
         if (c.rcNumber) cacheMap[String(c.rcNumber)] = c;
@@ -1247,7 +1246,7 @@ const adminGetAllGarages = async (req, res) => {
 
       const allVehicleIds = [...new Set([...Object.keys(logMap), ...Object.keys(cacheMap)])];
 
-      const userIds  = [...new Set(rtoLogs.map(l => l.userId).filter(Boolean))];
+      const userIds = [...new Set(rtoLogs.map(l => l.userId).filter(Boolean))];
       const logUsers = await User.find({ _id: { $in: userIds } })
         .select("_id basic_details.first_name basic_details.last_name basic_details.phone_number basic_details.email account_status")
         .lean();
@@ -1271,14 +1270,13 @@ const adminGetAllGarages = async (req, res) => {
 
         const log = logMap[String(vehicleId)];
         const cache = cacheMap[String(vehicleId)];
-        
+
         let userId = log?.userId || null;
         const user = userId ? (userMap[String(userId)] || null) : null;
 
-        // Exclude users/records that don't have a valid mobile number
-        if (!user || !user.basic_details?.phone_number) {
-          continue;
-        }
+        // Previously we skipped Guest Users (!userId), but now we want to show all saved vehicles.
+        // If it's a guest user but the data IS NOT saved, we can skip it to avoid clutter, 
+        // OR we can just show it. Let's show it if it has an RTOApiLog OR is saved.
 
         let userName = "Guest User";
         if (user) {
@@ -1290,32 +1288,32 @@ const adminGetAllGarages = async (req, res) => {
         const sortTime = log?.lastSeen || cache?.updatedAt || new Date(0);
 
         challanRows.push({
-          source:        "challan",
-          vehicle_id:    vehicleId,
-          isDataSaved:   savedVehicleIds.has(String(vehicleId)),
-          userId:        userId || null,
-          userName:      userName,
-          userPhone:     user?.basic_details?.phone_number || "-",
-          userEmail:     user?.basic_details?.email || "-",
-          profilePic:    "",
+          source: "challan",
+          vehicle_id: vehicleId,
+          isDataSaved: savedVehicleIds.has(String(vehicleId)),
+          userId: userId || null,
+          userName: userName,
+          userPhone: user?.basic_details?.phone_number || "-",
+          userEmail: user?.basic_details?.email || "-",
+          profilePic: "",
           accountStatus: user?.account_status || "GUEST",
-          lastChecked:   log?.lastSeen || null,
-          apiType:       log?.apiType || "cache",
-          sortTime:      sortTime,
+          lastChecked: log?.lastSeen || null,
+          apiType: log?.apiType || "cache",
+          sortTime: sortTime,
         });
       }
     }
 
     // ── 3. Apply tab filter ONLY for display, counts are always from both ──────
     let displayRows;
-    if (tab === "garage")       displayRows = garageRows;
+    if (tab === "garage") displayRows = garageRows;
     else if (tab === "challan") displayRows = challanRows;
-    else                        displayRows = [...garageRows, ...challanRows];
+    else displayRows = [...garageRows, ...challanRows];
 
     // Sort newest first
     displayRows.sort((a, b) => new Date(b.sortTime) - new Date(a.sortTime));
 
-    const total    = displayRows.length;
+    const total = displayRows.length;
     const paginated = displayRows.slice(skip, skip + limit);
 
     return res.status(200).json({
@@ -1326,10 +1324,10 @@ const adminGetAllGarages = async (req, res) => {
         total,
         page,
         limit,
-        totalPages:   Math.ceil(total / limit) || 1,
-        garageCount:  garageRows.length,
+        totalPages: Math.ceil(total / limit) || 1,
+        garageCount: garageRows.length,
         challanCount: challanRows.length,
-        allCount:     garageRows.length + challanRows.length,
+        allCount: garageRows.length + challanRows.length,
       },
     });
   } catch (error) {

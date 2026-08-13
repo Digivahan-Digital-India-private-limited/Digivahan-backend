@@ -21,7 +21,7 @@ const rtoChallanCacheSchema = new mongoose.Schema(
         ownerName: String,
         ownerFatherName: String,
         rcNumber: String,
-        court_status_desc: String,
+        court_name: String,
       }
     ],
   },

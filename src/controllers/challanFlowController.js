@@ -27,7 +27,7 @@ const mapChallanItem = (challan, defaultRc = "") => ({
   ownerName: challan.accusedName || challan.ownerName || challan.owner_name || challan.nameViolator || challan.nameOwner || challan.accNameDL || "",
   ownerFatherName: challan.accusedFatherName || challan.ownerFatherName || challan.father_name || challan.violatorFatherName || challan.nameFatherOwner || challan.accFatherNameDL || "",
   rcNumber: challan.rcNumber || challan.dlRcNumber || challan.rcNo || defaultRc,
-  court_status_desc: challan.court_status_desc || ""
+  court_name: challan.nameCourt || challan.court_name || challan.courtName || challan.court || ""
 });
 
 /**

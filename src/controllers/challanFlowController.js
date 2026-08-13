@@ -107,6 +107,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
         },
         { upsert: true, new: true }
       ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+      throw new Error("RTO_DOWN");
     }
 
     return [];
@@ -402,6 +403,13 @@ const verifyChallanOtp = async (req, res) => {
         }
       } catch (webhookError) {
         console.error("[ChallanFlow] Failed to fetch or cache real challans:", webhookError);
+        if (webhookError.message === "RTO_DOWN") {
+          return res.status(500).json({
+            status: false,
+            error_type: "RTO_DOWN",
+            message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
+          });
+        }
       }
     }
 
@@ -698,6 +706,13 @@ const refreshChallans = async (req, res) => {
     });
   } catch (error) {
     console.error("[ChallanFlow] Refresh error:", error);
+    if (error.message === "RTO_DOWN") {
+      return res.status(500).json({
+        status: false,
+        error_type: "RTO_DOWN",
+        message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
+      });
+    }
     return res.status(500).json({ status: false, message: "Failed to refresh challans" });
   }
 };
@@ -869,6 +884,13 @@ const directSearchChallans = async (req, res) => {
     });
   } catch (error) {
     console.error("Direct search error:", error);
+    if (error.message === "RTO_DOWN") {
+      return res.status(500).json({
+        status: false,
+        error_type: "RTO_DOWN",
+        message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
+      });
+    }
     return res.status(500).json({ status: false, message: "Failed to fetch challans" });
   }
 };

@@ -155,6 +155,13 @@ const addVehicle = async (req, res) => {
     });
   } catch (error) {
     console.error("Add vehicle error:", error);
+    if (error.message === "RTO_DOWN") {
+      return res.status(503).json({
+        status: false,
+        error_type: "RTO_DOWN",
+        message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
+      });
+    }
     return res.status(error.statusCode || 500).json({
       status: false,
       message: error.message || ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
@@ -423,6 +430,9 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
           },
           { upsert: true, new: true }
         ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+        const customErr = new Error("RTO_DOWN");
+        customErr.statusCode = 503;
+        throw customErr;
       }
     }
 
@@ -490,6 +500,9 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
           },
           { upsert: true, new: true }
         ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+        const customErr = new Error("RTO_DOWN");
+        customErr.statusCode = 503;
+        throw customErr;
       }
 
       const err = new Error(
@@ -1004,6 +1017,13 @@ const RefreshVehicleData = async (req, res) => {
     });
   } catch (error) {
     console.error("RefreshVehicleData Error:", error);
+    if (error.message === "RTO_DOWN") {
+      return res.status(503).json({
+        status: false,
+        error_type: "RTO_DOWN",
+        message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
+      });
+    }
 
     return res.status(error.statusCode || 500).json({
       status: false,

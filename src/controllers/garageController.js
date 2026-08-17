@@ -397,7 +397,15 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
       return normalizeRTOData(response.data.result || response.data.data || response.data);
     }
 
-    const isApiNoData = response.data?.code === 500 || response.data?.statusCode === 500 || (response.data?.message || "").toLowerCase().includes("contact support");
+    const errDataStr = typeof response.data === "string" ? response.data : JSON.stringify(response.data || "");
+    const isApiNoData = 
+      errDataStr.toLowerCase().includes("contact support") ||
+      errDataStr.toLowerCase().includes("vehicle not found") ||
+      errDataStr.toLowerCase().includes("sorry for inconvenience") ||
+      response.data?.code === 404 || 
+      response.data?.statusCode === 404 ||
+      response.data?.code === 500 || 
+      response.data?.statusCode === 500;
     if (isApiNoData && vehicleNumber) {
       VehicleForAdd.findOneAndUpdate(
         { vehicleNumber: vehicleNumber.toUpperCase().trim() },
@@ -418,7 +426,15 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
     if (error.response) {
       const errDataStr = typeof error.response.data === "string" ? error.response.data : JSON.stringify(error.response.data || "");
       const errMsgStr = error.message || "";
-      const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
+      const isApiNoData = 
+        errDataStr.toLowerCase().includes("sorry for inconvenience") || 
+        errMsgStr.toLowerCase().includes("sorry for inconvenience") ||
+        errDataStr.toLowerCase().includes("vehicle not found") ||
+        errDataStr.toLowerCase().includes("contact support") ||
+        error.response.data?.code === 404 || 
+        error.response.data?.statusCode === 404 ||
+        error.response.data?.code === 500 || 
+        error.response.data?.statusCode === 500;
 
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
@@ -488,7 +504,15 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
     if (axiosError.response) {
       const errDataStr = typeof axiosError.response.data === "string" ? axiosError.response.data : JSON.stringify(axiosError.response.data || "");
       const errMsgStr = axiosError.message || "";
-      const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
+      const isApiNoData = 
+        errDataStr.toLowerCase().includes("sorry for inconvenience") || 
+        errMsgStr.toLowerCase().includes("sorry for inconvenience") ||
+        errDataStr.toLowerCase().includes("vehicle not found") ||
+        errDataStr.toLowerCase().includes("contact support") ||
+        axiosError.response.data?.code === 404 || 
+        axiosError.response.data?.statusCode === 404 ||
+        axiosError.response.data?.code === 500 || 
+        axiosError.response.data?.statusCode === 500;
 
       if (isApiNoData && vehicleNumber) {
         VehicleForAdd.findOneAndUpdate(
@@ -535,7 +559,15 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
 
   const errDataStr = typeof response.data === "string" ? response.data : JSON.stringify(response.data || "");
   const errMsgStr = response.statusText || "";
-  const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
+  const isApiNoData = 
+    errDataStr.toLowerCase().includes("sorry for inconvenience") || 
+    errMsgStr.toLowerCase().includes("sorry for inconvenience") ||
+    errDataStr.toLowerCase().includes("vehicle not found") ||
+    errDataStr.toLowerCase().includes("contact support") ||
+    response.data?.code === 404 || 
+    response.data?.statusCode === 404 ||
+    response.data?.code === 500 || 
+    response.data?.statusCode === 500;
   if (isApiNoData && vehicleNumber) {
     VehicleForAdd.findOneAndUpdate(
       { vehicleNumber: vehicleNumber.toUpperCase().trim() },

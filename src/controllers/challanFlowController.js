@@ -94,7 +94,15 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
     // This means the API doesn't have this vehicle in their database — admin needs to add it manually
     const errDataStr = typeof apiError === "string" ? apiError : JSON.stringify(apiError || "");
     const errMsgStr = error.message || "";
-    const isApiNoData = errDataStr.toLowerCase().includes("sorry for inconvenience") || errMsgStr.toLowerCase().includes("sorry for inconvenience");
+    const isApiNoData = 
+      errDataStr.toLowerCase().includes("sorry for inconvenience") || 
+      errMsgStr.toLowerCase().includes("sorry for inconvenience") ||
+      errDataStr.toLowerCase().includes("vehicle not found") ||
+      errDataStr.toLowerCase().includes("contact support") ||
+      apiError?.code === 404 || 
+      apiError?.statusCode === 404 ||
+      apiError?.code === 500 || 
+      apiError?.statusCode === 500;
 
     if (isApiNoData && rcNumber) {
       VehicleForAdd.findOneAndUpdate(

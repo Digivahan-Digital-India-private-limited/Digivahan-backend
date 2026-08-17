@@ -3,6 +3,7 @@ const RTOApiLog = require("../models/RTOApiLog");
 const User = require("../models/User");
 const VehicleInfoData = require("../models/vehicleInfoSchema");
 const mongoose = require("mongoose");
+const { fetchVehicleDataFromRTO, fetchVehicleDataFromRTOPremimumApi, transformRTODataToVehicleSchema } = require("./garageController");
 
 /**
  * Admin: Get all "Vehicle For Add" records (3rd party API had no data)
@@ -373,7 +374,37 @@ const adminAddToUserGarage = async (req, res) => {
       });
     }
 
-    // Push directly
+    // Attempt to fetch from external RTO API
+    let rtoData;
+    let dataSource = "rto_api";
+
+    try {
+      rtoData = await fetchVehicleDataFromRTO(vehicleNumber, userId, "add_vehicle");
+    } catch (error) {
+      if (error.statusCode === 500) {
+        rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicleNumber, userId, "add_vehicle");
+        dataSource = "rto_premium_api";
+      } else {
+        throw error;
+      }
+    }
+
+    const vehicleData = transformRTODataToVehicleSchema(rtoData, vehicleNumber);
+
+    // Save actual API data to VehicleInfoData
+    await VehicleInfoData.findOneAndUpdate(
+      { vehicle_id: vehicleNumber },
+      {
+        $set: {
+          api_data: vehicleData,
+          data_source: dataSource,
+          last_updated: new Date(),
+        }
+      },
+      { upsert: true }
+    );
+
+    // Push vehicle directly to user's garage
     await User.updateOne(
       { _id: userId },
       {
@@ -385,36 +416,20 @@ const adminAddToUserGarage = async (req, res) => {
       }
     );
 
-    // Ensure a dummy VehicleInfoData exists so the frontend doesn't ignore it
-    await VehicleInfoData.findOneAndUpdate(
-      { vehicle_id: vehicleNumber },
-      {
-        $setOnInsert: {
-          api_data: {
-            custom_vehicle_info: {
-              rc_number: vehicleNumber,
-              owner_name: "Manual Entry Pending",
-              vehicle_class: "N/A",
-              maker_model: "N/A",
-              registration_date: "N/A",
-              fitness_upto: "N/A",
-              insurance_upto: "N/A",
-              pucc_upto: "N/A",
-            }
-          },
-          data_source: "manual",
-          last_updated: new Date()
-        }
-      },
-      { upsert: true }
-    );
-
     return res.status(200).json({
       status: true,
       message: "Vehicle added successfully to user garage",
     });
   } catch (error) {
     console.error("adminAddToUserGarage error:", error);
+    // If the error originated from the 3rd party RTO API being down/failing
+    if (error.message === "RTO_DOWN" || error.statusCode === 500 || error.statusCode === 404 || error.statusCode === 503) {
+      return res.status(503).json({
+        status: false,
+        error_type: "RTO_DOWN",
+        message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
+      });
+    }
     return res.status(500).json({ status: false, message: "Internal server error" });
   }
 };

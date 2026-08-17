@@ -43,6 +43,11 @@ const vehicleForAddSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    // Keep a small history of the latest API error logs (for admin debugging)
+    apiErrorLogs: {
+      type: [String],
+      default: [],
+    },
     downloadedAt: {
       type: Date,
       default: null,

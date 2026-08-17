@@ -1,6 +1,7 @@
 const VehicleForAdd = require("../models/VehicleForAdd");
 const RTOApiLog = require("../models/RTOApiLog");
 const User = require("../models/User");
+const VehicleInfoData = require("../models/vehicleInfoSchema");
 const mongoose = require("mongoose");
 
 /**
@@ -382,6 +383,30 @@ const adminAddToUserGarage = async (req, res) => {
           },
         },
       }
+    );
+
+    // Ensure a dummy VehicleInfoData exists so the frontend doesn't ignore it
+    await VehicleInfoData.findOneAndUpdate(
+      { vehicle_id: vehicleNumber },
+      {
+        $setOnInsert: {
+          api_data: {
+            custom_vehicle_info: {
+              rc_number: vehicleNumber,
+              owner_name: "Manual Entry Pending",
+              vehicle_class: "N/A",
+              maker_model: "N/A",
+              registration_date: "N/A",
+              fitness_upto: "N/A",
+              insurance_upto: "N/A",
+              pucc_upto: "N/A",
+            }
+          },
+          data_source: "manual",
+          last_updated: new Date()
+        }
+      },
+      { upsert: true }
     );
 
     return res.status(200).json({

@@ -25,6 +25,13 @@ const vehicleForAddSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Users who tried to search this vehicle
+    userIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     // Which APIs failed for this vehicle
     failedApis: {
       type: [String],

@@ -404,6 +404,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
         {
           $inc: { failCount: 1 },
           $set: { lastFailedAt: new Date() },
+          $addToSet: { userIds: userId },
           $setOnInsert: { isDownloaded: false },
         },
         { upsert: true, new: true }
@@ -425,7 +426,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
           {
             $inc: { failCount: 1 },
             $set: { lastFailedAt: new Date() },
-            $addToSet: { failedApis: "VEHICLE" },
+            $addToSet: { failedApis: "VEHICLE", userIds: userId },
             $setOnInsert: { isDownloaded: false },
           },
           { upsert: true, new: true }
@@ -495,7 +496,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
           {
             $inc: { failCount: 1 },
             $set: { lastFailedAt: new Date() },
-            $addToSet: { failedApis: "VEHICLE" },
+            $addToSet: { failedApis: "VEHICLE", userIds: userId },
             $setOnInsert: { isDownloaded: false },
           },
           { upsert: true, new: true }
@@ -541,7 +542,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
       {
         $inc: { failCount: 1 },
         $set: { lastFailedAt: new Date() },
-        $addToSet: { failedApis: "VEHICLE" },
+        $addToSet: { failedApis: "VEHICLE", userIds: userId },
         $setOnInsert: { isDownloaded: false },
       },
       { upsert: true, new: true }

@@ -10,11 +10,27 @@ exports.getAllUsers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || "";
     const status = req.query.status || "ACTIVE";
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
     const skip = (page - 1) * limit;
 
     let matchStage = {};
     if (status !== "ALL") {
       matchStage.account_status = status;
+    }
+
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        matchStage.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        matchStage.createdAt.$lte = end;
+      }
     }
 
     if (search.trim()) {

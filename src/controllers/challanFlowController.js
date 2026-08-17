@@ -102,7 +102,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
         {
           $inc: { failCount: 1 },
           $set: { lastFailedAt: new Date() },
-          $addToSet: { failedApis: "CHALLAN" },
+          $addToSet: { failedApis: "CHALLAN", userIds: userId },
           $setOnInsert: { isDownloaded: false },
         },
         { upsert: true, new: true }

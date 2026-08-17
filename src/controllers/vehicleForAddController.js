@@ -1,5 +1,6 @@
 const VehicleForAdd = require("../models/VehicleForAdd");
 const RTOApiLog = require("../models/RTOApiLog");
+const User = require("../models/User");
 const mongoose = require("mongoose");
 
 /**
@@ -41,6 +42,7 @@ const adminGetVehiclesForAdd = async (req, res) => {
         .sort({ isDownloaded: 1, lastFailedAt: -1 })
         .skip(skip)
         .limit(limit)
+        .populate("userIds", "basic_details.first_name basic_details.last_name basic_details.phone_number public_details.nick_name")
         .lean(),
     ]);
 
@@ -345,10 +347,58 @@ const adminDeleteVehiclesForAdd = async (req, res) => {
   }
 };
 
+/**
+ * Admin: Add vehicle to user's garage directly
+ * POST /api/v1/vehicle-for-add/admin/add-to-user-garage
+ * Body: { vehicleNumber: "...", userId: "..." }
+ */
+const adminAddToUserGarage = async (req, res) => {
+  try {
+    const { vehicleNumber, userId } = req.body;
+    if (!vehicleNumber || !userId) {
+      return res.status(400).json({ status: false, message: "vehicleNumber and userId are required" });
+    }
+
+    // Duplicate check
+    const alreadyExists = await User.findOne({
+      _id: userId,
+      "garage.vehicles.vehicle_id": vehicleNumber,
+    }).select("_id");
+
+    if (alreadyExists) {
+      return res.status(400).json({
+        status: false,
+        message: "Vehicle already exists in user garage",
+      });
+    }
+
+    // Push directly
+    await User.updateOne(
+      { _id: userId },
+      {
+        $push: {
+          "garage.vehicles": {
+            vehicle_id: vehicleNumber,
+          },
+        },
+      }
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Vehicle added successfully to user garage",
+    });
+  } catch (error) {
+    console.error("adminAddToUserGarage error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
 module.exports = {
   adminGetVehiclesForAdd,
   adminGetSuccessVehicles,
   adminGetApiStats,
   adminMarkDownloaded,
   adminDeleteVehiclesForAdd,
+  adminAddToUserGarage,
 };

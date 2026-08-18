@@ -414,7 +414,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
           $set: { lastFailedAt: new Date() },
           $addToSet: { userIds: userId },
           $setOnInsert: { isDownloaded: false },
-          $push: { apiErrorLogs: { $each: [errDataStr], $slice: -5 } },
+          $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -5 } },
         },
         { upsert: true, new: true }
       ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
@@ -445,7 +445,7 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
             $set: { lastFailedAt: new Date() },
             $addToSet: { failedApis: "VEHICLE", userIds: userId },
             $setOnInsert: { isDownloaded: false },
-            $push: { apiErrorLogs: { $each: [errDataStr], $slice: -5 } },
+            $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -5 } },
           },
           { upsert: true, new: true }
         ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
@@ -524,7 +524,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
             $set: { lastFailedAt: new Date() },
             $addToSet: { failedApis: "VEHICLE", userIds: userId },
             $setOnInsert: { isDownloaded: false },
-            $push: { apiErrorLogs: { $each: [errDataStr], $slice: -5 } },
+            $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -5 } },
           },
           { upsert: true, new: true }
         ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
@@ -579,7 +579,7 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
         $set: { lastFailedAt: new Date() },
         $addToSet: { failedApis: "VEHICLE", userIds: userId },
         $setOnInsert: { isDownloaded: false },
-        $push: { apiErrorLogs: { $each: [errDataStr], $slice: -5 } },
+        $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -5 } },
       },
       { upsert: true, new: true }
     ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));

@@ -112,7 +112,7 @@ const fetchRealChallans = async (rcNumber, userId = null, trigger = "challan_sea
           $set: { lastFailedAt: new Date() },
           $addToSet: { failedApis: "CHALLAN", userIds: userId },
           $setOnInsert: { isDownloaded: false },
-          $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -5 } },
+          $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -50 } },
         },
         { upsert: true, new: true }
       ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));

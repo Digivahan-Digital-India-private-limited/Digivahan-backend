@@ -2,35 +2,29 @@ const { createCanvas, loadImage } = require("canvas");
 const fs = require("fs");
 const path = require("path");
 
-const TEMPLATE_CONFIG = {
-  car: {
-    canvasWidth: 455,
-    canvasHeight: 718,
-    templatePath: path.join(__dirname, "../../assets/template.png"),
-    qrBox: {
-      x: 98,
-      y: 274,
-      width: 260,
-      height: 260,
-    },
-  },
+const NEW_TEMPLATE_PATH = path.join(__dirname, "../../assets/image (44).png");
 
-  bike: {
-    canvasWidth: 356,
-    canvasHeight: 455, // ✅ updated as requested
-    templatePath: path.join(__dirname, "../../assets/bike_template.png"),
-    qrBox: {
-      x: 52,
-      y: 102,
-      width: 255,
-      height: 255,
-    },
+const DEFAULT_CONFIG = {
+  canvasWidth: 1536,
+  canvasHeight: 1024,
+  templatePath: NEW_TEMPLATE_PATH,
+  qrBox: {
+    x: 895,
+    y: 217,
+    width: 520,
+    height: 520,
   },
+};
+
+const TEMPLATE_CONFIG = {
+  car: { ...DEFAULT_CONFIG },
+  bike: { ...DEFAULT_CONFIG },
+  default: { ...DEFAULT_CONFIG },
 };
 
 const generateQRTemplate = async (qrImageUrl, qrNo, type = "car") => {
   try {
-    const config = TEMPLATE_CONFIG[type] || TEMPLATE_CONFIG.car;
+    const config = TEMPLATE_CONFIG[type] || TEMPLATE_CONFIG.car || DEFAULT_CONFIG;
 
     const canvas = createCanvas(config.canvasWidth, config.canvasHeight);
     const ctx = canvas.getContext("2d");
@@ -38,12 +32,6 @@ const generateQRTemplate = async (qrImageUrl, qrNo, type = "car") => {
     // Background template
     const templateImage = await loadImage(config.templatePath);
     ctx.drawImage(templateImage, 0, 0, config.canvasWidth, config.canvasHeight);
-
-    // QR number
-    ctx.font = "12px Arial";
-    ctx.fillStyle = "#ec9700";
-    ctx.textAlign = "center";
-    ctx.fillText(`${qrNo}`, config.canvasWidth / 2, 15);
 
     // QR image
     const qrImage = await loadImage(qrImageUrl);
@@ -55,8 +43,13 @@ const generateQRTemplate = async (qrImageUrl, qrNo, type = "car") => {
 
     ctx.drawImage(qrImage, QR_X, QR_Y, QR_SIZE, QR_SIZE);
 
+    const uploadsDir = path.join(__dirname, "../../uploads");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
     const fileName = `digivahan_qr_${type}_${Date.now()}.png`;
-    const outputPath = path.join(__dirname, "../../uploads", fileName);
+    const outputPath = path.join(uploadsDir, fileName);
 
     fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
 

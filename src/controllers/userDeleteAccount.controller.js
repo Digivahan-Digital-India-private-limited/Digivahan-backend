@@ -44,10 +44,10 @@ exports.submitDeleteRequest = async (req, res) => {
       });
     }
 
-    if (!deviceType || !["android", "ios"].includes(deviceType.toLowerCase())) {
+    if (!deviceType || !["android", "ios", "web"].includes(deviceType.toLowerCase())) {
       return res.status(400).json({
         success: false,
-        message: "deviceType must be 'android' or 'ios'.",
+        message: "deviceType must be 'android', 'ios', or 'web'.",
       });
     }
 

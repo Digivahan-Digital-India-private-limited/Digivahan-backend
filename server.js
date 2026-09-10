@@ -48,6 +48,7 @@ const concernRoutes = require("./src/routes/concern.routes");
 const userRoutes = require("./src/routes/user.routes");
 const deleteAccountRoutes = require("./src/routes/deleteAccount.routes");
 const reportIssueRoutes = require("./src/routes/reportIssue.routes");
+const userDeleteAccountRoutes = require("./src/routes/userDeleteAccount.routes");
 
 // service apis routes
 
@@ -106,6 +107,7 @@ app.use(notificationImageRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/delete-account",deleteAccountRoutes);
 app.use("/api/report-issue",reportIssueRoutes);
+app.use("/api/user-account", userDeleteAccountRoutes);
 
 // -------------------- ROUTES -------------------- //
 

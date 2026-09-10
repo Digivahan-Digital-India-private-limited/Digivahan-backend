@@ -355,7 +355,7 @@ const signIn = async (req, res) => {
 
     // 🔥 Minimal field selection (fast query)
     const user = await User.findOne(query).select(
-      "basic_details public_details is_tracking_on is_notification_sound_on is_active account_status suspended_until suspension_reason is_logged_in deletion_date",
+      "basic_details public_details is_tracking_on is_notification_sound_on is_active account_status suspended_until suspension_reason is_logged_in deletion_date deletionRequestData",
     );
 
     if (!user) {
@@ -496,6 +496,14 @@ const signIn = async (req, res) => {
         is_tracking_on: user.is_tracking_on || false,
         is_notification_sound_on: user.is_notification_sound_on ?? true,
         token,
+        deletionRequestData: user.deletionRequestData
+          ? {
+              deleteStatus: user.deletionRequestData.deleteStatus || false,
+              deleteRequestDate: user.deletionRequestData.deleteRequestDate || null,
+              deleteRequestProcessDate: user.deletionRequestData.deleteRequestProcessDate || null,
+              deleteRequestProcessDays: user.deletionRequestData.deleteRequestProcessDays || null,
+            }
+          : { deleteStatus: false },
       },
     });
   } catch (error) {
@@ -953,7 +961,7 @@ const verifyLoginOtp = async (req, res) => {
 
     // 🔥 Select only required fields
     const user = await User.findOne(query).select(
-      "basic_details public_details is_tracking_on is_notification_sound_on is_active suspended_until suspension_reason",
+      "basic_details public_details is_tracking_on is_notification_sound_on is_active suspended_until suspension_reason deletionRequestData",
     );
 
     if (!user) {
@@ -1062,6 +1070,14 @@ const verifyLoginOtp = async (req, res) => {
         is_tracking_on: user.is_tracking_on || false,
         is_notification_sound_on: user.is_notification_sound_on ?? true,
         token,
+        deletionRequestData: user.deletionRequestData
+          ? {
+              deleteStatus: user.deletionRequestData.deleteStatus || false,
+              deleteRequestDate: user.deletionRequestData.deleteRequestDate || null,
+              deleteRequestProcessDate: user.deletionRequestData.deleteRequestProcessDate || null,
+              deleteRequestProcessDays: user.deletionRequestData.deleteRequestProcessDays || null,
+            }
+          : { deleteStatus: false },
       },
     });
   } catch (error) {

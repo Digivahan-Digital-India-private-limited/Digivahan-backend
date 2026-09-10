@@ -291,6 +291,14 @@ const userSchema = new mongoose.Schema(
     blocked_reason: { type: String, default: "" },
     blocked_at: { type: Date, default: null },
     deletion_date: { type: Date, default: null },
+
+    // Self-service deletion request data (set by the user via the app)
+    deletionRequestData: {
+      deleteStatus:             { type: Boolean, default: false },
+      deleteRequestDate:        { type: String,  default: null }, // "dd/MM/yyyy"
+      deleteRequestProcessDate: { type: String,  default: null }, // "dd/MM/yyyy"
+      deleteRequestProcessDays: { type: Number,  default: null },
+    },
   },
   {
     timestamps: true,

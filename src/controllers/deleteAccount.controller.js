@@ -87,22 +87,54 @@ exports.getDeleteRequests = async (req, res) => {
 
   try {
 
-    const { status } = req.query;
+    const { status, deviceType } = req.query;
 
     let filter = {};
 
-    if (status) {
+    if (status && status !== "all") {
       filter.status = status;
+    }
+
+    if (deviceType && deviceType !== "all") {
+      if (deviceType === "web") {
+        filter.$or = [
+          { deviceType: "web" },
+          { deviceType: { $exists: false } },
+          { deviceType: null }
+        ];
+      } else {
+        filter.deviceType = deviceType.toLowerCase();
+      }
     }
 
     const requests = await DeleteAccountRequest
       .find(filter)
       .sort({ createdAt: -1 });
 
+    // Fetch tab counts for admin dashboard
+    const [allCount, iosCount, androidCount, webCount] = await Promise.all([
+      DeleteAccountRequest.countDocuments({}),
+      DeleteAccountRequest.countDocuments({ deviceType: "ios" }),
+      DeleteAccountRequest.countDocuments({ deviceType: "android" }),
+      DeleteAccountRequest.countDocuments({
+        $or: [
+          { deviceType: "web" },
+          { deviceType: { $exists: false } },
+          { deviceType: null }
+        ]
+      })
+    ]);
+
     res.json({
 
       success: true,
       total: requests.length,
+      counts: {
+        all: allCount,
+        ios: iosCount,
+        android: androidCount,
+        web: webCount
+      },
       data: requests
 
     });

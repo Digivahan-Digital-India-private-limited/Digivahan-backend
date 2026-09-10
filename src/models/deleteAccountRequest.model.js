@@ -36,8 +36,8 @@ default:""
 
 status:{
 type:String,
-enum:["new","checked","closed"],
-default:"new",
+enum:["new","pending","checked","closed","cancelled","completed"],
+default:"pending",
 index:true
 },
 

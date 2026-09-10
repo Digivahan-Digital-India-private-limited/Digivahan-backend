@@ -123,7 +123,7 @@ exports.submitDeleteRequest = async (req, res) => {
             duration: 0,
             deleteRequestDate: formatDate(new Date()),
             deleteRequestProcessDate: formatDate(new Date()),
-            status: "closed",
+            status: "completed",
           }
         },
         { upsert: true, new: true }
@@ -157,6 +157,23 @@ exports.submitDeleteRequest = async (req, res) => {
       },
     });
 
+    // Also record in UserDeletion for daily cron processing
+    await UserDeletion.findOneAndUpdate(
+      { user_id: user._id },
+      {
+        $set: {
+          user_id: user._id,
+          deletion_type: "SCHEDULED",
+          reason: reason || "User requested scheduled deletion",
+          deletion_days: durationDays * 24 * 60,
+          deletion_date: processDate,
+          status: "PENDING",
+          isImmediate: false,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
     // Save/Update in DeleteAccountRequest collection for Admin Panel
     await DeleteAccountRequest.findOneAndUpdate(
       { user_id: user._id },
@@ -171,7 +188,7 @@ exports.submitDeleteRequest = async (req, res) => {
           duration: durationDays,
           deleteRequestDate: deletionRequestData.deleteRequestDate,
           deleteRequestProcessDate: deletionRequestData.deleteRequestProcessDate,
-          status: "new",
+          status: "pending",
         }
       },
       { upsert: true, new: true }
@@ -248,10 +265,10 @@ exports.cancelDeleteRequest = async (req, res) => {
         { $set: { status: "active" } }
       ),
       DeleteAccountRequest.updateMany(
-        { user_id: userId, status: { $ne: "closed" } },
+        { user_id: userId, status: { $ne: "completed" } },
         {
           $set: {
-            status: "closed",
+            status: "cancelled",
             otherReason: `Cancelled by user on ${formatDate(new Date())}`,
           },
         }

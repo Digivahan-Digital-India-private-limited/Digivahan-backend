@@ -89,10 +89,70 @@ exports.getDeleteRequests = async (req, res) => {
 
     const { status, deviceType } = req.query;
 
+    const now = new Date();
+
+    // Auto-delete any accounts whose deletion date has arrived (due date passed)
+    try {
+      const dueDeletions = await UserDeletion.find({
+        status: "PENDING",
+        deletion_date: { $lte: now },
+      });
+
+      for (const record of dueDeletions) {
+        const uid = record.user_id;
+        await QRAssignment.updateMany({ assigned_to: uid }, { status: "inactive" });
+        await DeleteAccountRequest.updateMany(
+          { user_id: uid, status: { $ne: "cancelled" } },
+          { $set: { status: "completed" } }
+        );
+        record.status = "COMPLETED";
+        record.completed_at = now;
+        await record.save();
+        await User.findByIdAndDelete(uid);
+        console.log(`[AutoDelete] UserDeletion record processed: ${uid}`);
+      }
+
+      const dueUsers = await User.find({
+        account_status: "PENDING_DELETION",
+        deletion_date: { $lte: now },
+      });
+
+      for (const u of dueUsers) {
+        await QRAssignment.updateMany({ assigned_to: u._id }, { status: "inactive" });
+        await DeleteAccountRequest.updateMany(
+          { user_id: u._id, status: { $ne: "cancelled" } },
+          { $set: { status: "completed" } }
+        );
+        await UserDeletion.findOneAndUpdate(
+          { user_id: u._id },
+          { $set: { status: "COMPLETED", completed_at: now } },
+          { upsert: true }
+        );
+        await User.findByIdAndDelete(u._id);
+        console.log(`[AutoDelete] Account deleted on due date: ${u._id}`);
+      }
+    } catch (autoErr) {
+      console.error("[AutoDelete Error]:", autoErr.message);
+    }
+
     let filter = {};
 
     if (status && status !== "all") {
-      filter.status = status;
+      if (status === "cancelled") {
+        filter.$or = [
+          { status: "cancelled" },
+          { otherReason: { $regex: /cancel/i } }
+        ];
+      } else if (status === "completed") {
+        filter.$or = [
+          { status: "completed" },
+          { status: "closed", otherReason: { $not: /cancel/i } }
+        ];
+      } else if (status === "pending") {
+        filter.status = { $in: ["pending", "new", "checked"] };
+      } else {
+        filter.status = status;
+      }
     }
 
     if (deviceType && deviceType !== "all") {
@@ -112,8 +172,21 @@ exports.getDeleteRequests = async (req, res) => {
       .sort({ createdAt: -1 });
 
     // Fetch tab counts for admin dashboard
-    const [allCount, iosCount, androidCount, webCount] = await Promise.all([
+    const [allCount, pendingCount, cancelledCount, completedCount, iosCount, androidCount, webCount] = await Promise.all([
       DeleteAccountRequest.countDocuments({}),
+      DeleteAccountRequest.countDocuments({ status: { $in: ["pending", "new", "checked"] } }),
+      DeleteAccountRequest.countDocuments({
+        $or: [
+          { status: "cancelled" },
+          { otherReason: { $regex: /cancel/i } }
+        ]
+      }),
+      DeleteAccountRequest.countDocuments({
+        $or: [
+          { status: "completed" },
+          { status: "closed", otherReason: { $not: /cancel/i } }
+        ]
+      }),
       DeleteAccountRequest.countDocuments({ deviceType: "ios" }),
       DeleteAccountRequest.countDocuments({ deviceType: "android" }),
       DeleteAccountRequest.countDocuments({
@@ -131,6 +204,9 @@ exports.getDeleteRequests = async (req, res) => {
       total: requests.length,
       counts: {
         all: allCount,
+        pending: pendingCount,
+        cancelled: cancelledCount,
+        completed: completedCount,
         ios: iosCount,
         android: androidCount,
         web: webCount
@@ -277,9 +353,10 @@ exports.getDeleteRequestStatus = async (req, res) => {
       });
     }
 
-    // Check if user has any existing request
+    // Check if user has any active pending request
     const pendingRequest = await DeleteAccountRequest.findOne({
-      user_id: new mongoose.Types.ObjectId(userId)
+      user_id: new mongoose.Types.ObjectId(userId),
+      status: { $in: ["pending", "new", "checked"] },
     }).sort({ createdAt: -1 });
 
     if (pendingRequest) {

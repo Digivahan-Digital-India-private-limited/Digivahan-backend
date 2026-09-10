@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const User = require("../models/User");
 const UserDeletion = require("../models/UserDeletion");
 const QRAssignment = require("../models/QRAssignment"); 
+const DeleteAccountRequest = require("../models/deleteAccountRequest.model");
 
 function startCronJobs() {
 
@@ -29,15 +30,39 @@ function startCronJobs() {
           { status: "inactive" }
         );
 
-        // 3. Delete the user
+        // 3. Complete DeleteAccountRequest
+        await DeleteAccountRequest.updateMany(
+          { user_id: userId },
+          { $set: { status: "completed" } }
+        );
+
+        // 4. Delete the user
         await User.findByIdAndDelete(userId);
 
-        // 4. Complete deletion process record
+        // 5. Complete deletion process record
         record.status = "COMPLETED";
         record.completed_at = new Date();
         await record.save();
 
         console.log(`[CRON] User permanently deleted: ${userId}`);
+      }
+
+      // Also process any users pending deletion in User collection directly
+      const pendingUsers = await User.find({
+        account_status: "PENDING_DELETION",
+        deletion_date: { $lte: now },
+      });
+
+      for (const u of pendingUsers) {
+        await QRAssignment.updateMany({ assigned_to: u._id }, { status: "inactive" });
+        await DeleteAccountRequest.updateMany({ user_id: u._id }, { $set: { status: "completed" } });
+        await UserDeletion.findOneAndUpdate(
+          { user_id: u._id },
+          { $set: { status: "COMPLETED", completed_at: new Date() } },
+          { upsert: true }
+        );
+        await User.findByIdAndDelete(u._id);
+        console.log(`[CRON] Scheduled user auto-deleted: ${u._id}`);
       }
 
     } catch (error) {

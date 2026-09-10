@@ -59,7 +59,14 @@ exports.submitDeleteRequest = async (req, res) => {
     }
 
     if (!user) {
-      user = await User.findOne({ "basic_details.phone_number": id.trim() });
+      const cleanId = String(id).trim();
+      user = await User.findOne({
+        $or: [
+          { "basic_details.phone_number": cleanId },
+          { phoneNumber: cleanId },
+          { phone_number: cleanId },
+        ],
+      });
     }
 
     if (!user) {

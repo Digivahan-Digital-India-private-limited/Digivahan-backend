@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digivahan - Account Deletion & Cancellation APIs Documentation</title>
+<style>
+  @page {
+    size: A4;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.5;
+    font-size: 13px;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+  }
+  .header {
+    border-bottom: 2px solid #3b82f6;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+  .badge-project {
+    background-color: #eff6ff;
+    color: #2563eb;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 12px;
+    border: 1px solid #bfdbfe;
+  }
+  h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1e3a8a;
+    border-left: 4px solid #3b82f6;
+    padding-left: 8px;
+    margin-top: 22px;
+    margin-bottom: 10px;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+  }
+  p {
+    margin: 0 0 8px 0;
+  }
+  ul, ol {
+    margin: 0 0 10px 0;
+    padding-left: 20px;
+  }
+  li {
+    margin-bottom: 4px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 15px 0;
+    font-size: 12px;
+    page-break-inside: avoid;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 7px 10px;
+    text-align: left;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+  .method-post {
+    display: inline-block;
+    background-color: #f59e0b;
+    color: white;
+    font-weight: bold;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .url-box {
+    display: inline-block;
+    background-color: #f1f5f9;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+  }
+  pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11.5px;
+    overflow-x: auto;
+    margin: 8px 0 12px 0;
+    page-break-inside: avoid;
+    line-height: 1.4;
+  }
+  .info-card {
+    background-color: #f0fdf4;
+    border-left: 4px solid #22c55e;
+    padding: 10px 12px;
+    border-radius: 0 6px 6px 0;
+    margin: 10px 0;
+    font-size: 12px;
+    page-break-inside: avoid;
+  }
+  .warning-card {
+    background-color: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    padding: 10px 12px;
+    border-radius: 0 6px 6px 0;
+    margin: 10px 0;
+    font-size: 12px;
+    page-break-inside: avoid;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+  .file-tag {
+    font-family: Consolas, monospace;
+    background-color: #e2e8f0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11.5px;
+  }
+  .footer {
+    margin-top: 25px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 8px;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1 class="title">Digivahan Backend - Account Deletion APIs Documentation</h1>
+      <div class="subtitle">Complete Technical Guide & Postman Testing Instructions</div>
+    </div>
+    <div class="badge-project">Digivahan API v1.0</div>
+  </div>
+
+  <h2>1. Executive Summary & Code Changes Completed</h2>
+  <p>Humne Digivahan backend me self-service <strong>User Account Deletion & Cancellation</strong> ka poora system implement kar diya hai. Iske tehat nimnlikhit kaam complete hue hain:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">File / Component</th>
+        <th style="width: 15%;">Action</th>
+        <th style="width: 60%;">Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="file-tag">src/models/User.js</span></td>
+        <td><strong>Modified</strong></td>
+        <td>User schema me <code>deletionRequestData</code> sub-document add kiya gaya (deleteStatus, deleteRequestDate, deleteRequestProcessDate, deleteRequestProcessDays).</td>
+      </tr>
+      <tr>
+        <td><span class="file-tag">src/controllers/userDeleteAccount.controller.js</span></td>
+        <td><strong>Created (New)</strong></td>
+        <td>Dono core business logic functions banaye: <code>submitDeleteRequest</code> (immediate vs scheduled delete) aur <code>cancelDeleteRequest</code> (status reset & reactivate).</td>
+      </tr>
+      <tr>
+        <td><span class="file-tag">src/routes/userDeleteAccount.routes.js</span></td>
+        <td><strong>Created (New)</strong></td>
+        <td>Naye endpoints define kiye gaye aur <code>authenticateToken</code> middleware se secure kiya gaya.</td>
+      </tr>
+      <tr>
+        <td><span class="file-tag">server.js</span></td>
+        <td><strong>Modified</strong></td>
+        <td>Naye routes ko base path <code>/api/user-account</code> par register kiya gaya.</td>
+      </tr>
+      <tr>
+        <td><span class="file-tag">src/controllers/authController.js</span></td>
+        <td><strong>Modified</strong></td>
+        <td>Dono Login APIs (<code>signIn</code> & <code>verifyLoginOtp</code>) ke response me <code>deletionRequestData</code> include kiya gaya taaki app me login karte hi status visible ho.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. API Endpoints Overview</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>API Name</th>
+        <th>Method</th>
+        <th>Endpoint</th>
+        <th>Auth Type</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Submit Delete Request</strong></td>
+        <td><span class="method-post">POST</span></td>
+        <td><code>/api/user-account/delete</code></td>
+        <td>Bearer Token (JWT)</td>
+      </tr>
+      <tr>
+        <td><strong>2. Cancel Delete Request</strong></td>
+        <td><span class="method-post">POST</span></td>
+        <td><code>/api/user-account/cancel-delete</code></td>
+        <td>Bearer Token (JWT)</td>
+      </tr>
+      <tr>
+        <td><strong>3. Verify Login OTP / Sign-in</strong></td>
+        <td><span class="method-post">POST</span></td>
+        <td><code>/api/auth/verify-login-otp</code> or <code>/api/auth/sign-in</code></td>
+        <td>Public</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>3. Detailed API Specifications</h2>
+
+  <h3>API 1: Submit Account Deletion Request</h3>
+  <p><strong>Endpoint:</strong> <span class="method-post">POST</span> <span class="url-box">/api/user-account/delete</span></p>
+  <p><strong>Headers:</strong> <code>Authorization: Bearer &lt;JWT_TOKEN&gt;</code>, <code>Content-Type: application/json</code></p>
+  
+  <h4>Request Body Parameters:</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Type</th>
+        <th>Required</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>id</code></td>
+        <td>String</td>
+        <td>Yes</td>
+        <td>User ID (MongoDB ObjectId) ya 10-digit Phone Number.</td>
+      </tr>
+      <tr>
+        <td><code>duration</code></td>
+        <td>Integer</td>
+        <td>Yes</td>
+        <td>Kitne din baad delete karna hai. Agar <strong>0</strong> hai to turant delete hoga.</td>
+      </tr>
+      <tr>
+        <td><code>reason</code></td>
+        <td>String</td>
+        <td>No</td>
+        <td>Account delete karne ka reason.</td>
+      </tr>
+      <tr>
+        <td><code>deviceType</code></td>
+        <td>String</td>
+        <td>Yes</td>
+        <td>Device platform: <code>"android"</code>, <code>"ios"</code>, ya <code>"web"</code> allow hai.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>Sample Request (Scheduled Deletion - e.g. 5 Days):</h4>
+<pre>{
+  "id": "9876543210",
+  "duration": 5,
+  "reason": "I no longer want to use the application",
+  "deviceType": "android"
+}</pre>
+
+  <h4>Success Response (200 OK):</h4>
+<pre>{
+  "success": true,
+  "message": "Account deletion scheduled successfully",
+  "deletionRequestData": {
+    "deleteStatus": true,
+    "deleteRequestDate": "10/09/2026",
+    "deleteRequestProcessDate": "15/09/2026",
+    "deleteRequestProcessDays": 5
+  }
+}</pre>
+
+  <h4>Immediate Deletion Request (duration = 0):</h4>
+<pre>{
+  "id": "9876543210",
+  "duration": 0,
+  "reason": "Deleting immediately",
+  "deviceType": "ios"
+}</pre>
+  <h4>Immediate Deletion Response (200 OK):</h4>
+<pre>{
+  "success": true,
+  "message": "Account has been deleted immediately"
+}</pre>
+
+  <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 18px 0;">
+
+  <h3>API 2: Cancel Account Deletion Request</h3>
+  <p><strong>Endpoint:</strong> <span class="method-post">POST</span> <span class="url-box">/api/user-account/cancel-delete</span></p>
+  <p><strong>Headers:</strong> <code>Authorization: Bearer &lt;JWT_TOKEN&gt;</code></p>
+  <p><strong>Request Body:</strong> None (User identity JWT Token se automatically extract hoti hai).</p>
+
+  <h4>Success Response (200 OK):</h4>
+<pre>{
+  "success": true,
+  "message": "Account deletion request cancelled successfully",
+  "deletionRequestData": {
+    "deleteStatus": false,
+    "deleteRequestDate": null,
+    "deleteRequestProcessDate": null,
+    "deleteRequestProcessDays": 0
+  }
+}</pre>
+
+  <div class="page-break"></div>
+
+  <h2>4. Updated Login APIs (Profile Response)</h2>
+  <p>Jab user <code>/api/auth/verify-login-otp</code> ya <code>/api/auth/sign-in</code> call karta hai, to response ke <code>user</code> object me ab <code>deletionRequestData</code> hamesha include rehta hai:</p>
+
+<pre>{
+  "success": true,
+  "message": "Login successful",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "_id": "64f1a2b3c4d5e6f7a8b9c0d1",
+    "fullName": "Rahul Sharma",
+    "phoneNumber": "9876543210",
+    "account_status": "PENDING_DELETION",
+    "deletionRequestData": {
+      "deleteStatus": true,
+      "deleteRequestDate": "10/09/2026",
+      "deleteRequestProcessDate": "15/09/2026",
+      "deleteRequestProcessDays": 5
+    }
+  }
+}</pre>
+
+  <h2>5. Step-by-Step Postman Testing Guide</h2>
+  
+  <div class="info-card">
+    <strong>Note:</strong> Test karte waqt ensure karein ki aapka backend server chal raha ho (e.g. <code>npm run dev</code> ya <code>node server.js</code>) aur MongoDB connected ho. Default port <strong>3000</strong> hai.
+  </div>
+
+  <h3>Step 1: Bearer Token Hasil Karein (Login)</h3>
+  <ol>
+    <li>Postman me new request create karein: <strong>POST</strong></li>
+    <li>URL: <code>http://localhost:3000/api/auth/verify-login-otp</code></li>
+    <li>Body &gt; raw &gt; JSON:
+      <pre style="margin: 4px 0 6px 0;">{"phoneNumber": "9876543210", "otp": "1234"}</pre>
+    </li>
+    <li>Response me se <strong><code>token</code></strong> string ko copy kar lein.</li>
+  </ol>
+
+  <h3>Step 2: Submit Delete Request Test Karein</h3>
+  <ol>
+    <li>Method: <strong>POST</strong></li>
+    <li>URL: <code>http://localhost:3000/api/user-account/delete</code></li>
+    <li><strong>Headers</strong> tab me add karein:
+      <ul>
+        <li><code>Authorization</code> : <code>Bearer &lt;Step 1 me mila token&gt;</code></li>
+        <li><code>Content-Type</code> : <code>application/json</code></li>
+      </ul>
+    </li>
+    <li><strong>Body</strong> tab &gt; raw &gt; JSON:
+<pre style="margin: 4px 0 6px 0;">{
+  "id": "9876543210",
+  "duration": 5,
+  "reason": "Temporary break",
+  "deviceType": "android"
+}</pre>
+    </li>
+    <li><strong>Send</strong> click karein. Aapko <code>200 OK</code> aur updated <code>deletionRequestData</code> milega.</li>
+  </ol>
+
+  <h3>Step 3: Login Response me Verification</h3>
+  <ol>
+    <li>Wapas Step 1 wali login request send karein.</li>
+    <li>Check karein ki user ke profile me <code>account_status: "PENDING_DELETION"</code> aur <code>deletionRequestData.deleteStatus: true</code> aa raha hai.</li>
+  </ol>
+
+  <h3>Step 4: Cancel Deletion Request Test Karein</h3>
+  <ol>
+    <li>Method: <strong>POST</strong></li>
+    <li>URL: <code>http://localhost:3000/api/user-account/cancel-delete</code></li>
+    <li><strong>Headers</strong> tab: <code>Authorization: Bearer &lt;Token&gt;</code></li>
+    <li><strong>Body</strong>: Empty rakhein.</li>
+    <li><strong>Send</strong> click karein. <code>200 OK</code> response aayega aur <code>deleteStatus: false</code> ho jayega.</li>
+  </ol>
+
+  <div class="warning-card">
+    <strong>Validation & Error Scenarios to Test:</strong>
+    <ul>
+      <li><strong>Missing deviceType:</strong> Agar body me deviceType na ho, API <code>400 Bad Request</code> return karegi.</li>
+      <li><strong>Invalid duration:</strong> Duration negative ya non-number hone par <code>400 Bad Request</code> aayega.</li>
+      <li><strong>Duplicate Cancel:</strong> Agar deletion request already cancel ho chuki ho to API <code>400 Bad Request ("No active deletion request found")</code> degi.</li>
+  <div class="page-break"></div>
+
+  <h2>6. Admin Panel - Dedicated "iOS App" Tab in Delete Account Requests</h2>
+  <p>Admin panel ke <strong>Delete Account Requests</strong> page me dedicated platform tabs add kiye gaye hain taaki mobile app (iOS / Android) se aane wali requests alag se filter hokar dikhein:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tab Name</th>
+        <th>Platform Source</th>
+        <th>Displayed Fields</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>All Requests</strong></td>
+        <td>Total (Web + iOS + Android)</td>
+        <td>Sabhi requests ek saath live total counter ke sath.</td>
+      </tr>
+      <tr>
+        <td><strong>iOS App</strong></td>
+        <td><code>deviceType: "ios"</code></td>
+        <td>
+          User Name, Phone Number, Email, <strong>iOS App Badge ()</strong>, 
+          <strong>Scheduled Duration (e.g. 5 Days / Immediate)</strong>, 
+          <strong>Process Date</strong>, Reason, Status (New/Checked/Closed), Take Action button.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Android App</strong></td>
+        <td><code>deviceType: "android"</code></td>
+        <td>Android app se submit hui deletion requests with Android badge.</td>
+      </tr>
+      <tr>
+        <td><strong>Website</strong></td>
+        <td><code>deviceType: "web"</code></td>
+        <td>Website form ke zariye aayi hui requests with Web badge.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info-card">
+    <strong>Synchronized Deletion Workflow:</strong><br>
+    Jab bhi user <code>POST /api/user-account/delete</code> call karta hai (deviceType: "ios"), to:
+    <ul>
+      <li>User ke profile me <code>deletionRequestData</code> save hota hai.</li>
+      <li>Admin panel ke <code>DeleteAccountRequest</code> collection me entry save hoti hai with <code>deviceType: "ios"</code>.</li>
+      <li>Admin panel me <strong>iOS App</strong> tab par live count update hota hai aur card ke upar <strong>iOS App</strong> badge aur <strong>Scheduled Process Date</strong> dikhai deti hai.</li>
+      <li>Agar user app se deletion cancel kar deta hai (<code>cancel-delete</code>), to admin panel me status automatically <code>Closed (Cancelled by user)</code> ho jata hai.</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    Digivahan Project &bull; Technical Documentation &bull; Generated Automatically
+  </div>
+
+</body>
+</html>

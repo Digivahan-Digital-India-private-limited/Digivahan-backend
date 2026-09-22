@@ -1952,6 +1952,79 @@ const canSendOtpToday = async (contact) => {
   return count <= limit;
 };
 
+/**
+ * Refresh User Token
+ * POST /api/auth/refresh-token
+ * Body: { user_id }
+ * Returns a fresh JWT token for the given user.
+ */
+const refreshToken = async (req, res) => {
+  try {
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id is required",
+      });
+    }
+
+    const user = await User.findById(user_id)
+      .select("basic_details.email basic_details.phone_number is_active account_status blocked_reason")
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.is_active) {
+      return res.status(401).json({
+        status: false,
+        message: ERROR_MESSAGES.ACCOUNT_DEACTIVATED,
+      });
+    }
+
+    if (user.account_status === "BLOCKED") {
+      return res.status(403).json({
+        status: false,
+        error_type: "blocked",
+        message: "Your account has been blocked. You cannot use this service.",
+        reason: user.blocked_reason || "Blocked by admin",
+      });
+    }
+
+    if (user.account_status === "DELETED") {
+      return res.status(401).json({
+        status: false,
+        error_type: "user_deleted",
+        message: "User account is deleted.",
+      });
+    }
+
+    const token = generateAuthToken({
+      user_id: user_id,
+      email: user.basic_details?.email || null,
+      phone_number: user.basic_details?.phone_number || null,
+      isMasterAdmin: false,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Token refreshed successfully",
+      token,
+    });
+  } catch (error) {
+    console.error("Refresh token error:", error);
+    return res.status(500).json({
+      status: false,
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+    });
+  }
+};
+
 module.exports = {
   registerInit,
   checkRegisteredUser,
@@ -1971,4 +2044,5 @@ module.exports = {
   LogOutUser,
   suspendUser,
   removeUserSuspension,
+  refreshToken,
 };

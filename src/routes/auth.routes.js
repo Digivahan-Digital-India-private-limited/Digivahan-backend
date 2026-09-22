@@ -26,6 +26,7 @@ const {
   LogOutUser,
   suspendUser,
   removeUserSuspension,
+  refreshToken,
 } = require("../controllers/authController.js");
 const { API_ROUTES } = require("../../constants/apiRoutes.js");
 
@@ -234,5 +235,8 @@ router.post(
   ],
   removeUserSuspension
 );
+
+// Refresh User Token - Generate a new JWT token using user_id
+router.post("/refresh-token", refreshToken);
 
 module.exports = router;

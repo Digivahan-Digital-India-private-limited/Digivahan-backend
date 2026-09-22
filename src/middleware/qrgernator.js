@@ -2,15 +2,15 @@ const QRCode = require("qrcode");
 
 const generateQRCode = async (data) => {
   try {
-    // Base64 QR
-    const qrImage = await QRCode.toDataURL(data, {
+    // Returns a raw PNG Buffer — compatible with Cloudinary upload_stream
+    const qrBuffer = await QRCode.toBuffer(data, {
       errorCorrectionLevel: "H",
-      type: "image/png",
+      type: "png",
       margin: 2,
       width: 300,
     });
 
-    return qrImage;
+    return qrBuffer;
   } catch (error) {
     throw error;
   }

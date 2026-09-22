@@ -155,12 +155,71 @@ const addVehicle = async (req, res) => {
     });
   } catch (error) {
     console.error("Add vehicle error:", error);
-    if (error.message === "RTO_DOWN") {
-      return res.status(503).json({
-        status: false,
-        error_type: "RTO_DOWN",
-        message: "We're currently facing an issue while fetching your request from the Government Parivahan database. Please try again after some time."
-      });
+    if (error.message === "RTO_DOWN" || error.statusCode === 404 || error.statusCode === 503) {
+      // Vehicle not found in RTO registry — return dummy/placeholder data
+      const dummyVehicleData = {
+        status: true,
+        not_found: true,
+        message: "Vehicle details not found in RTO registry",
+        data: {
+          result: {
+            custom_vehicle_info: {
+              vehicle_number: vehicle_number?.toUpperCase().trim() || "N/A",
+              owner_name: "N*** N*****",
+              engine: "N/A",
+              chassis_number: "N/A",
+              insurance_policy_number: "N/A",
+              category: "N/A",
+            },
+            rto_data: {
+              registration: {
+                number: vehicle_number?.toUpperCase().trim() || "N/A",
+                date: null,
+                ownerCount: "N/A",
+                authority: "N/A",
+                status: { active: false },
+                expiryDate: null,
+                owner: {
+                  name: "N*** N*****",
+                  fatherName: "N/A",
+                  presentAddress: "******",
+                  permanentAddress: "******",
+                },
+              },
+              vehicle: {
+                manufacturer: "N/A",
+                model: "N/A",
+                class: "N/A",
+                fuelType: "N/A",
+                normsType: "N/A",
+                engine: "N/A",
+                chassis: "N/A",
+                color: "N/A",
+                unladenWeight: "0",
+                category: "N/A",
+                manufacturingYear: "N/A",
+                fitnessUpTo: null,
+              },
+              insurance: {
+                company: "N/A",
+                expiryDate: null,
+                policyNumber: "N/A",
+              },
+              pollutionControl: {
+                validUpto: null,
+                certificateNumber: "N/A",
+              },
+              finance: {
+                isFinanced: false,
+                rcFinancer: "N/A",
+              },
+            },
+          },
+          data_source: "not_found",
+        },
+        challan_credits: remainingCredits,
+      };
+      return res.status(200).json(dummyVehicleData);
     }
     return res.status(error.statusCode || 500).json({
       status: false,
@@ -593,9 +652,9 @@ const fetchVehicleDataFromRTOPremimumApi = async (vehicleNumber, userId = null, 
 // Add vehicle in User Garage
 const addVehicleInUsergarage = async (req, res) => {
   try {
-    const { user_id, vehicle_number, owner_name } = req.body;
+    const { user_id, vehicle_number } = req.body;
 
-    if (!vehicle_number || !owner_name) {
+    if (!vehicle_number) {
       return res.status(400).json({
         status: false,
         message: ERROR_MESSAGES.INVALID_PARAMETER,
@@ -627,47 +686,7 @@ const addVehicleInUsergarage = async (req, res) => {
       });
     }
 
-    const dbOwnerName = matchedVehicle.api_data?.custom_vehicle_info?.owner_name || "";
-
-    // Flexible Name Matching Logic supporting legacy masked data
-    const cleanInput = owner_name.trim().toUpperCase().replace(/\s+/g, " ");
-    const cleanDb = dbOwnerName.trim().toUpperCase().replace(/\s+/g, " ");
-
-    const maskedInput = maskName(cleanInput);
-    const maskedDb = maskName(cleanDb);
-
-    let isMatch = false;
-
-    if (cleanInput === cleanDb) {
-      isMatch = true;
-    } else if (maskedInput === cleanDb) {
-      isMatch = true;
-    } else if (cleanInput === maskedDb) {
-      isMatch = true;
-    } else if (maskedInput === maskedDb) {
-      isMatch = true;
-    } else {
-      // Character-by-character wildcard match (where * can match any character)
-      if (cleanInput.length === cleanDb.length) {
-        let charMatch = true;
-        for (let i = 0; i < cleanInput.length; i++) {
-          if (cleanInput[i] !== "*" && cleanDb[i] !== "*" && cleanInput[i] !== cleanDb[i]) {
-            charMatch = false;
-            break;
-          }
-        }
-        if (charMatch) isMatch = true;
-      }
-    }
-
-    if (!isMatch) {
-      return res.status(404).json({
-        status: false,
-        message: "Vehicle owner name verification failed",
-      });
-    }
-
-    // 3️⃣ Push directly (ATOMIC)
+    // 3️⃣ Push directly (ATOMIC) — no owner name verification required
     await User.updateOne(
       { _id: user_id },
       {

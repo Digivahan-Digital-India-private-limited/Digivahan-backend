@@ -695,18 +695,92 @@ const addVehicleInUsergarage = async (req, res) => {
     }
 
     // 2️⃣ Find vehicle in master collection (INDEXED)
-    const matchedVehicle = await VehicleInfoData.findOne({
+    let matchedVehicle = await VehicleInfoData.findOne({
       vehicle_id: vehicle_number,
     }).lean();
 
+    // 3️⃣ If not found in DB — create dummy data, save to cache, add to garage
     if (!matchedVehicle) {
-      return res.status(404).json({
-        status: false,
-        message: "Vehicle not found in RTO registry",
+      const cleanVehicleNumber = vehicle_number.toUpperCase().trim();
+
+      const dummyApiData = {
+        custom_vehicle_info: {
+          vehicle_number: cleanVehicleNumber,
+          owner_name: "N*** N*****",
+          engine: "N/A",
+          chassis_number: "N/A",
+          insurance_policy_number: "N/A",
+          category: "N/A",
+        },
+        rto_data: {
+          registration: {
+            number: cleanVehicleNumber,
+            date: null,
+            ownerCount: "N/A",
+            authority: "N/A",
+            status: { active: false },
+            expiryDate: null,
+            owner: {
+              name: "N*** N*****",
+              fatherName: "N/A",
+              presentAddress: "******",
+              permanentAddress: "******",
+            },
+          },
+          vehicle: {
+            manufacturer: "N/A",
+            model: "N/A",
+            class: "N/A",
+            fuelType: "N/A",
+            normsType: "N/A",
+            engine: "N/A",
+            chassis: "N/A",
+            color: "N/A",
+            unladenWeight: "0",
+            category: "N/A",
+            manufacturingYear: "N/A",
+            fitnessUpTo: null,
+          },
+          insurance: {
+            company: "N/A",
+            expiryDate: null,
+            policyNumber: "N/A",
+          },
+          pollutionControl: {
+            validUpto: null,
+            certificateNumber: "N/A",
+          },
+          finance: {
+            isFinanced: false,
+            rcFinancer: "N/A",
+          },
+        },
+      };
+
+      // Save dummy data to VehicleInfoData cache
+      const savedDummy = await VehicleInfoData.findOneAndUpdate(
+        { vehicle_id: cleanVehicleNumber },
+        { $set: { api_data: dummyApiData, data_source: "not_found", last_updated: new Date() } },
+        { upsert: true, new: true }
+      );
+
+      // Push vehicle to user's garage
+      await User.updateOne(
+        { _id: user_id },
+        { $push: { "garage.vehicles": { vehicle_id: cleanVehicleNumber } } },
+      );
+
+      return res.status(200).json({
+        status: true,
+        not_found: true,
+        message: SUCCESS_MESSAGES.VEHICLE_ADDED_SUCCESSFULLY,
+        data: {
+          vehicle: dummyApiData,
+        },
       });
     }
 
-    // 3️⃣ Push directly (ATOMIC) — no owner name verification required
+    // 4️⃣ Push directly (ATOMIC) — no owner name verification required
     await User.updateOne(
       { _id: user_id },
       {

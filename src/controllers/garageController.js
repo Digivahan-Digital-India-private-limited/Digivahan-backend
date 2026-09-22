@@ -122,6 +122,10 @@ const addVehicle = async (req, res) => {
     try {
       rtoData = await fetchVehicleDataFromRTO(vehicle_number, userId, "add_vehicle");
     } catch (error) {
+      // RTO_DOWN / 503 = vehicle not found in govt DB — bubble up directly, no point trying premium
+      if (error.message === "RTO_DOWN" || error.statusCode === 503) {
+        throw error;
+      }
       if (error.statusCode === 500) {
         rtoData = await fetchVehicleDataFromRTOPremimumApi(vehicle_number, userId, "add_vehicle");
         dataSource = "rto_premium_api";
@@ -155,7 +159,18 @@ const addVehicle = async (req, res) => {
     });
   } catch (error) {
     console.error("Add vehicle error:", error);
-    if (error.message === "RTO_DOWN" || error.statusCode === 404 || error.statusCode === 503) {
+    const isNotFound =
+      error.message === "RTO_DOWN" ||
+      error.statusCode === 503 ||
+      error.statusCode === 404 ||
+      error.statusCode === 500 ||
+      (typeof error.message === "string" && (
+        error.message.toLowerCase().includes("sorry for inconvenience") ||
+        error.message.toLowerCase().includes("vehicle not found") ||
+        error.message.toLowerCase().includes("contact support") ||
+        error.message.toLowerCase().includes("rto_down")
+      ));
+    if (isNotFound) {
       // Vehicle not found in RTO registry — return dummy/placeholder data
       const dummyVehicleData = {
         status: true,
@@ -471,12 +486,16 @@ const fetchVehicleDataFromRTO = async (vehicleNumber, userId = null, trigger = "
         {
           $inc: { failCount: 1 },
           $set: { lastFailedAt: new Date() },
-          $addToSet: { userIds: userId },
+          $addToSet: { failedApis: "VEHICLE", userIds: userId },
           $setOnInsert: { isDownloaded: false },
           $push: { apiErrorLogs: { $each: [`[${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}] ${errDataStr}`], $slice: -50 } },
         },
         { upsert: true, new: true }
       ).catch((e) => console.error("[VehicleForAdd] Failed to save:", e.message));
+      // ✅ Throw RTO_DOWN consistently (same as axios catch block) so callers handle it as not-found
+      const rtoErr = new Error("RTO_DOWN");
+      rtoErr.statusCode = 503;
+      throw rtoErr;
     }
 
     const err = new Error(response.data?.message || "NORMAL_RTO_FAILED");

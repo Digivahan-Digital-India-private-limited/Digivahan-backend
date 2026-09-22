@@ -21,10 +21,11 @@ const { getNoCreditsMessage } = require("../utils/creditUtils");
  * POST /api/v1/garage/add-vehicle
  */
 const addVehicle = async (req, res) => {
+  // Declare outside try so they are accessible in the catch block (dummy data response)
+  const { vehicle_number } = req.body;
+  const userId = req.user?.userId || null;
+
   try {
-    const { vehicle_number } = req.body;
-    // userId from auth middleware (may be undefined for public calls)
-    const userId = req.user?.userId || null;
 
     if (!vehicle_number) {
       return res.status(400).json({

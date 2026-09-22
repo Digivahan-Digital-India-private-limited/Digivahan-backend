@@ -24,6 +24,7 @@ const addVehicle = async (req, res) => {
   // Declare outside try so they are accessible in the catch block (dummy data response)
   const { vehicle_number } = req.body;
   const userId = req.user?.userId || null;
+  let remainingCredits = null;
 
   try {
 
@@ -35,7 +36,6 @@ const addVehicle = async (req, res) => {
     }
 
     let user = null;
-    let remainingCredits = null;
 
     // ─── Step 1: Account status check ────────────────────────────────────────
     if (userId) {

@@ -353,6 +353,8 @@ const ALL_PAGE_KEYS = [
   "manage_appointment",
   "challan_webhook",
   "app_management",
+  "vehicle_for_add",
+  "garage_management",
   "hr_manager",
 ];
 

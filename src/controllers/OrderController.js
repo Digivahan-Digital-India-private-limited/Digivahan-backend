@@ -2653,11 +2653,8 @@ const checkShiprocketCouierService = async (delivery_postcode, compareOn) => {
       error?.response?.data || error.message,
     );
 
-    return res.status(500).json({
-      status: false,
-      message: "Something went wrong",
-      error: error?.response?.data || error.message,
-    });
+    // res yahan available nahi hai — error throw karo taaki calling controller handle kare
+    throw new Error(error?.response?.data?.message || error.message || "Something went wrong");
   }
 };
 
@@ -2668,10 +2665,8 @@ const checkDeliverycouierService = async (delivery_postcode) => {
     ----------------------------- */
 
     if (!delivery_postcode) {
-      return res.status(400).json({
-        status: false,
-        message: "delivery_postcode is required",
-      });
+      // res yahan available nahi hai — error throw karo
+      throw new Error("delivery_postcode is required");
     }
 
     const { datetime } = getISTDateTime();

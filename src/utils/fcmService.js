@@ -34,19 +34,20 @@ const ONESIGNAL_RAW_CHANNELS = {
   default:                      "328b98de-49cc-47b2-85b4-733547c953d4",
 };
 
-// In Android OS, OneSignal creates notification channels prefixed with "OS_"
+// Channel IDs registered in the mobile app — SIMPLE STRING NAMES (from handover doc Section 8)
+// The mobile app registers NotificationChannels with these exact IDs + matching raw sound files
 const ANDROID_CHANNEL_MAP = {
-  no_parking:                   "OS_0b251d79-aa58-4410-ac8b-a810849ce1c6",
-  congested_parking:            "OS_5fbca66a-703c-459e-bcfa-c3815f25b2bb",
-  road_block_alert:             "OS_1f097e17-2009-4dd5-b27e-cb84a52cb7c5",
-  blocked_vehicle_alert:        "OS_80a16cd8-e359-43be-8ea5-d31ddfab6338",
-  car_lights_windows_left_open: "OS_d13bad07-8593-4603-960e-e140317410db",
-  car_horn_alarm_going_on:      "OS_8bd1c0ed-7865-4f41-9f95-81a9b37310b8",
-  unknown_issue_alert:          "OS_5bd7c478-55c0-42a7-b87f-472c0013ec1f",
-  doc_access:                   "OS_b4258f1b-b16e-4d8b-920f-fdcc394eb79f",
-  accident_alert:               "OS_99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
-  call_user:                    "OS_0f86d5a8-1877-4a8a-ad45-d609c14d16bd",
-  sound:                        "OS_328b98de-49cc-47b2-85b4-733547c953d4",
+  no_parking:                   "no_parking",
+  congested_parking:            "congested_parking",
+  road_block_alert:             "road_block_alert",
+  blocked_vehicle_alert:        "blocked_vehicle_alert",
+  car_lights_windows_left_open: "car_lights_windows_left_open",
+  car_horn_alarm_going_on:      "car_horn_alarm_going_on",
+  unknown_issue_alert:          "unknown_issue_alert",
+  doc_access:                   "doc_access",
+  accident_alert:               "accident_alert",
+  call_user:                    "call_user",
+  sound:                        "sound",
 };
 
 const ANDROID_SOUND_MAP = {
@@ -77,7 +78,7 @@ const IOS_SOUND_MAP = {
   call_user:                    "call_sound.caf",
 };
 
-const DEFAULT_ANDROID_CHANNEL = "OS_328b98de-49cc-47b2-85b4-733547c953d4";
+const DEFAULT_ANDROID_CHANNEL = "sound"; // default channel registered in app
 const DEFAULT_IOS_SOUND       = "default";
 const FCM_BASE                = "https://fcm.googleapis.com/v1/projects";
 const OAUTH_URL               = "https://oauth2.googleapis.com/token";
@@ -241,57 +242,75 @@ async function sendFcmNotification(opts) {
     : DEFAULT_ANDROID_CHANNEL;
 
   const androidSound = isSoundOn
-    ? (ANDROID_SOUND_MAP[normIssue] || ANDROID_SOUND_MAP[issue_type] || androidChannel)
-    : DEFAULT_ANDROID_CHANNEL;
+    ? (ANDROID_SOUND_MAP[normIssue] || ANDROID_SOUND_MAP[issue_type] || "default")
+    : "default";
 
   const iosSound = isSoundOn
     ? (IOS_SOUND_MAP[normIssue] || IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND)
     : DEFAULT_IOS_SOUND;
 
-  const rawChannelUuid = ONESIGNAL_RAW_CHANNELS[normIssue] || ONESIGNAL_RAW_CHANNELS[issue_type] || ONESIGNAL_RAW_CHANNELS.default;
+  // ─── OneSignal UUID channel map (for SDK interception) ──────────────────
+  // The OneSignal SDK in the app intercepts FCM data messages that contain
+  // OneSignal-format fields. We piggyback on this to get custom sounds without
+  // any app code changes. The SDK uses android_channel_id (UUID) which it
+  // already created with the correct custom sound.
+  const OS_CHANNEL_UUIDS = {
+    no_parking:                   "0b251d79-aa58-4410-ac8b-a810849ce1c6",
+    congested_parking:            "5fbca66a-703c-459e-bcfa-c3815f25b2bb",
+    road_block_alert:             "1f097e17-2009-4dd5-b27e-cb84a52cb7c5",
+    blocked_vehicle_alert:        "80a16cd8-e359-43be-8ea5-d31ddfab6338",
+    car_lights_windows_left_open: "d13bad07-8593-4603-960e-e140317410db",
+    car_horn_alarm_going_on:      "8bd1c0ed-7865-4f41-9f95-81a9b37310b8",
+    unknown_issue_alert:          "5bd7c478-55c0-42a7-b87f-472c0013ec1f",
+    doc_access:                   "b4258f1b-b16e-4d8b-920f-fdcc394eb79f",
+    accident_alert:               "99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
+    call_user:                    "0f86d5a8-1877-4a8a-ad45-d609c14d16bd",
+    sound:                        "328b98de-49cc-47b2-85b4-733547c953d4",
+  };
 
-  // All FCM data-payload values must be strings
+  const osChannelUuid = isSoundOn
+    ? (OS_CHANNEL_UUIDS[normIssue] || OS_CHANNEL_UUIDS[issue_type] || OS_CHANNEL_UUIDS.sound)
+    : OS_CHANNEL_UUIDS.sound;
+
+  // Unique notification ID for OneSignal SDK deduplication
+  const notifId = `dv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+  // All FCM data-payload values must be strings.
+  // Fields 'custom', 'alert', 'title', 'sound', 'android_channel_id' are
+  // OneSignal SDK internal fields — the SDK intercepts them and builds a
+  // local notification with the correct custom sound.
   const data = {
-    notification_type: String(notification_type),
-    issue_type:        String(issue_type || normIssue),
-    vehicle_id:        String(vehicle_id),
-    chat_room_id:      String(chat_room_id),
-    sender_id:         String(sender_id),
-    order_id:          String(order_id),
-    latitude:          String(latitude),
-    longitude:         String(longitude),
-    channel_id:        androidChannel,
-    android_channel_id: rawChannelUuid,
-    sound:             androidSound,
-    sound_name:        androidSound,
-    ios_sound:         iosSound,
-    custom: JSON.stringify({
-      i: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      a: {
-        issue_type: String(issue_type || normIssue),
-        vehicle_id: String(vehicle_id || ""),
-        notification_type: String(notification_type || ""),
-        chat_room_id: String(chat_room_id || ""),
-        order_id: String(order_id || ""),
-        latitude: String(latitude || ""),
-        longitude: String(longitude || ""),
-      }
-    }),
+    // OneSignal SDK intercept fields (triggers SDK processing with custom sound)
+    custom:             JSON.stringify({ i: notifId }),
+    title:              String(title || ""),
+    alert:              String(body || ""),
+    sound:              androidSound,
+    android_channel_id: osChannelUuid,
+    pri:                "1",
+    // App routing data
+    notification_type:  String(notification_type || ""),
+    issue_type:         String(issue_type || normIssue || ""),
+    vehicle_id:         String(vehicle_id || ""),
+    chat_room_id:       String(chat_room_id || ""),
+    sender_id:          String(sender_id || ""),
+    order_id:           String(order_id || ""),
+    latitude:           String(latitude || ""),
+    longitude:          String(longitude || ""),
+    badge:              String(badgeCount),
   };
 
   const message = {
     token: fcmToken,
+    // notification kept as fallback if SDK doesn't intercept
     notification: { title, body },
     data,
     android: {
-      priority: highPriority ? "HIGH" : "NORMAL",
+      priority: "HIGH",
       notification: {
         channel_id:            androidChannel,
         sound:                 androidSound,
-        notification_priority: highPriority ? "PRIORITY_MAX" : "PRIORITY_DEFAULT",
-        default_sound:         !isSoundOn,
-        default_vibrate_timings: true,
-        click_action:          "FLUTTER_NOTIFICATION_CLICK",
+        notification_priority: "PRIORITY_HIGH",
+        visibility:            "PUBLIC",
       },
     },
     apns: {
@@ -305,6 +324,7 @@ async function sendFcmNotification(opts) {
           sound: isSoundOn ? iosSound : "default",
           badge: badgeCount,
           "content-available": 1,
+          "mutable-content":   1,
         },
       },
     },
@@ -312,6 +332,11 @@ async function sendFcmNotification(opts) {
 
   try {
     const url = `${FCM_BASE}/${projectId}/messages:send`;
+    console.log("[FCM] Sending payload:", JSON.stringify({
+      channel: androidChannel,
+      sound: androidSound,
+      issue: normIssue,
+    }));
     const res = await axios.post(
       url,
       { message },

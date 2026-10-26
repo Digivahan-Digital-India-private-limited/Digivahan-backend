@@ -18,20 +18,35 @@ const path   = require("path");
 const crypto = require("crypto");
 const axios  = require("axios");
 
-// ─── Sound + Channel maps (Section 8 of handover) ────────────────────────────
+// ─── Sound + Channel maps (Aligned with mobile app's OneSignal Channels) ───
 
+const ONESIGNAL_RAW_CHANNELS = {
+  no_parking:                   "0b251d79-aa58-4410-ac8b-a810849ce1c6",
+  congested_parking:            "5fbca66a-703c-459e-bcfa-c3815f25b2bb",
+  road_block_alert:             "1f097e17-2009-4dd5-b27e-cb84a52cb7c5",
+  blocked_vehicle_alert:        "80a16cd8-e359-43be-8ea5-d31ddfab6338",
+  car_lights_windows_left_open: "d13bad07-8593-4603-960e-e140317410db",
+  car_horn_alarm_going_on:      "8bd1c0ed-7865-4f41-9f95-81a9b37310b8",
+  unknown_issue_alert:          "5bd7c478-55c0-42a7-b87f-472c0013ec1f",
+  doc_access:                   "b4258f1b-b16e-4d8b-920f-fdcc394eb79f",
+  accident_alert:               "99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
+  call_user:                    "0f86d5a8-1877-4a8a-ad45-d609c14d16bd",
+  default:                      "328b98de-49cc-47b2-85b4-733547c953d4",
+};
+
+// In Android OS, OneSignal creates notification channels prefixed with "OS_"
 const ANDROID_CHANNEL_MAP = {
-  no_parking:                   "no_parking",
-  congested_parking:            "congested_parking",
-  road_block_alert:             "road_block_alert",
-  blocked_vehicle_alert:        "blocked_vehicle_alert",
-  car_lights_windows_left_open: "car_lights_windows_left_open",
-  unknown_issue_alert:          "unknown_issue_alert",
-  doc_access:                   "doc_access",
-  accident_alert:               "accident_alert",
-  car_horn_alarm_going_on:      "car_horn_alarm_going_on",
-  sound:                        "sound",
-  call_user:                    "call_user",
+  no_parking:                   "OS_0b251d79-aa58-4410-ac8b-a810849ce1c6",
+  congested_parking:            "OS_5fbca66a-703c-459e-bcfa-c3815f25b2bb",
+  road_block_alert:             "OS_1f097e17-2009-4dd5-b27e-cb84a52cb7c5",
+  blocked_vehicle_alert:        "OS_80a16cd8-e359-43be-8ea5-d31ddfab6338",
+  car_lights_windows_left_open: "OS_d13bad07-8593-4603-960e-e140317410db",
+  car_horn_alarm_going_on:      "OS_8bd1c0ed-7865-4f41-9f95-81a9b37310b8",
+  unknown_issue_alert:          "OS_5bd7c478-55c0-42a7-b87f-472c0013ec1f",
+  doc_access:                   "OS_b4258f1b-b16e-4d8b-920f-fdcc394eb79f",
+  accident_alert:               "OS_99fdc63d-21f4-42a3-bb3d-5d9c4398c594",
+  call_user:                    "OS_0f86d5a8-1877-4a8a-ad45-d609c14d16bd",
+  sound:                        "OS_328b98de-49cc-47b2-85b4-733547c953d4",
 };
 
 const ANDROID_SOUND_MAP = {
@@ -45,7 +60,7 @@ const ANDROID_SOUND_MAP = {
   accident_alert:               "accident_alert",
   car_horn_alarm_going_on:      "car_horn_alarm_going_on",
   sound:                        "sound",
-  call_user:                    "call_sound", // special case – handover Section 8
+  call_user:                    "call_sound",
 };
 
 const IOS_SOUND_MAP = {
@@ -59,10 +74,10 @@ const IOS_SOUND_MAP = {
   accident_alert:               "accident_alert.caf",
   car_horn_alarm_going_on:      "car_horn_alarm_going_on.caf",
   sound:                        "sound.caf",
-  call_user:                    "call_sound.caf", // special case – handover Section 8
+  call_user:                    "call_sound.caf",
 };
 
-const DEFAULT_ANDROID_CHANNEL = "default";
+const DEFAULT_ANDROID_CHANNEL = "OS_328b98de-49cc-47b2-85b4-733547c953d4";
 const DEFAULT_IOS_SOUND       = "default";
 const FCM_BASE                = "https://fcm.googleapis.com/v1/projects";
 const OAUTH_URL               = "https://oauth2.googleapis.com/token";
@@ -233,6 +248,8 @@ async function sendFcmNotification(opts) {
     ? (IOS_SOUND_MAP[normIssue] || IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND)
     : DEFAULT_IOS_SOUND;
 
+  const rawChannelUuid = ONESIGNAL_RAW_CHANNELS[normIssue] || ONESIGNAL_RAW_CHANNELS[issue_type] || ONESIGNAL_RAW_CHANNELS.default;
+
   // All FCM data-payload values must be strings
   const data = {
     notification_type: String(notification_type),
@@ -244,9 +261,22 @@ async function sendFcmNotification(opts) {
     latitude:          String(latitude),
     longitude:         String(longitude),
     channel_id:        androidChannel,
+    android_channel_id: rawChannelUuid,
     sound:             androidSound,
     sound_name:        androidSound,
     ios_sound:         iosSound,
+    custom: JSON.stringify({
+      i: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      a: {
+        issue_type: String(issue_type || normIssue),
+        vehicle_id: String(vehicle_id || ""),
+        notification_type: String(notification_type || ""),
+        chat_room_id: String(chat_room_id || ""),
+        order_id: String(order_id || ""),
+        latitude: String(latitude || ""),
+        longitude: String(longitude || ""),
+      }
+    }),
   };
 
   const message = {

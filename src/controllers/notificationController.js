@@ -164,16 +164,23 @@ const sendNotification = async (req, res) => {
       ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})`
       : message;
 
-    // Look up the recipient's FCM token from the Device collection
-    const deviceRecord = isFcmConfigured()
-      ? await Device.findOne(
-          { user_id: receiver_id, fcm_token: { $ne: "" } },
+    // ── FCM-first + OneSignal fallback ─────────────────────────────────────
+    // Safely look up FCM token — any DB error must NEVER kill OneSignal delivery
+    let deviceRecord = null;
+    try {
+      if (isFcmConfigured()) {
+        deviceRecord = await Device.findOne(
+          { user_id: receiver_id, fcm_token: { $exists: true, $ne: "" } },
           { fcm_token: 1, _id: 0 }
-        ).sort({ token_updated_at: -1 }).lean()
-      : null;
+        ).lean();
+      }
+    } catch (dbErr) {
+      console.warn("[FCM] Device lookup failed, using OneSignal fallback:", dbErr.message);
+    }
 
+    let fcmSent = false;
     if (deviceRecord?.fcm_token) {
-      // ── FCM path ──────────────────────────────────────────────────
+      // ── Try FCM ───────────────────────────────────────────────────
       try {
         await sendFcmNotification({
           fcmToken:          deviceRecord.fcm_token,
@@ -191,41 +198,25 @@ const sendNotification = async (req, res) => {
           badgeCount:        updatedUser.notification_count,
           highPriority:      true,
         });
+        fcmSent = true;
+        console.log("[FCM] Notification sent successfully for user:", receiver_id);
       } catch (fcmErr) {
         if (fcmErr.isBadToken) {
-          // Clean up stale token
-          await Device.updateMany(
-            { fcm_token: deviceRecord.fcm_token },
-            { $set: { fcm_token: "", token_updated_at: new Date() } }
-          );
+          try {
+            await Device.updateMany(
+              { fcm_token: deviceRecord.fcm_token },
+              { $set: { fcm_token: "", token_updated_at: new Date() } }
+            );
+          } catch (cleanupErr) { /* ignore */ }
           console.warn("[FCM] Stale token removed for user:", receiver_id);
         } else {
-          console.error("[FCM] Send error:", fcmErr.message);
+          console.error("[FCM] Send error (falling back to OneSignal):", fcmErr.message);
         }
-        // Fall through to OneSignal fallback on any FCM failure
-        await sendOneSignalNotification({
-          externalUserId: receiver_id.toString(),
-          title:          notification_title,
-          message:        notifBody,
-          data: {
-            sender_id,
-            notification_type,
-            order_id:     order_id || "",
-            vehicle_id:   vehicle_id || "",
-            chat_room_id: chat_room_id || "",
-            issue_type:   issue_type || "",
-            latitude,
-            longitude,
-          },
-          androidChannelId,
-          iosSound,
-          iosBadgeCount: updatedUser.notification_count,
-          largeIconUrl:  incidentProofArray[0],
-          bigPictureUrl: incidentProofArray[0],
-        });
       }
-    } else {
-      // ── OneSignal fallback path ───────────────────────────────────
+    }
+
+    // ── OneSignal path (primary when no FCM token, fallback when FCM failed) ──
+    if (!fcmSent) {
       await sendOneSignalNotification({
         externalUserId: receiver_id.toString(),
         title:          notification_title,

@@ -244,6 +244,10 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    fcm_token: {
+      type: String,
+      default: "",
+    },
     my_orders: [
       {
         type: mongoose.Schema.Types.ObjectId,

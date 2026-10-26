@@ -33,25 +33,23 @@ const Device   = require("../models/Device");
  */
 const saveDeviceData = async (req, res) => {
   try {
-    const {
-      hit_by,
-      user_id,
-      uuid,
-      device_name    = "",
-      device_version = "",
-      device_model   = "",
-      app_version    = "",
-      player_id      = "",
-      fcm_token      = "",
-      device_type    = "",
-    } = req.body;
+    const user_id = req.body.user_id || req.body.userId;
+    const uuid = req.body.uuid || req.body.device_id || req.body.deviceId || req.body.device_uuid || "default_device";
+    const fcm_token = req.body.fcm_token || req.body.fcmToken || req.body.token || req.body.device_token || req.body.registration_token || "";
+    const player_id = req.body.player_id || req.body.playerId || req.body.onesignal_id || req.body.one_signal_id || "";
+    const device_type = req.body.device_type || req.body.deviceType || req.body.platform || "";
+    const device_name = req.body.device_name || req.body.deviceName || "";
+    const device_version = req.body.device_version || req.body.deviceVersion || "";
+    const device_model = req.body.device_model || req.body.deviceModel || "";
+    const app_version = req.body.app_version || req.body.appVersion || "";
+    const hit_by = req.body.hit_by || "add";
 
     /* ── 1. Validate required fields ─────────────────────────────────────── */
 
-    if (!user_id || !uuid) {
+    if (!user_id) {
       return res.status(400).json({
         status:  false,
-        message: "user_id and uuid are required",
+        message: "user_id is required",
       });
     }
 
@@ -111,6 +109,11 @@ const saveDeviceData = async (req, res) => {
         setDefaultsOnInsert: true,
       }
     );
+
+    // Also sync directly to User for ultra-fast lookup
+    if (fcm_token) {
+      await User.updateOne({ _id: user_id }, { $set: { fcm_token } }).catch(() => {});
+    }
 
     /* ── 5. Safe log (never log full token in production) ───────────────── */
 

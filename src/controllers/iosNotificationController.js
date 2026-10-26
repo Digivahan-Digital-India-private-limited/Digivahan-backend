@@ -14,8 +14,11 @@ async function getFcmToken(userId) {
     const rec = await Device.findOne(
       { user_id: userId, fcm_token: { $exists: true, $ne: "" } },
       { fcm_token: 1 }
-    ).lean();
-    return rec?.fcm_token || null;
+    ).sort({ token_updated_at: -1, updatedAt: -1 }).lean();
+    if (rec?.fcm_token) return rec.fcm_token;
+
+    const u = await User.findById(userId).select("fcm_token").lean();
+    return u?.fcm_token || null;
   } catch (e) {
     console.warn("[FCM] token lookup failed:", e.message);
     return null;
@@ -39,9 +42,13 @@ async function removeStaleFcmToken(token) {
 ───────────────────────────────────────────────────────────────────────────── */
 async function trySendFcm(opts) {
   const { fcmToken, ...rest } = opts;
-  if (!fcmToken) return false;
+  if (!fcmToken) {
+    console.log("[Push] No FCM token found, using OneSignal fallback");
+    return false;
+  }
   try {
-    await sendFcmNotification({ fcmToken, ...rest });
+    const msgId = await sendFcmNotification({ fcmToken, ...rest });
+    console.log("[FCM] Push delivered successfully! Message ID:", msgId);
     return true;
   } catch (err) {
     if (err.isBadToken) {
@@ -89,11 +96,18 @@ async function sendOneSignal({
       payload.android_big_picture = bigPictureUrl;
       payload.ios_attachments     = { id1: bigPictureUrl };
     }
-    await axios.post(
+    const res = await axios.post(
       "https://onesignal.com/api/v1/notifications",
       payload,
       { headers: { "Content-Type": "application/json", Authorization: `Basic ${key}` } }
     );
+    if (res.data?.warnings?.length > 0) {
+      console.warn("[OneSignal] Delivery warning:", res.data.warnings);
+    }
+    if (res.data?.errors?.length > 0) {
+      console.warn("[OneSignal] Errors:", res.data.errors);
+    }
+    console.log(`[OneSignal] Response for user=${externalUserId}: id=${res.data?.id || "none"} recipients=${res.data?.recipients ?? 0}`);
     return true;
   } catch (err) {
     console.error("[OneSignal] Error:", err.response?.data || err.message);

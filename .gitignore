@@ -25,3 +25,9 @@ package-lock.json
 
 # One-time admin scripts
 scripts/updateCredits.js
+
+# ─── Firebase / FCM credentials (MUST NOT be committed) ──────────────────────
+serviceAccountKey.json
+*serviceAccount*.json
+*.p8
+AuthKey_*.p8

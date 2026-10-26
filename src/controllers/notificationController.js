@@ -1,8 +1,10 @@
 const User = require("../models/User");
 const Notification = require("../models/notification.model");
+const Device = require("../models/Device");
 const ChatList = require("../models/Chat");
 const axios = require("axios");
 const mongoose = require("mongoose");
+const { sendFcmNotification, isFcmConfigured } = require("../utils/fcmService");
 
 const sendNotification = async (req, res) => {
   try {
@@ -109,6 +111,7 @@ const sendNotification = async (req, res) => {
        6️⃣ ANDROID CHANNEL LOGIC
     =============================== */
 
+    // OneSignal channel UUIDs (kept for OneSignal fallback path)
     const CHANNEL_MAP = {
       no_parking: "0b251d79-aa58-4410-ac8b-a810849ce1c6",
       congested_parking: "5fbca66a-703c-459e-bcfa-c3815f25b2bb",
@@ -153,26 +156,97 @@ const sendNotification = async (req, res) => {
        7️⃣ SEND PUSH NOTIFICATION
     =============================== */
 
-    await sendOneSignalNotification({
-      externalUserId: receiver_id.toString(),
-      title: notification_title,
-      message: vehicle_id ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})` : message,
-      data: {
-        sender_id,
-        notification_type,
-        order_id: order_id || "",
-        vehicle_id: vehicle_id || "",
-        chat_room_id: chat_room_id || "",
-        issue_type: issue_type || "",
-        latitude,
-        longitude,
-      },
-      androidChannelId,
-      iosSound,
-      iosBadgeCount: updatedUser.notification_count,
-      largeIconUrl: incidentProofArray[0],
-      bigPictureUrl: incidentProofArray[0],
-    });
+    /* ═══════════════════════════════════════════════════════════════
+       7️⃣  PUSH NOTIFICATION — FCM first, OneSignal fallback
+    ═══════════════════════════════════════════════════════════════ */
+
+    const notifBody = vehicle_id
+      ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})`
+      : message;
+
+    // Look up the recipient's FCM token from the Device collection
+    const deviceRecord = isFcmConfigured()
+      ? await Device.findOne(
+          { user_id: receiver_id, fcm_token: { $ne: "" } },
+          { fcm_token: 1, _id: 0 }
+        ).sort({ token_updated_at: -1 }).lean()
+      : null;
+
+    if (deviceRecord?.fcm_token) {
+      // ── FCM path ──────────────────────────────────────────────────
+      try {
+        await sendFcmNotification({
+          fcmToken:          deviceRecord.fcm_token,
+          title:             notification_title,
+          body:              notifBody,
+          issue_type:        issue_type || "",
+          notification_type: notification_type || "",
+          vehicle_id:        vehicle_id || "",
+          chat_room_id:      chat_room_id || "",
+          sender_id:         sender_id || "",
+          order_id:          order_id || "",
+          latitude:          latitude || "",
+          longitude:         longitude || "",
+          soundEnabled:      receiver.is_notification_sound_on,
+          badgeCount:        updatedUser.notification_count,
+          highPriority:      true,
+        });
+      } catch (fcmErr) {
+        if (fcmErr.isBadToken) {
+          // Clean up stale token
+          await Device.updateMany(
+            { fcm_token: deviceRecord.fcm_token },
+            { $set: { fcm_token: "", token_updated_at: new Date() } }
+          );
+          console.warn("[FCM] Stale token removed for user:", receiver_id);
+        } else {
+          console.error("[FCM] Send error:", fcmErr.message);
+        }
+        // Fall through to OneSignal fallback on any FCM failure
+        await sendOneSignalNotification({
+          externalUserId: receiver_id.toString(),
+          title:          notification_title,
+          message:        notifBody,
+          data: {
+            sender_id,
+            notification_type,
+            order_id:     order_id || "",
+            vehicle_id:   vehicle_id || "",
+            chat_room_id: chat_room_id || "",
+            issue_type:   issue_type || "",
+            latitude,
+            longitude,
+          },
+          androidChannelId,
+          iosSound,
+          iosBadgeCount: updatedUser.notification_count,
+          largeIconUrl:  incidentProofArray[0],
+          bigPictureUrl: incidentProofArray[0],
+        });
+      }
+    } else {
+      // ── OneSignal fallback path ───────────────────────────────────
+      await sendOneSignalNotification({
+        externalUserId: receiver_id.toString(),
+        title:          notification_title,
+        message:        notifBody,
+        data: {
+          sender_id,
+          notification_type,
+          order_id:     order_id || "",
+          vehicle_id:   vehicle_id || "",
+          chat_room_id: chat_room_id || "",
+          issue_type:   issue_type || "",
+          latitude,
+          longitude,
+        },
+        androidChannelId,
+        iosSound,
+        iosBadgeCount: updatedUser.notification_count,
+        largeIconUrl:  incidentProofArray[0],
+        bigPictureUrl: incidentProofArray[0],
+      });
+    }
 
     /* ===============================
        8️⃣ SUCCESS RESPONSE
@@ -244,22 +318,60 @@ const sendNotificationForCall = async (req, res) => {
 
     const message = "Incoming call request";
 
+    // OneSignal channel for call (fallback)
     const androidChannelId = "0f86d5a8-1877-4a8a-ad45-d609c14d16bd";
-    const iosSound = "default";
+    const iosSound = "call_sound.caf"; // FCM section 8 special case
 
-    // 🔥 Send push (non-blocking safe pattern)
-    await sendOneSignalNotification({
-      externalUserId: receiver._id.toString(),
-      title: senderName,
-      message,
-      data: {
-        sender_id: sender_id || "",
-        type: "call",
-      },
-      androidChannelId,
-      iosSound,
-      iosBadgeCount: receiver.notification_count || 1,
-    });
+    // Try FCM first for call notification
+    const callDevice = isFcmConfigured()
+      ? await Device.findOne(
+          { user_id: receiver._id, fcm_token: { $ne: "" } },
+          { fcm_token: 1, _id: 0 }
+        ).sort({ token_updated_at: -1 }).lean()
+      : null;
+
+    if (callDevice?.fcm_token) {
+      try {
+        await sendFcmNotification({
+          fcmToken:          callDevice.fcm_token,
+          title:             senderName,
+          body:              message,
+          issue_type:        "call_user",
+          notification_type: "call",
+          sender_id:         sender_id || "",
+          soundEnabled:      true,
+          badgeCount:        receiver.notification_count || 1,
+          highPriority:      true,
+        });
+      } catch (fcmErr) {
+        if (fcmErr.isBadToken) {
+          await Device.updateMany(
+            { fcm_token: callDevice.fcm_token },
+            { $set: { fcm_token: "", token_updated_at: new Date() } }
+          );
+        }
+        // Fall back to OneSignal on error
+        await sendOneSignalNotification({
+          externalUserId: receiver._id.toString(),
+          title: senderName,
+          message,
+          data: { sender_id: sender_id || "", type: "call" },
+          androidChannelId,
+          iosSound,
+          iosBadgeCount: receiver.notification_count || 1,
+        });
+      }
+    } else {
+      await sendOneSignalNotification({
+        externalUserId: receiver._id.toString(),
+        title: senderName,
+        message,
+        data: { sender_id: sender_id || "", type: "call" },
+        androidChannelId,
+        iosSound,
+        iosBadgeCount: receiver.notification_count || 1,
+      });
+    }
 
     return res.status(200).json({
       status: true,

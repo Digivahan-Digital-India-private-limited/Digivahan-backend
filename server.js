@@ -57,6 +57,7 @@ const challanWebhookRoutes = require("./src/routes/challanWebhook.routes.js")
 const challanFlowRoutes = require("./src/routes/challanFlow.routes.js")
 const careerRoutes = require("./src/routes/career.routes.js")
 const vehicleForAddRoutes = require("./src/routes/vehicleForAdd.routes.js");
+const deviceRoutes = require("./src/routes/device.routes.js");
 
 // Socket.IO handler
 const { setupSocketIO } = require("./src/socket/socketHandler.js");
@@ -136,6 +137,7 @@ app.use(API_ROUTES.BBPS.BASE, serviceRoutes)
 app.use("/api", challanWebhookRoutes)
 app.use(API_ROUTES.CHALLAN_FLOW.BASE, challanFlowRoutes)
 app.use("/api/career", careerRoutes)
+app.use(API_ROUTES.DEVICE.BASE, deviceRoutes)
 
 
 // -------------------- HEALTH CHECK --------------------

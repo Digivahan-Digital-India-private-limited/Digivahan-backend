@@ -1,8 +1,10 @@
 const User = require("../models/User");
 const Notification = require("../models/notification.model");
+const Device = require("../models/Device");
 const ChatList = require("../models/Chat");
 const axios = require("axios");
 const mongoose = require("mongoose");
+const { sendFcmNotification, isFcmConfigured } = require("../utils/fcmService");
 
 const sendIosNotification = async (req, res) => {
   try {
@@ -153,26 +155,92 @@ const sendIosNotification = async (req, res) => {
        7️⃣ SEND PUSH NOTIFICATION
     =============================== */
 
-    await sendOneSignalNotification({
-      externalUserId: receiver_id.toString(),
-      title: notification_title,
-      message: vehicle_id ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})` : message,
-      data: {
-        sender_id,
-        notification_type,
-        order_id: order_id || "",
-        vehicle_id: vehicle_id || "",
-        chat_room_id: chat_room_id || "",
-        issue_type: issue_type || "",
-        latitude,
-        longitude,
-      },
-      androidChannelId,
-      iosSound,
-      iosBadgeCount: updatedUser.notification_count,
-      largeIconUrl: incidentProofArray[0],
-      bigPictureUrl: incidentProofArray[0],
-    });
+    /* ═══════════════════════════════════════════════════════════════
+       7️⃣  PUSH NOTIFICATION — FCM first, OneSignal fallback
+    ═══════════════════════════════════════════════════════════════ */
+
+    const notifBody = vehicle_id
+      ? `${message} (Vehicle: ${vehicle_id.toUpperCase()})`
+      : message;
+
+    const deviceRecord = isFcmConfigured()
+      ? await Device.findOne(
+          { user_id: receiver_id, fcm_token: { $ne: "" } },
+          { fcm_token: 1, _id: 0 }
+        ).sort({ token_updated_at: -1 }).lean()
+      : null;
+
+    if (deviceRecord?.fcm_token) {
+      try {
+        await sendFcmNotification({
+          fcmToken:          deviceRecord.fcm_token,
+          title:             notification_title,
+          body:              notifBody,
+          issue_type:        issue_type || "",
+          notification_type: notification_type || "",
+          vehicle_id:        vehicle_id || "",
+          chat_room_id:      chat_room_id || "",
+          sender_id:         sender_id || "",
+          order_id:          order_id || "",
+          latitude:          latitude || "",
+          longitude:         longitude || "",
+          soundEnabled:      receiver.is_notification_sound_on,
+          badgeCount:        updatedUser.notification_count,
+          highPriority:      true,
+        });
+      } catch (fcmErr) {
+        if (fcmErr.isBadToken) {
+          await Device.updateMany(
+            { fcm_token: deviceRecord.fcm_token },
+            { $set: { fcm_token: "", token_updated_at: new Date() } }
+          );
+          console.warn("[FCM] Stale token removed for user:", receiver_id);
+        } else {
+          console.error("[FCM] Send error:", fcmErr.message);
+        }
+        await sendOneSignalNotification({
+          externalUserId: receiver_id.toString(),
+          title:          notification_title,
+          message:        notifBody,
+          data: {
+            sender_id,
+            notification_type,
+            order_id:     order_id || "",
+            vehicle_id:   vehicle_id || "",
+            chat_room_id: chat_room_id || "",
+            issue_type:   issue_type || "",
+            latitude,
+            longitude,
+          },
+          androidChannelId,
+          iosSound,
+          iosBadgeCount: updatedUser.notification_count,
+          largeIconUrl:  incidentProofArray[0],
+          bigPictureUrl: incidentProofArray[0],
+        });
+      }
+    } else {
+      await sendOneSignalNotification({
+        externalUserId: receiver_id.toString(),
+        title:          notification_title,
+        message:        notifBody,
+        data: {
+          sender_id,
+          notification_type,
+          order_id:     order_id || "",
+          vehicle_id:   vehicle_id || "",
+          chat_room_id: chat_room_id || "",
+          issue_type:   issue_type || "",
+          latitude,
+          longitude,
+        },
+        androidChannelId,
+        iosSound,
+        iosBadgeCount: updatedUser.notification_count,
+        largeIconUrl:  incidentProofArray[0],
+        bigPictureUrl: incidentProofArray[0],
+      });
+    }
 
     /* ===============================
        8️⃣ SUCCESS RESPONSE

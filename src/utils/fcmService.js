@@ -76,28 +76,7 @@ let _tokenExpiry  = 0;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function loadServiceAccount() {
-  // 1. Explicit path in env variable
-  if (process.env.FCM_SERVICE_ACCOUNT_PATH) {
-    const saPath = process.env.FCM_SERVICE_ACCOUNT_PATH;
-    const abs = path.isAbsolute(saPath) ? saPath : path.join(process.cwd(), saPath);
-    if (fs.existsSync(abs)) {
-      return JSON.parse(fs.readFileSync(abs, "utf8"));
-    }
-  }
-
-  // 2. Check serviceAccountKey.json in project root
-  const rootKey = path.join(__dirname, "../../serviceAccountKey.json");
-  if (fs.existsSync(rootKey)) {
-    return JSON.parse(fs.readFileSync(rootKey, "utf8"));
-  }
-
-  // 3. Check serviceAccountKey.json one directory above project root
-  const parentKey = path.join(__dirname, "../../../serviceAccountKey.json");
-  if (fs.existsSync(parentKey)) {
-    return JSON.parse(fs.readFileSync(parentKey, "utf8"));
-  }
-
-  // 4. Bundled credentials (works out-of-the-box on Git deployment without manual file transfers)
+  // 1. Bundled credentials (hardcoded in code, ZERO .env changes needed on live server!)
   try {
     const bundled = require("../config/firebaseCredentials.js");
     if (bundled && bundled.project_id && bundled.private_key) {
@@ -107,9 +86,23 @@ function loadServiceAccount() {
     // ignore
   }
 
+  // 2. Explicit path in env variable (fallback)
+  if (process.env.FCM_SERVICE_ACCOUNT_PATH) {
+    const saPath = process.env.FCM_SERVICE_ACCOUNT_PATH;
+    const abs = path.isAbsolute(saPath) ? saPath : path.join(process.cwd(), saPath);
+    if (fs.existsSync(abs)) {
+      return JSON.parse(fs.readFileSync(abs, "utf8"));
+    }
+  }
+
+  // 3. Check serviceAccountKey.json in project root
+  const rootKey = path.join(__dirname, "../../serviceAccountKey.json");
+  if (fs.existsSync(rootKey)) {
+    return JSON.parse(fs.readFileSync(rootKey, "utf8"));
+  }
+
   throw new Error(
-    "[FCM] Firebase service-account credentials could not be loaded. " +
-    "Provide serviceAccountKey.json or configure FCM_SERVICE_ACCOUNT_PATH."
+    "[FCM] Firebase service-account credentials could not be loaded."
   );
 }
 
@@ -217,7 +210,7 @@ async function sendFcmNotification(opts) {
   if (!fcmToken) throw new Error("[FCM] fcmToken is required");
 
   const sa          = loadServiceAccount();
-  const projectId   = process.env.FCM_PROJECT_ID || sa.project_id || "digivahan-94702-dd898";
+  const projectId   = sa.project_id || process.env.FCM_PROJECT_ID || "digivahan-94702";
   const accessToken = await getAccessToken();
 
   // Normalize issue_type (e.g. "no_parking", "No Parking", "no-parking")

@@ -19,9 +19,41 @@ async function getFcmToken(userId) {
     if (rec?.fcm_token) return rec.fcm_token;
 
     const u = await User.findById(userId).select("fcm_token").lean();
-    return u?.fcm_token || null;
+    if (u?.fcm_token) return u.fcm_token;
+
+    // Auto-retrieve from OneSignal (ZERO mobile app changes needed!)
+    const osKey = (process.env.ONESIGNAL_REST_API_KEY || "").replace(">", "").trim();
+    const osAppId = (process.env.ONESIGNAL_APP_ID || "").trim();
+    if (osKey && osAppId && userId) {
+      const res = await axios.get(
+        `https://onesignal.com/api/v1/apps/${osAppId}/users/by/external_id/${userId}`,
+        { headers: { Authorization: `Basic ${osKey}` }, timeout: 4000 }
+      );
+      const pushSub = (res.data?.subscriptions || []).find(
+        s => s.enabled && s.token && (s.type === "AndroidPush" || s.type === "iOSPush")
+      );
+      if (pushSub?.token) {
+        console.log(`[FCM] Auto-retrieved live token from OneSignal for user=${userId}`);
+        await Device.findOneAndUpdate(
+          { user_id: userId, uuid: pushSub.id || "onesignal_device" },
+          {
+            $set: {
+              fcm_token: pushSub.token,
+              device_type: pushSub.type === "iOSPush" ? "ios" : "android",
+              is_active: true,
+              token_updated_at: new Date()
+            }
+          },
+          { upsert: true }
+        ).catch(() => {});
+        await User.updateOne({ _id: userId }, { $set: { fcm_token: pushSub.token } }).catch(() => {});
+        return pushSub.token;
+      }
+    }
+
+    return null;
   } catch (e) {
-    console.warn("[FCM] token lookup failed:", e.message);
+    console.warn("[FCM] token lookup:", e.message);
     return null;
   }
 }

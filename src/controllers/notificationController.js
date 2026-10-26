@@ -140,8 +140,9 @@ async function sendOneSignal({
     if (res.data?.errors?.length > 0) {
       console.warn("[OneSignal] Errors:", res.data.errors);
     }
-    console.log(`[OneSignal] Response for user=${externalUserId}: id=${res.data?.id || "none"} recipients=${res.data?.recipients ?? 0}`);
-    return true;
+    const recipients = res.data?.recipients ?? 0;
+    console.log(`[OneSignal] Response for user=${externalUserId}: id=${res.data?.id || "none"} recipients=${recipients}`);
+    return recipients > 0;
   } catch (err) {
     console.error("[OneSignal] Error:", err.response?.data || err.message);
     return false;

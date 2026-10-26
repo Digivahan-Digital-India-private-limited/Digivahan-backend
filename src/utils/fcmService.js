@@ -272,22 +272,12 @@ async function sendFcmNotification(opts) {
     ? (OS_CHANNEL_UUIDS[normIssue] || OS_CHANNEL_UUIDS[issue_type] || OS_CHANNEL_UUIDS.sound)
     : OS_CHANNEL_UUIDS.sound;
 
-  // Unique notification ID for OneSignal SDK deduplication
+  // Unique notification ID for deduplication
   const notifId = `dv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-  // All FCM data-payload values must be strings.
-  // Fields 'custom', 'alert', 'title', 'sound', 'android_channel_id' are
-  // OneSignal SDK internal fields — the SDK intercepts them and builds a
-  // local notification with the correct custom sound.
+  // All FCM data-payload values must be strings (per handover Section 9)
   const data = {
-    // OneSignal SDK intercept fields (triggers SDK processing with custom sound)
-    custom:             JSON.stringify({ i: notifId }),
-    title:              String(title || ""),
-    alert:              String(body || ""),
-    sound:              androidSound,
-    android_channel_id: osChannelUuid,
-    pri:                "1",
-    // App routing data
+    // Required routing fields
     notification_type:  String(notification_type || ""),
     issue_type:         String(issue_type || normIssue || ""),
     vehicle_id:         String(vehicle_id || ""),
@@ -297,20 +287,33 @@ async function sendFcmNotification(opts) {
     latitude:           String(latitude || ""),
     longitude:          String(longitude || ""),
     badge:              String(badgeCount),
+    // Audio / Channel fields
+    channel_id:         androidChannel,
+    sound:              androidSound,
+    sound_name:         androidSound,
+    ios_sound:          iosSound,
+    // Interop fields
+    custom:             JSON.stringify({ i: notifId }),
+    title:              String(title || ""),
+    alert:              String(body || ""),
+    android_channel_id: osChannelUuid,
+    pri:                "1",
   };
 
   const message = {
     token: fcmToken,
-    // notification kept as fallback if SDK doesn't intercept
     notification: { title, body },
     data,
     android: {
-      priority: "HIGH",
+      priority: highPriority ? "HIGH" : "NORMAL",
       notification: {
-        channel_id:            androidChannel,
-        sound:                 androidSound,
-        notification_priority: "PRIORITY_HIGH",
-        visibility:            "PUBLIC",
+        channel_id:              androidChannel,
+        sound:                   androidSound,
+        notification_priority:   highPriority ? "PRIORITY_MAX" : "PRIORITY_HIGH",
+        visibility:              "PUBLIC",
+        click_action:            "FLUTTER_NOTIFICATION_CLICK",
+        default_sound:           !isSoundOn,
+        default_vibrate_timings: true,
       },
     },
     apns: {
@@ -332,11 +335,6 @@ async function sendFcmNotification(opts) {
 
   try {
     const url = `${FCM_BASE}/${projectId}/messages:send`;
-    console.log("[FCM] Sending payload:", JSON.stringify({
-      channel: androidChannel,
-      sound: androidSound,
-      issue: normIssue,
-    }));
     const res = await axios.post(
       url,
       { message },

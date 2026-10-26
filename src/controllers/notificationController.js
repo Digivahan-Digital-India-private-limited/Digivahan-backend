@@ -252,37 +252,46 @@ const sendNotification = async (req, res) => {
     };
 
     /* ── 7. Send push notification ───────────────────────────────── */
-    // Send FCM first (guaranteed delivery), then also try OneSignal (for custom sound)
+    // Handover Section 7 & 10:
+    // Send through FCM when the recipient has an fcm_token.
+    // If there is no FCM token, use OneSignal sending logic as fallback.
+    // Do not send duplicate notifications through both providers.
     const fcmToken = await getFcmToken(receiver_id);
-    const fcmSent  = await trySendFcm({
-      fcmToken,
-      title:             notification_title,
-      body:              notifBody,
-      issue_type:        issue_type || "",
-      notification_type: notification_type || "",
-      vehicle_id:        vehicle_id || "",
-      chat_room_id:      chat_room_id || "",
-      sender_id:         sender_id || "",
-      order_id:          order_id || "",
-      latitude:          latitude || "",
-      longitude:         longitude || "",
-      soundEnabled:      soundOn,
-      badgeCount,
-      highPriority:      true,
-    });
+    let pushSent = false;
 
-    // Also send via OneSignal (handles custom sound correctly)
-    await sendOneSignal({
-      externalUserId: receiver_id.toString(),
-      title:          notification_title,
-      body:           notifBody,
-      data:           sharedData,
-      androidChannelId: osChannelId,
-      iosSound:       iosSoundFile,
-      badgeCount,
-      largeIconUrl:   incidentProofArray[0] || "",
-      bigPictureUrl:  incidentProofArray[0] || "",
-    });
+    if (fcmToken) {
+      pushSent = await trySendFcm({
+        fcmToken,
+        title:             notification_title,
+        body:              notifBody,
+        issue_type:        issue_type || "",
+        notification_type: notification_type || "",
+        vehicle_id:        vehicle_id || "",
+        chat_room_id:      chat_room_id || "",
+        sender_id:         sender_id || "",
+        order_id:          order_id || "",
+        latitude:          latitude || "",
+        longitude:         longitude || "",
+        soundEnabled:      soundOn,
+        badgeCount,
+        highPriority:      true,
+      });
+    }
+
+    // Fallback to OneSignal only if recipient had no FCM token or FCM failed
+    if (!pushSent) {
+      await sendOneSignal({
+        externalUserId:   receiver_id.toString(),
+        title:            notification_title,
+        body:             notifBody,
+        data:             sharedData,
+        androidChannelId: osChannelId,
+        iosSound:         iosSoundFile,
+        badgeCount,
+        largeIconUrl:     incidentProofArray[0] || "",
+        bigPictureUrl:    incidentProofArray[0] || "",
+      });
+    }
 
     return res.status(201).json({ status: true, message: "Notification sent successfully", data: dbNotif });
   } catch (error) {
@@ -312,19 +321,11 @@ const sendNotificationForCall = async (req, res) => {
     const senderName = sender ? (`${sender.basic_details.first_name || ""} ${sender.basic_details.last_name || ""}`).trim() || "Unknown User" : "Unknown User";
     const callBody   = "Incoming call request";
 
-    const osSent = await sendOneSignal({
-      externalUserId:  receiver._id.toString(),
-      title:           senderName,
-      body:            callBody,
-      data:            { sender_id: sender_id || "", type: "call" },
-      androidChannelId: CALL_OS_CHANNEL,
-      iosSound:        "call_sound.caf",
-      badgeCount:      receiver.notification_count || 1,
-    });
+    const fcmToken = await getFcmToken(receiver_id);
+    let callSent   = false;
 
-    if (!osSent) {
-      const fcmToken = await getFcmToken(receiver_id);
-      await trySendFcm({
+    if (fcmToken) {
+      callSent = await trySendFcm({
         fcmToken,
         title:             senderName,
         body:              callBody,
@@ -334,6 +335,18 @@ const sendNotificationForCall = async (req, res) => {
         soundEnabled:      true,
         badgeCount:        receiver.notification_count || 1,
         highPriority:      true,
+      });
+    }
+
+    if (!callSent) {
+      await sendOneSignal({
+        externalUserId:   receiver._id.toString(),
+        title:            senderName,
+        body:             callBody,
+        data:             { sender_id: sender_id || "", type: "call" },
+        androidChannelId: CALL_OS_CHANNEL,
+        iosSound:         "call_sound.caf",
+        badgeCount:       receiver.notification_count || 1,
       });
     }
 

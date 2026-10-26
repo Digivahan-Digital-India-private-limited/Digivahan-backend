@@ -34,6 +34,20 @@ const ANDROID_CHANNEL_MAP = {
   call_user:                    "call_user",
 };
 
+const ANDROID_SOUND_MAP = {
+  no_parking:                   "no_parking",
+  congested_parking:            "congested_parking",
+  road_block_alert:             "road_block_alert",
+  blocked_vehicle_alert:        "blocked_vehicle_alert",
+  car_lights_windows_left_open: "car_lights_windows_left_open",
+  unknown_issue_alert:          "unknown_issue_alert",
+  doc_access:                   "doc_access",
+  accident_alert:               "accident_alert",
+  car_horn_alarm_going_on:      "car_horn_alarm_going_on",
+  sound:                        "sound",
+  call_user:                    "call_sound", // special case – handover Section 8
+};
+
 const IOS_SOUND_MAP = {
   no_parking:                   "no_parking.caf",
   congested_parking:            "congested_parking.caf",
@@ -206,18 +220,30 @@ async function sendFcmNotification(opts) {
   const projectId   = process.env.FCM_PROJECT_ID || sa.project_id || "digivahan-94702-dd898";
   const accessToken = await getAccessToken();
 
-  const androidChannel = soundEnabled
-    ? (ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL)
+  // Normalize issue_type (e.g. "no_parking", "No Parking", "no-parking")
+  const normIssue = String(issue_type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  const isSoundOn = soundEnabled !== false;
+
+  const androidChannel = isSoundOn
+    ? (ANDROID_CHANNEL_MAP[normIssue] || ANDROID_CHANNEL_MAP[issue_type] || DEFAULT_ANDROID_CHANNEL)
     : DEFAULT_ANDROID_CHANNEL;
 
-  const iosSound = soundEnabled
-    ? (IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND)
+  const androidSound = isSoundOn
+    ? (ANDROID_SOUND_MAP[normIssue] || ANDROID_SOUND_MAP[issue_type] || androidChannel)
+    : DEFAULT_ANDROID_CHANNEL;
+
+  const iosSound = isSoundOn
+    ? (IOS_SOUND_MAP[normIssue] || IOS_SOUND_MAP[issue_type] || DEFAULT_IOS_SOUND)
     : DEFAULT_IOS_SOUND;
 
   // All FCM data-payload values must be strings
   const data = {
     notification_type: String(notification_type),
-    issue_type:        String(issue_type),
+    issue_type:        String(issue_type || normIssue),
     vehicle_id:        String(vehicle_id),
     chat_room_id:      String(chat_room_id),
     sender_id:         String(sender_id),
@@ -225,6 +251,9 @@ async function sendFcmNotification(opts) {
     latitude:          String(latitude),
     longitude:         String(longitude),
     channel_id:        androidChannel,
+    sound:             androidSound,
+    sound_name:        androidSound,
+    ios_sound:         iosSound,
   };
 
   const message = {
@@ -232,19 +261,25 @@ async function sendFcmNotification(opts) {
     notification: { title, body },
     data,
     android: {
-      priority: highPriority ? "high" : "normal",
+      priority: highPriority ? "HIGH" : "NORMAL",
       notification: {
-        channel_id: androidChannel,
-        sound:      androidChannel,
-        click_action: "FLUTTER_NOTIFICATION_CLICK",
+        channel_id:            androidChannel,
+        sound:                 androidSound,
+        notification_priority: highPriority ? "PRIORITY_MAX" : "PRIORITY_DEFAULT",
+        default_sound:         !isSoundOn,
+        default_vibrate_timings: true,
+        click_action:          "FLUTTER_NOTIFICATION_CLICK",
       },
     },
     apns: {
-      headers: { "apns-priority": highPriority ? "10" : "5" },
+      headers: {
+        "apns-priority":  highPriority ? "10" : "5",
+        "apns-push-type": "alert",
+      },
       payload: {
         aps: {
           alert: { title, body },
-          sound: iosSound,
+          sound: isSoundOn ? iosSound : "default",
           badge: badgeCount,
           "content-available": 1,
         },
@@ -294,5 +329,6 @@ module.exports = {
   sendFcmNotification,
   isFcmConfigured,
   ANDROID_CHANNEL_MAP,
+  ANDROID_SOUND_MAP,
   IOS_SOUND_MAP,
 };

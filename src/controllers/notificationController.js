@@ -187,7 +187,7 @@ const sendNotification = async (req, res) => {
           order_id:          order_id || "",
           latitude:          latitude || "",
           longitude:         longitude || "",
-          soundEnabled:      receiver.is_notification_sound_on,
+          soundEnabled:      receiver.is_notification_sound_on !== false,
           badgeCount:        updatedUser.notification_count,
           highPriority:      true,
         });
